@@ -757,6 +757,8 @@ export function LoginPage() {
       if (!el) return;
       window.google?.accounts.id.initialize({
         client_id: clientId,
+        ux_mode: "popup",
+        auto_select: false,
         callback: async ({ credential }: { credential: string }) => {
           try {
             await api("/api/auth/google", {

@@ -7,6 +7,10 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+      "Referrer-Policy": "no-referrer-when-downgrade",
+    },
     proxy: {
       "/api": { target: "http://localhost:4000", changeOrigin: true },
       "/socket.io": { target: "ws://localhost:4000", ws: true },

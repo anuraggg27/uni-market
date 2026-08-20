@@ -70,6 +70,7 @@ export function createApp(deps: {
           styleSrc: ["'self'", "'unsafe-inline'", "https://accounts.google.com"],
         },
       },
+      crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
       crossOriginResourcePolicy: { policy: "cross-origin" },
     }),
   );
@@ -138,7 +139,7 @@ export function createApp(deps: {
     "/api",
     rateLimit({
       windowMs: 10_000,
-      limit: 40,
+      limit: config.NODE_ENV === "test" ? 8 : 40,
       standardHeaders: true,
       legacyHeaders: false,
       skip: (req) =>
