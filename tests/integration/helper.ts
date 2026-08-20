@@ -1,0 +1,69 @@
+import { PGlite } from '@electric-sql/pglite';
+import { drizzle } from 'drizzle-orm/pglite';
+import { migrate } from 'drizzle-orm/pglite/migrator';
+import { eq } from 'drizzle-orm';
+import request from 'supertest';
+import sharp from 'sharp';
+import { resolve } from 'node:path';
+import { createApp } from '../../apps/api/src/app';
+import { loadConfig } from '../../apps/api/src/config';
+import * as schema from '../../apps/api/src/db/schema';
+import type { GoogleIdentity, GoogleVerifier } from '../../apps/api/src/services/google';
+import { AppError } from '../../apps/api/src/lib/errors';
+
+class FakeGoogleVerifier implements GoogleVerifier {
+  async verify(credential: string): Promise<GoogleIdentity> {
+    if (credential.startsWith('invalid-')) throw new AppError(401, 'INVALID_GOOGLE_CREDENTIAL', 'Google sign-in could not be verified');
+    const marker = credential.replace(/[^a-z0-9]/gi, '').slice(0, 16).toLowerCase();
+    return { sub: `google-sub-${credential}`, email: `${marker}@${credential.includes('domain-b') ? 'example.org' : 'gmail.com'}`, emailVerified: true, name: `Student ${marker}` };
+  }
+}
+
+export async function setup() {
+  const client = new PGlite(); const db = drizzle(client, { schema });
+  await migrate(db, { migrationsFolder: resolve(process.cwd(), 'apps/api/drizzle') });
+  const config = loadConfig({ NODE_ENV: 'test', APP_ENV: 'test', DEV_MODE: 'true', CLIENT_URL: 'http://localhost:5173', API_URL: 'http://localhost:4000', DATABASE_URL: 'pglite://:memory:', SESSION_SECRET: 'test-session-secret-at-least-32-chars', CSRF_SECRET: 'test-csrf-secret-at-least-32-chars', SMTP_FROM_EMAIL: 'test@example.com' });
+  const app = createApp({ db, config, googleVerifier: new FakeGoogleVerifier() });
+  const category = (await db.insert(schema.categories).values({ name: 'Books', slug: 'books' }).returning())[0]!;
+  return { client, db, config, app, category };
+}
+
+export async function login(app: ReturnType<typeof createApp>, credential: string) {
+  const agent = request.agent(app);
+  const response = await agent.post('/api/auth/google').send({ credential: credential.padEnd(24, 'x') });
+  if (response.status !== 200) throw new Error(`login failed ${response.status}: ${JSON.stringify(response.body)}`);
+  const me = await agent.get('/api/auth/me');
+  const csrf = await agent.get('/api/auth/csrf');
+  const setCookie = response.headers['set-cookie'];
+  const cookie = Array.isArray(setCookie) ? setCookie[0] : setCookie;
+  return { agent, user: me.body.data, csrf: csrf.body.data.csrfToken as string, cookie: String(cookie).split(';')[0], headers: { 'x-csrf-token': csrf.body.data.csrfToken as string } };
+}
+
+export async function verifyPhone(auth: Awaited<ReturnType<typeof login>>, phone = '9876543210') {
+  await auth.agent.post('/api/phone/send').set(auth.headers).send({ phone }).expect(200);
+  return auth.agent.post('/api/phone/verify').set(auth.headers).send({ phone, code: '999999' });
+}
+
+export async function createDraft(auth: Awaited<ReturnType<typeof login>>, categoryId: string, overrides: Record<string, unknown> = {}) {
+  const response = await auth.agent.post('/api/listings').set(auth.headers).send({ title: 'Linear algebra textbook', description: 'Barely used textbook with clean pages and no missing chapters.', categoryId, condition: 'GOOD', conditionExplanation: '', priceType: 'FIXED', exactPrice: 450, negotiable: true, location: 'Main campus library', brand: '', defects: '', meetupPoint: 'Library entrance', ...overrides });
+  if (response.status !== 201) throw new Error(`draft failed ${response.status}: ${JSON.stringify(response.body)}`);
+  return response.body.data;
+}
+
+export async function uploadImage(auth: Awaited<ReturnType<typeof login>>, listingId: string, content?: Buffer) {
+  const buffer = content ?? await sharp({ create: { width: 640, height: 480, channels: 3, background: '#56806a' } }).jpeg().toBuffer();
+  const presign = await auth.agent.post(`/api/uploads/listings/${listingId}/presign`).set(auth.headers).send({ mimeType: 'image/jpeg', byteSize: buffer.length }).expect(201);
+  const url = new URL(presign.body.data.uploadUrl);
+  await auth.agent.put(`${url.pathname}${url.search}`).set('content-type', 'image/jpeg').send(buffer).expect(204);
+  return auth.agent.post(`/api/uploads/listings/${listingId}/finalize`).set(auth.headers).send({ imageId: presign.body.data.imageId });
+}
+
+export async function makeRole(db: any, userId: string, role: 'MODERATOR'|'SUPPORT_AGENT'|'SUPER_ADMIN') {
+  await db.insert(schema.userRoles).values({ userId, role }).onConflictDoNothing();
+}
+
+export async function refreshAuthRoles(db: any, auth: Awaited<ReturnType<typeof login>>) {
+  const rawSessions = await db.select().from(schema.sessions).where(eq(schema.sessions.userId, auth.user.id));
+  expectExisting(rawSessions[0]);
+}
+function expectExisting(value: unknown): asserts value { if (!value) throw new Error('Expected seeded value'); }

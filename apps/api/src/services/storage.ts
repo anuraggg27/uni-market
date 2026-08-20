@@ -1,0 +1,95 @@
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { fileTypeFromBuffer } from 'file-type';
+import sharp from 'sharp';
+import type { AppConfig } from '../config.js';
+import { AppError } from '../lib/errors.js';
+
+const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+export interface UploadTicket { uploadUrl: string; tempKey: string; expiresAt: string; headers: Record<string, string>; }
+
+export class StorageService {
+  private s3?: S3Client;
+  private localRoot = resolve(process.cwd(), '.data/uploads');
+  constructor(private config: AppConfig) {
+    if (config.R2_ACCESS_KEY_ID && config.R2_SECRET_ACCESS_KEY && config.R2_BUCKET_NAME) {
+      this.s3 = new S3Client({ region: 'auto', endpoint: config.R2_ENDPOINT || `https://${config.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`, credentials: { accessKeyId: config.R2_ACCESS_KEY_ID, secretAccessKey: config.R2_SECRET_ACCESS_KEY } });
+    }
+  }
+
+  async createUploadTicket(ownerId: string, listingId: string, mimeType: string, byteSize: number): Promise<UploadTicket> {
+    if (!ALLOWED.has(mimeType)) throw new AppError(400, 'UNSUPPORTED_IMAGE', 'Only JPEG, PNG and WebP images are allowed');
+    if (byteSize > this.config.MAX_IMAGE_SIZE_MB * 1024 * 1024) throw new AppError(413, 'IMAGE_TOO_LARGE', `Images must be ${this.config.MAX_IMAGE_SIZE_MB} MB or smaller`);
+    const tempKey = `temporary/${ownerId}/${listingId}/${randomUUID()}`;
+    const expiresAt = new Date(Date.now() + 5 * 60_000);
+    if (this.s3) {
+      const command = new PutObjectCommand({ Bucket: this.config.R2_BUCKET_NAME, Key: tempKey, ContentType: mimeType, ContentLength: byteSize, Metadata: { owner: ownerId, listing: listingId } });
+      return { uploadUrl: await getSignedUrl(this.s3, command, { expiresIn: 300 }), tempKey, expiresAt: expiresAt.toISOString(), headers: { 'content-type': mimeType } };
+    }
+    if (this.config.NODE_ENV === 'production') throw new AppError(503, 'STORAGE_UNAVAILABLE', 'Image storage is not configured');
+    const signature = this.sign(`${tempKey}:${expiresAt.getTime()}:${mimeType}:${byteSize}`);
+    return { uploadUrl: `${this.config.API_URL}/api/uploads/local?key=${encodeURIComponent(tempKey)}&expires=${expiresAt.getTime()}&type=${encodeURIComponent(mimeType)}&size=${byteSize}&signature=${signature}`, tempKey, expiresAt: expiresAt.toISOString(), headers: { 'content-type': mimeType } };
+  }
+
+  async acceptLocalUpload(params: { key: string; expires: number; type: string; size: number; signature: string }, buffer: Buffer): Promise<void> {
+    if (this.s3 || this.config.NODE_ENV === 'production') throw new AppError(404, 'NOT_FOUND', 'Upload endpoint not found');
+    const expected = this.sign(`${params.key}:${params.expires}:${params.type}:${params.size}`);
+    const left = Buffer.from(expected); const right = Buffer.from(params.signature);
+    if (Date.now() > params.expires || left.length !== right.length || !timingSafeEqual(left, right) || !params.key.startsWith('temporary/') || params.key.includes('..')) throw new AppError(403, 'UPLOAD_EXPIRED', 'The upload link is invalid or expired');
+    if (buffer.length !== params.size || buffer.length > this.config.MAX_IMAGE_SIZE_MB * 1024 * 1024) throw new AppError(400, 'UPLOAD_SIZE_MISMATCH', 'Uploaded file size did not match the request');
+    const path = this.localPath(params.key); await mkdir(dirname(path), { recursive: true }); await writeFile(path, buffer, { flag: 'wx' });
+  }
+
+  async finalize(tempKey: string, ownerId: string, listingId: string): Promise<{ objectKey: string; mimeType: string; byteSize: number; width: number; height: number }> {
+    if (!tempKey.startsWith(`temporary/${ownerId}/${listingId}/`) || tempKey.includes('..')) throw new AppError(403, 'UPLOAD_FORBIDDEN', 'This upload does not belong to you');
+    let buffer: Buffer;
+    try {
+      if (this.s3) {
+        const head = await this.s3.send(new HeadObjectCommand({ Bucket: this.config.R2_BUCKET_NAME, Key: tempKey }));
+        if (head.Metadata?.owner !== ownerId || head.Metadata?.listing !== listingId || (head.ContentLength ?? 0) > this.config.MAX_IMAGE_SIZE_MB * 1024 * 1024) throw new AppError(400, 'INVALID_IMAGE', 'Image validation failed');
+        const object = await this.s3.send(new GetObjectCommand({ Bucket: this.config.R2_BUCKET_NAME, Key: tempKey }));
+        buffer = Buffer.from(await object.Body!.transformToByteArray());
+      } else buffer = await readFile(this.localPath(tempKey));
+      if (buffer.length > this.config.MAX_IMAGE_SIZE_MB * 1024 * 1024) throw new AppError(413, 'IMAGE_TOO_LARGE', 'Image is too large');
+      const detected = await fileTypeFromBuffer(buffer);
+      if (!detected || !ALLOWED.has(detected.mime)) throw new AppError(400, 'INVALID_IMAGE_SIGNATURE', 'The file is not a supported image');
+      const input = sharp(buffer, { failOn: 'error', limitInputPixels: this.config.MAX_IMAGE_DIMENSION ** 2 });
+      const metadata = await input.metadata();
+      if (!metadata.width || !metadata.height || metadata.width < this.config.MIN_IMAGE_WIDTH || metadata.height < this.config.MIN_IMAGE_HEIGHT || metadata.width > this.config.MAX_IMAGE_DIMENSION || metadata.height > this.config.MAX_IMAGE_DIMENSION) throw new AppError(400, 'INVALID_IMAGE_DIMENSIONS', 'Image dimensions are outside the allowed range');
+      const sanitized = await input.rotate().resize({ width: 2200, height: 2200, fit: 'inside', withoutEnlargement: true }).webp({ quality: 84 }).toBuffer();
+      const finalMeta = await sharp(sanitized).metadata();
+      const objectKey = `listings/${listingId}/${randomUUID()}.webp`;
+      if (this.s3) await this.s3.send(new PutObjectCommand({ Bucket: this.config.R2_BUCKET_NAME, Key: objectKey, Body: sanitized, ContentType: 'image/webp', ContentLength: sanitized.length, Metadata: { owner: ownerId, listing: listingId, private: 'true' } }));
+      else { const path = this.localPath(objectKey); await mkdir(dirname(path), { recursive: true }); await writeFile(path, sanitized, { flag: 'wx' }); }
+      return { objectKey, mimeType: 'image/webp', byteSize: sanitized.length, width: finalMeta.width!, height: finalMeta.height! };
+    } finally {
+      await this.delete(tempKey).catch(() => undefined);
+    }
+  }
+
+  async signedReadUrl(objectKey: string): Promise<string> {
+    if (!objectKey.startsWith('listings/') || objectKey.includes('..')) throw new AppError(400, 'INVALID_OBJECT_KEY', 'Invalid image key');
+    if (this.s3) return getSignedUrl(this.s3, new GetObjectCommand({ Bucket: this.config.R2_BUCKET_NAME, Key: objectKey }), { expiresIn: 300 });
+    const expires = Date.now() + 5 * 60_000; const signature = this.sign(`${objectKey}:${expires}`);
+    return `${this.config.API_URL}/api/uploads/local-read?key=${encodeURIComponent(objectKey)}&expires=${expires}&signature=${signature}`;
+  }
+
+  async readLocal(key: string, expires: number, signature: string): Promise<Buffer> {
+    const expected = this.sign(`${key}:${expires}`); const left = Buffer.from(expected); const right = Buffer.from(signature);
+    if (this.s3 || Date.now() > expires || left.length !== right.length || !timingSafeEqual(left, right) || !key.startsWith('listings/') || key.includes('..')) throw new AppError(403, 'IMAGE_URL_EXPIRED', 'Image link is invalid or expired');
+    return readFile(this.localPath(key));
+  }
+
+  async delete(key: string): Promise<void> {
+    if (key.includes('..') || (!key.startsWith('temporary/') && !key.startsWith('listings/'))) return;
+    if (this.s3) await this.s3.send(new DeleteObjectCommand({ Bucket: this.config.R2_BUCKET_NAME, Key: key }));
+    else await rm(this.localPath(key), { force: true });
+  }
+
+  private sign(value: string): string { return createHmac('sha256', this.config.SESSION_SECRET).update(value).digest('base64url'); }
+  private localPath(key: string): string { return resolve(this.localRoot, key); }
+}

@@ -1,0 +1,10 @@
+import { Bell, Heart, Home, ListPlus, MessageCircle, Search, ShieldCheck, UserRound } from 'lucide-react';
+import { Link, NavLink, Outlet } from 'react-router-dom';
+import { useAuth } from '../auth';
+
+const mobileLinks = [{ to: '/', label: 'Home', icon: Home }, { to: '/browse', label: 'Browse', icon: Search }, { to: '/sell', label: 'Sell', icon: ListPlus }, { to: '/chats', label: 'Chats', icon: MessageCircle }, { to: '/profile', label: 'Profile', icon: UserRound }];
+
+export function Layout() {
+  const { user } = useAuth(); const isAdmin = user?.roles.some((role) => ['MODERATOR', 'SUPPORT_AGENT', 'SUPER_ADMIN'].includes(role));
+  return <div className="app-shell"><a className="skip-link" href="#main">Skip to content</a><header className="topbar"><div className="topbar-inner"><Link className="brand" to="/"><span>Campus</span> Market</Link><nav className="desktop-nav" aria-label="Primary"><NavLink to="/browse">Browse</NavLink><NavLink to="/saved"><Heart aria-hidden="true"/>Saved</NavLink><NavLink to="/chats"><MessageCircle aria-hidden="true"/>Chats</NavLink><NavLink to="/my-listings">My listings</NavLink>{isAdmin ? <NavLink to="/admin"><ShieldCheck aria-hidden="true"/>Admin</NavLink> : null}</nav><div className="account-links">{user ? <><NavLink className="icon-link" to="/notifications" aria-label="Notifications"><Bell/></NavLink><NavLink to="/profile">{user.displayName}</NavLink></> : <NavLink className="button small primary" to="/login">Sign in</NavLink>}<NavLink className="button small sell-button" to="/sell">Sell</NavLink></div></div></header><main id="main"><Outlet /></main><nav className="mobile-nav" aria-label="Mobile primary">{mobileLinks.map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} end={to === '/'}><Icon aria-hidden="true"/><span>{label}</span></NavLink>)}</nav><footer><div><strong>Campus Market</strong><p>Buy and sell locally. Payments and delivery happen independently.</p></div><nav aria-label="Footer"><Link to="/support">Support</Link><Link to="/leaderboard">Top sellers</Link><Link to="/settings">Settings</Link></nav></footer></div>;
+}

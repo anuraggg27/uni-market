@@ -1,0 +1,42 @@
+{
+  "name": "campus-market",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n api,web -c cyan,green \"npm run dev -w @campus-market/api\" \"npm run dev -w @campus-market/web\"",
+    "build": "npm run build -w @campus-market/shared && npm run build -w @campus-market/api && npm run build -w @campus-market/web",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "vitest run --coverage",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:e2e": "playwright test",
+    "test:all": "npm run lint && npm run typecheck && npm run test && npm run build && npm run test:e2e",
+    "db:generate": "npm run db:generate -w @campus-market/api",
+    "db:migrate": "npm run db:migrate -w @campus-market/api",
+    "db:seed": "npm run db:seed -w @campus-market/api"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@eslint/js": "^9.33.0",
+    "@playwright/test": "^1.55.0",
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/react": "^16.3.0",
+    "@types/node": "^24.3.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "concurrently": "^9.2.0",
+    "eslint": "^9.33.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "globals": "^16.3.0",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.40.0",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,377 @@
+import {
+  expect,
+  test,
+  type BrowserContext,
+  type APIRequestContext,
+} from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+import sharp from "sharp";
+
+const API = "http://localhost:4000";
+async function signIn(
+  context: BrowserContext,
+  credential: string,
+  { profile = true, phone = true } = {},
+) {
+  const request = context.request;
+  await request.post(`${API}/api/auth/google`, {
+    data: { credential: credential.padEnd(24, "x") },
+  });
+  const csrf = (await (await request.get(`${API}/api/auth/csrf`)).json()).data
+    .csrfToken;
+  const headers = { "x-csrf-token": csrf };
+  if (profile)
+    await request.patch(`${API}/api/auth/me`, {
+      headers,
+      data: {
+        displayName: credential,
+        institution: "Open University",
+        campus: "Main campus",
+        graduationYear: 2028,
+        onboardingComplete: true,
+      },
+    });
+  if (phone) {
+    const suffix = String(
+      (Math.abs(hash(credential)) % 9000000000) + 1000000000,
+    ).slice(0, 10);
+    const valid = `9${suffix.slice(1)}`;
+    await request.post(`${API}/api/phone/send`, {
+      headers,
+      data: { phone: valid },
+    });
+    await request.post(`${API}/api/phone/verify`, {
+      headers,
+      data: { phone: valid, code: "999999" },
+    });
+  }
+  return { request, headers };
+}
+function hash(value: string) {
+  let result = 0;
+  for (const char of value) result = (result * 31 + char.charCodeAt(0)) | 0;
+  return result;
+}
+async function category(request: APIRequestContext) {
+  return (
+    (await (await request.get(`${API}/api/categories`)).json()).data as any[]
+  )[0].id as string;
+}
+async function createListing(
+  auth: Awaited<ReturnType<typeof signIn>>,
+  title: string,
+  { submit = true } = {},
+) {
+  const categoryId = await category(auth.request);
+  const created = await auth.request.post(`${API}/api/listings`, {
+    headers: auth.headers,
+    data: {
+      title,
+      description:
+        "A genuine used student product in good condition with all important details included.",
+      categoryId,
+      condition: "GOOD",
+      conditionExplanation: "",
+      priceType: "FIXED",
+      exactPrice: 650,
+      negotiable: true,
+      location: "Main campus",
+      brand: "StudyCo",
+      defects: "",
+      meetupPoint: "Library entrance",
+    },
+  });
+  const listing = (await created.json()).data;
+  const image = await sharp({
+    create: { width: 640, height: 480, channels: 3, background: "#5b7f68" },
+  })
+    .jpeg()
+    .toBuffer();
+  const presign = (
+    await (
+      await auth.request.post(
+        `${API}/api/uploads/listings/${listing.id}/presign`,
+        {
+          headers: auth.headers,
+          data: { mimeType: "image/jpeg", byteSize: image.length },
+        },
+      )
+    ).json()
+  ).data;
+  await auth.request.put(presign.uploadUrl, {
+    headers: { "content-type": "image/jpeg" },
+    data: image,
+  });
+  await auth.request.post(
+    `${API}/api/uploads/listings/${listing.id}/finalize`,
+    { headers: auth.headers, data: { imageId: presign.imageId } },
+  );
+  if (submit)
+    await auth.request.post(`${API}/api/listings/${listing.id}/submit`, {
+      headers: auth.headers,
+    });
+  return listing;
+}
+async function approve(
+  context: BrowserContext,
+  listingId: string,
+  decision = "APPROVE",
+  userVisibleReason?: string,
+) {
+  const auth = await signIn(context, "moderator");
+  const response = await auth.request.post(
+    `${API}/api/admin/listings/${listingId}/decision`,
+    {
+      headers: auth.headers,
+      data: {
+        decision,
+        internalReason: "E2E moderation review completed",
+        userVisibleReason,
+      },
+    },
+  );
+  expect(response.ok()).toBeTruthy();
+}
+
+test("E2E-01 seller journey from onboarding through moderator approval", async ({
+  browser,
+}) => {
+  const seller = await browser.newContext();
+  await signIn(seller, "seller-journey", { profile: false, phone: false });
+  const page = await seller.newPage();
+  await page.goto("/onboarding");
+  await page.getByLabel("Display name").fill("Journey Seller");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/settings/);
+  await page.getByLabel("Indian mobile number").fill("9876500001");
+  await page.getByRole("button", { name: "Send code" }).click();
+  await page.getByLabel("6-digit code").fill("999999");
+  await page.getByRole("button", { name: "Verify phone" }).click();
+  await expect(page.getByText("Your phone is verified")).toBeVisible();
+  await page.goto("/sell");
+  await page.getByLabel("Title").fill("Engineering mechanics book");
+  await page
+    .getByLabel("Description")
+    .fill(
+      "A clean engineering mechanics textbook with no missing pages or annotations.",
+    );
+  await page.getByLabel("Category").selectOption({ index: 1 });
+  await page.getByLabel("Price (₹)").fill("650");
+  await page
+    .getByLabel("Campus, hostel area or neighbourhood")
+    .fill("Main campus");
+  const image = await sharp({
+    create: { width: 640, height: 480, channels: 3, background: "#355e4b" },
+  })
+    .jpeg()
+    .toBuffer();
+  await page
+    .getByLabel(/Product images/)
+    .setInputFiles({ name: "book.jpg", mimeType: "image/jpeg", buffer: image });
+  await page.getByRole("button", { name: "Save private draft" }).click();
+  await expect(page).toHaveURL(/listing\//);
+  const listingId = page.url().split("/").pop()!;
+  await page.goto("/my-listings");
+  await page.getByRole("button", { name: "Submit for review" }).click();
+  await expect(page.getByText("PENDING").first()).toBeVisible();
+  const mod = await browser.newContext();
+  await approve(mod, listingId);
+  await page.goto(`/listing/${listingId}`);
+  await expect(page.getByText("Engineering mechanics book")).toBeVisible();
+  const guest = await browser.newContext();
+  const guestPage = await guest.newPage();
+  await guestPage.goto("/browse");
+  await expect(guestPage.getByText("Engineering mechanics book")).toBeVisible();
+  await seller.close();
+  await mod.close();
+  await guest.close();
+});
+
+test("E2E-02 rejected listing is corrected, resubmitted and approved", async ({
+  browser,
+}) => {
+  const seller = await browser.newContext();
+  const auth = await signIn(seller, "rejected-seller");
+  const listing = await createListing(auth, "Old calculator");
+  const mod = await browser.newContext();
+  await approve(
+    mod,
+    listing.id,
+    "REJECT",
+    "Please describe the battery condition.",
+  );
+  const page = await seller.newPage();
+  await page.goto(`/listing/${listing.id}`);
+  await expect(
+    page.getByText("Please describe the battery condition."),
+  ).toBeVisible();
+  await page.goto(`/listing/${listing.id}/edit`);
+  await page
+    .getByLabel("Description")
+    .fill(
+      "A working calculator with a recently replaced battery and clear display.",
+    );
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await page.goto("/my-listings");
+  await page.getByRole("button", { name: "Submit for review" }).click();
+  await approve(mod, listing.id);
+  const guest = await browser.newContext();
+  const guestPage = await guest.newPage();
+  await guestPage.goto(`/listing/${listing.id}`);
+  await expect(guestPage.getByText("Old calculator")).toBeVisible();
+  await seller.close();
+  await mod.close();
+  await guest.close();
+});
+
+test("E2E-03 buyer transaction, chat, reservation, completion and reviews", async ({
+  browser,
+}) => {
+  const seller = await browser.newContext();
+  const sellerAuth = await signIn(seller, "transaction-seller");
+  const listing = await createListing(sellerAuth, "Graphing calculator");
+  const mod = await browser.newContext();
+  await approve(mod, listing.id);
+  const buyer = await browser.newContext();
+  await signIn(buyer, "transaction-buyer");
+  const buyerPage = await buyer.newPage();
+  await buyerPage.goto(`/listing/${listing.id}`);
+  await buyerPage.getByRole("button", { name: "Save product" }).click();
+  await buyerPage.getByRole("button", { name: "Contact seller" }).click();
+  await expect(buyerPage).toHaveURL(/chats/);
+  await buyerPage
+    .getByLabel("Message")
+    .fill("Can we meet at the library tomorrow?");
+  await buyerPage.getByRole("button", { name: "Send" }).click();
+  await expect(
+    buyerPage.getByText("Can we meet at the library tomorrow?"),
+  ).toBeVisible();
+  await buyerPage.goto(`/listing/${listing.id}`);
+  await buyerPage.getByRole("button", { name: "Request to buy" }).click();
+  const sellerPage = await seller.newPage();
+  await sellerPage.goto("/transactions");
+  await sellerPage.getByRole("button", { name: "Accept and reserve" }).click();
+  await sellerPage.getByRole("button", { name: "Mark handed over" }).click();
+  await buyerPage.goto("/transactions");
+  await buyerPage.getByRole("button", { name: "Confirm receipt" }).click();
+  await expect(buyerPage.getByText("COMPLETED")).toBeVisible();
+  await buyerPage
+    .getByLabel("Short review")
+    .fill("Exactly as described and easy meetup.");
+  await buyerPage
+    .getByRole("button", { name: "Leave verified review" })
+    .click();
+  await expect(buyerPage.getByText("Review submitted.")).toBeVisible();
+  await seller.close();
+  await buyer.close();
+  await mod.close();
+});
+
+test("E2E-04 report, removal, seller notification and audit trail", async ({
+  browser,
+}) => {
+  const seller = await browser.newContext();
+  const sellerAuth = await signIn(seller, "reported-seller");
+  const listing = await createListing(sellerAuth, "Reported product");
+  const mod = await browser.newContext();
+  await approve(mod, listing.id);
+  const reporter = await browser.newContext();
+  await signIn(reporter, "reporting-user");
+  const page = await reporter.newPage();
+  await page.goto(`/listing/${listing.id}`);
+  await page.getByRole("button", { name: "Report listing" }).click();
+  await page.getByLabel("Reason").selectOption("MISLEADING_INFORMATION");
+  await page.getByLabel("Details").fill("This listing appears misleading.");
+  await page.getByRole("button", { name: "Submit report" }).click();
+  const moderator = await mod.newPage();
+  await moderator.goto("/admin/reports");
+  await expect(moderator.getByText("MISLEADING INFORMATION")).toBeVisible();
+  await approve(
+    mod,
+    listing.id,
+    "REMOVE",
+    "Removed after a confirmed misleading listing report.",
+  );
+  const guest = await browser.newContext();
+  await (await guest.newPage()).goto(`/listing/${listing.id}`);
+  await expect(
+    (await guest.pages())[0].getByText("This listing is unavailable"),
+  ).toBeVisible();
+  const sellerPage = await seller.newPage();
+  await sellerPage.goto("/notifications");
+  await expect(sellerPage.getByText("Listing removed")).toBeVisible();
+  await moderator.goto("/admin/audit-logs");
+  await expect(moderator.getByText("LISTING_REMOVE")).toBeVisible();
+  await seller.close();
+  await reporter.close();
+  await mod.close();
+  await guest.close();
+});
+
+test("E2E-05 support request receives an agent response and resolves", async ({
+  browser,
+}) => {
+  const user = await browser.newContext();
+  await signIn(user, "support-user");
+  const page = await user.newPage();
+  await page.goto("/support");
+  await page.getByLabel("Subject").fill("Listing status question");
+  await page
+    .getByLabel("Describe the issue")
+    .fill(
+      "My listing status has not changed and I would like help understanding it.",
+    );
+  await page.getByRole("button", { name: "Open request" }).click();
+  await expect(page).toHaveURL(/\/support\/[0-9a-f-]{36}$/);
+  const ticketId = page.url().split("/").pop()!;
+  const support = await browser.newContext();
+  await signIn(support, "support");
+  const agent = await support.newPage();
+  await agent.goto(`/admin/support/${ticketId}`);
+  await agent
+    .getByLabel("Reply")
+    .fill("Your listing is still in the normal review queue.");
+  await agent.getByLabel("New status").selectOption("RESOLVED");
+  await agent.getByRole("button", { name: "Send reply" }).click();
+  await page.reload();
+  await expect(
+    page.getByText("Your listing is still in the normal review queue."),
+  ).toBeVisible();
+  await expect(page.getByText("RESOLVED")).toBeVisible();
+  await user.close();
+  await support.close();
+});
+
+test("E2E-06 important marketplace screens remain usable at mobile, tablet and desktop widths", async ({
+  browser,
+}) => {
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 768, height: 1024 },
+    { width: 1440, height: 900 },
+  ]) {
+    const context = await browser.newContext({ viewport });
+    const page = await context.newPage();
+    const pageErrors: string[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    for (const path of ["/", "/browse", "/leaderboard", "/login"]) {
+      await page.goto(path);
+      const overflow = await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth >
+          document.documentElement.clientWidth,
+      );
+      expect(overflow, `${path} overflows at ${viewport.width}`).toBe(false);
+      await expect(page.locator("main")).toBeVisible();
+      const accessibility = await new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa"])
+        .analyze();
+      expect(
+        accessibility.violations,
+        `${path} has accessibility violations`,
+      ).toEqual([]);
+    }
+    expect(pageErrors).toEqual([]);
+    await context.close();
+  }
+});

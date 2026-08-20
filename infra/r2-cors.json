@@ -1,0 +1,14 @@
+{
+  "rules": [
+    {
+      "allowed": {
+        "origins": ["https://market.example.edu"],
+        "methods": ["GET", "PUT"],
+        "headers": ["Content-Type"]
+      },
+      "exposeHeaders": ["ETag"],
+      "maxAgeSeconds": 3600
+    }
+  ]
+}
+
