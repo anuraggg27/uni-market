@@ -4,6 +4,8 @@ import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import { rateLimit } from "express-rate-limit";
 import pinoHttp from "pino-http";
+import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import type { AppConfig } from "./config.js";
 import type { Database } from "./db/client.js";
 import { csrfProtection, sessionMiddleware } from "./middleware/auth.js";
@@ -143,6 +145,17 @@ export function createApp(deps: {
   app.use("/api", reputationRouter(db));
   app.use("/api", userOperationsRouter(db));
   app.use("/api/admin", adminRouter(db));
+  if (config.NODE_ENV === "production") {
+    const webRoot = fileURLToPath(new URL("../../web/dist", import.meta.url));
+    app.use(express.static(webRoot, { index: false, maxAge: "1h" }));
+    app.get("/{*path}", (req, res, next) => {
+      if (req.path === "/api" || req.path.startsWith("/api/") || req.path.startsWith("/socket.io")) {
+        next();
+        return;
+      }
+      res.sendFile(join(webRoot, "index.html"));
+    });
+  }
   app.use(notFound);
   app.use(errorHandler);
   return app;

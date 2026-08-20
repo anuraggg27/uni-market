@@ -2,8 +2,8 @@
   "rules": [
     {
       "allowed": {
-        "origins": ["https://market.example.edu"],
-        "methods": ["GET", "PUT"],
+        "origins": ["https://uni-market.shubhang.dev"],
+        "methods": ["GET", "PUT", "HEAD"],
         "headers": ["Content-Type"]
       },
       "exposeHeaders": ["ETag"],
@@ -11,4 +11,3 @@
     }
   ]
 }
-

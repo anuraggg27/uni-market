@@ -1,0 +1,30 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        VITE_API_URL: ${API_URL}
+        VITE_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+        VITE_TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY}
+    image: uni-market:production
+    container_name: uni-market
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    ports:
+      - "127.0.0.1:3020:4000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 384m
+    cpus: 0.75
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+

@@ -52,6 +52,8 @@ npm run start -w @campus-market/api
 
 The production frontend is in `apps/web/dist`; the API entry point is `apps/api/dist/index.js`. Serve both behind TLS, keep `CLIENT_URL` exact, and set `TRUST_PROXY=true` only behind a trusted single proxy.
 
+The included production container builds both applications, serves the SPA from Express, runs database migrations before startup, and exposes only port `4000` inside the container. On the shared deployment droplet, Compose binds it to `127.0.0.1:3020` and Caddy uses the isolated site fragment in `infra/uni-market.caddy`.
+
 ## R2 uploads
 
 Draft image uploads use a short-lived signed PUT URL to a random temporary key. Finalization verifies ownership, byte size, actual JPEG/PNG/WebP signature, dimensions, and configured limits; Sharp re-encodes the image as WebP and strips metadata. The temporary object is deleted. Pending images remain private and read URLs are short lived. When R2 credentials are absent outside production, an equivalent signed local storage adapter supports development and tests.
