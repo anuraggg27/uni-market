@@ -25,6 +25,11 @@ function sessionCookie(config: AppConfig) {
 export function authRouter(db: Database, config: AppConfig, verifier: GoogleVerifier): Router {
   const router = Router();
 
+  const currentUser = async (userId: string) => {
+    const user = (await db.select({ id: users.id, email: users.email, displayName: users.displayName, avatarUrl: users.avatarUrl, institution: users.institution, campus: users.campus, graduationYear: users.graduationYear, phoneVerifiedAt: users.phoneVerifiedAt, phoneE164: users.phoneE164, onboardingComplete: users.onboardingComplete, suspendedAt: users.suspendedAt, createdAt: users.createdAt }).from(users).where(and(eq(users.id, userId), isNull(users.deletedAt))).limit(1))[0];
+    return user ? { ...user, phoneE164: user.phoneE164 ? `${user.phoneE164.slice(0, 3)}******${user.phoneE164.slice(-3)}` : null } : null;
+  };
+
   router.post('/google', asyncRoute(async (req, res) => {
     const { credential } = z.object({ credential: z.string().min(20).max(10_000) }).parse(req.body);
     const identity = await verifier.verify(credential);
@@ -64,11 +69,21 @@ export function authRouter(db: Database, config: AppConfig, verifier: GoogleVeri
     res.status(204).end();
   }));
 
+  router.get('/session', asyncRoute(async (req, res) => {
+    res.setHeader('cache-control', 'no-store');
+    if (!req.auth) {
+      res.json({ data: null });
+      return;
+    }
+    const user = await currentUser(req.auth.userId);
+    res.json({ data: user ? { ...user, roles: req.auth.roles } : null });
+  }));
+
   router.get('/me', requireAuth, asyncRoute(async (req, res) => {
-    const user = (await db.select({ id: users.id, email: users.email, displayName: users.displayName, avatarUrl: users.avatarUrl, institution: users.institution, campus: users.campus, graduationYear: users.graduationYear, phoneVerifiedAt: users.phoneVerifiedAt, phoneE164: users.phoneE164, onboardingComplete: users.onboardingComplete, suspendedAt: users.suspendedAt, createdAt: users.createdAt }).from(users).where(and(eq(users.id, req.auth!.userId), isNull(users.deletedAt))).limit(1))[0];
+    const user = await currentUser(req.auth!.userId);
     if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'Account not found');
     res.setHeader('cache-control', 'no-store');
-    res.json({ data: { ...user, phoneE164: user.phoneE164 ? `${user.phoneE164.slice(0, 3)}******${user.phoneE164.slice(-3)}` : null, roles: req.auth!.roles } });
+    res.json({ data: { ...user, roles: req.auth!.roles } });
   }));
 
   router.patch('/me', requireAuth, asyncRoute(async (req, res) => {

@@ -61,7 +61,7 @@ export function createApp(deps: {
           ],
           imgSrc: ["'self'", "data:", "blob:", "https:"],
           connectSrc: ["'self'", config.CLIENT_URL, config.API_URL, "wss:"],
-          styleSrc: ["'self'", "'unsafe-inline'"],
+          styleSrc: ["'self'", "'unsafe-inline'", "https://accounts.google.com"],
         },
       },
       crossOriginResourcePolicy: { policy: "cross-origin" },

@@ -7,6 +7,11 @@ let ctx: Awaited<ReturnType<typeof setup>>;
 beforeEach(async()=>{ctx=await setup();});afterEach(async()=>ctx?.client.close());
 
 describe('authentication acceptance',()=>{
+  it('returns an anonymous session without emitting an expected browser error',async()=>{
+    const request=(await import('supertest')).default;
+    const response=await request(ctx.app).get('/api/auth/session').expect(200);
+    expect(response.body.data).toBeNull();expect(response.headers['cache-control']).toBe('no-store');
+  });
   it('AUTH-01 guest browsing returns approved active listings without private seller data',async()=>{
     const seller=(await ctx.db.insert(schema.users).values({email:'seller@example.com',displayName:'Seller',phoneE164:'+919876543210',phoneVerifiedAt:new Date()}).returning())[0]!;
     await ctx.db.insert(schema.listings).values({sellerId:seller.id,categoryId:ctx.category.id,title:'Approved calculator',description:'A working scientific calculator in good condition.',condition:'GOOD',priceType:'FIXED',exactPrice:500,negotiable:false,location:'Campus gate',moderationState:'APPROVED',lifecycleState:'ACTIVE',approvedAt:new Date()});

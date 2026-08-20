@@ -1,14 +1,14 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Navigate, useLocation } from 'react-router-dom';
-import { api, ApiError } from './api';
+import { api } from './api';
 
 export interface CurrentUser { id: string; email: string; displayName: string; avatarUrl: string | null; institution: string | null; campus: string | null; graduationYear: number | null; phoneVerifiedAt: string | null; onboardingComplete: boolean; suspendedAt: string | null; roles: string[]; }
 const AuthContext = createContext<{ user: CurrentUser | null; loading: boolean; refresh: () => Promise<unknown> }>({ user: null, loading: true, refresh: async () => undefined });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const client = useQueryClient();
-  const query = useQuery({ queryKey: ['me'], queryFn: async () => { try { return await api<CurrentUser>('/api/auth/me'); } catch (error) { if (error instanceof ApiError && error.status === 401) return null; throw error; } } });
+  const query = useQuery({ queryKey: ['me'], queryFn: () => api<CurrentUser | null>('/api/auth/session') });
   return <AuthContext.Provider value={{ user: query.data ?? null, loading: query.isLoading, refresh: () => client.invalidateQueries({ queryKey: ['me'] }) }}>{children}</AuthContext.Provider>;
 }
 export function useAuth() { return useContext(AuthContext); }
