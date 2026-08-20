@@ -13,7 +13,7 @@ const app = createApp({ db: database.db, config, googleVerifier: new ProductionG
 const server = createServer(app);
 attachSocket(server, database.db, config);
 const emailWorker = new EmailWorker(database.db, config); emailWorker.start();
-server.listen(config.PORT, () => logger.info({ port: config.PORT, appEnv: config.APP_ENV, devMode: config.DEV_MODE }, 'Campus Market API listening'));
+server.listen(config.PORT, () => logger.info({ port: config.PORT, appEnv: config.APP_ENV, devMode: config.DEV_MODE }, 'Uni Market API listening'));
 
 async function shutdown(signal: string) {
   logger.info({ signal }, 'shutting down'); emailWorker.stop(); server.close(); await database.close(); process.exit(0);

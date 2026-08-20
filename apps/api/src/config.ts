@@ -39,7 +39,7 @@ const schema = z
     SMTP_SECURE: booleanString.default(false),
     SMTP_USER: z.string().default(""),
     SMTP_PASSWORD: z.string().default(""),
-    SMTP_FROM_NAME: z.string().default("Campus Market"),
+    SMTP_FROM_NAME: z.string().default("Uni Market"),
     SMTP_FROM_EMAIL: z.string().email().default("noreply@example.test"),
     CLOUDFLARE_ACCOUNT_ID: z.string().default(""),
     R2_ACCESS_KEY_ID: z.string().default(""),

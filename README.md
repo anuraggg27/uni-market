@@ -1,4 +1,4 @@
-# Campus Market
+# Uni Market
 
 A mobile-first marketplace where students can buy and sell used products, communicate privately, and complete offline exchanges. Registration accepts any verified Google account; institution details are optional.
 
@@ -75,4 +75,3 @@ Read [docs/moderation-policy.md](docs/moderation-policy.md) before moderating co
 - SMTP and email outbox processing are asynchronous; monitor failed jobs.
 
 Additional documentation: [architecture](docs/architecture.md), [API](docs/api.md), [security](docs/security.md), [testing](docs/testing.md), and [UI references](docs/ui-reference.md).
-

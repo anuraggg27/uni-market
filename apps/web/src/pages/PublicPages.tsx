@@ -784,7 +784,7 @@ export function LoginPage() {
       <div className="panel stack-lg">
         <div>
           <p className="eyebrow">Welcome</p>
-          <h1>Sign in to Campus Market</h1>
+          <h1>Sign in to Uni Market</h1>
           <p className="lede">
             Continue with any verified Google account. No university email is
             required.
