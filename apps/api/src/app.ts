@@ -11,7 +11,7 @@ import type { Database } from "./db/client.js";
 import { csrfProtection, sessionMiddleware } from "./middleware/auth.js";
 import { adaptiveTurnstile } from "./middleware/adaptive-turnstile.js";
 import { requestContext } from "./middleware/request.js";
-import { errorHandler, notFound } from "./lib/errors.js";
+import { AppError, errorHandler, notFound } from "./lib/errors.js";
 import { logger } from "./lib/logger.js";
 import type { GoogleVerifier } from "./services/google.js";
 import { StorageService } from "./services/storage.js";
@@ -77,7 +77,7 @@ export function createApp(deps: {
     cors({
       origin(origin, callback) {
         if (!origin || origin === config.CLIENT_URL) callback(null, true);
-        else callback(new Error("Origin not allowed"));
+        else callback(new AppError(403, "CORS_DENIED", "Origin not allowed"));
       },
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
