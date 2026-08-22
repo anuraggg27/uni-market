@@ -29,6 +29,8 @@ import {
   StatusBadge,
 } from "../components/UI";
 
+import { HeroParticles } from "../components/HeroParticles";
+
 function useListings(search: string) {
   return useQuery({
     queryKey: ["listings", search],
@@ -45,7 +47,6 @@ function useCategories() {
 export function HomePage() {
   const navigate = useNavigate();
   const [term, setTerm] = useState("");
-  const categories = useCategories();
   const recent = useListings("?limit=8&sort=newest");
   const popular = useListings("?limit=8&sort=popular");
   const { user } = useAuth();
@@ -58,63 +59,71 @@ export function HomePage() {
     ? `?limit=4&location=${encodeURIComponent(user.campus)}`
     : "?limit=4";
   const nearby = useListings(nearbySearch);
+
   return (
     <>
-      <section className="search-shell">
-        <div className="search-inner">
-          <p className="eyebrow">Buy nearby. Sell simply.</p>
-          <h1>Find what you need around campus</h1>
+      {/* ─── Hero Section (Minimal / Antigravity inspired) ─── */}
+      <section className="relative flex min-h-[76vh] md:min-h-[82vh] flex-col items-center justify-center overflow-hidden px-4 py-16 text-center sm:px-6 md:py-24 bg-white">
+        <HeroParticles />
+        <div className="relative z-10 mx-auto flex max-w-5xl flex-col items-center">
+          {/* Eyebrow badge */}
+          <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-black/[0.08] bg-black/[0.02] px-3.5 py-1.5 text-[12px] sm:text-[13px] font-medium uppercase tracking-[0.2em] text-[#555555] backdrop-blur-sm select-none">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#176b45]" />
+            BUY NEARBY. SELL SIMPLY.
+          </div>
+
+          {/* Main Heading */}
+          <h1 className="mb-6 max-w-5xl text-5xl sm:text-7xl md:text-[84px] font-extralight tracking-[-0.04em] text-[#111827] leading-[1.04]">
+            <span className="font-extralight text-[#374151]">Find what you need</span>{" "}
+            <span className="font-normal text-[#111827]">around campus</span>
+          </h1>
+
+          {/* Supporting text */}
+          <p className="mb-10 max-w-2xl text-lg sm:text-[20px] font-light leading-relaxed text-[#6b7280]">
+            The student marketplace for peer-to-peer textbook, tech, cycle, and room essentials exchanges.
+          </p>
+
+          {/* Search Pill Component */}
           <form
-            className="search-form"
+            className="group relative w-full max-w-2xl sm:max-w-3xl"
             role="search"
             onSubmit={(event) => {
               event.preventDefault();
-              navigate(`/browse?q=${encodeURIComponent(term)}`);
+              if (term.trim()) {
+                navigate(`/browse?q=${encodeURIComponent(term.trim())}`);
+              } else {
+                navigate("/browse");
+              }
             }}
           >
-            <label className="sr-only" htmlFor="home-search">
-              Search products
-            </label>
-            <input
-              id="home-search"
-              value={term}
-              onChange={(event) => setTerm(event.target.value)}
-              placeholder="Search books, cycles, calculators…"
-            />
-            <button className="button primary" type="submit">
-              <Search aria-hidden="true" />
-              Search
-            </button>
+            <div className="relative flex h-14 sm:h-16 w-full items-center rounded-full border border-[#e5e7eb] bg-white/95 pl-5 pr-2 sm:pr-2.5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] backdrop-blur-xl transition-all duration-200 hover:border-[#d1d5db] focus-within:border-[#9ca3af] focus-within:shadow-[0_12px_36px_rgba(0,0,0,0.08)]">
+              <Search
+                className="mr-3.5 size-5 shrink-0 text-[#9ca3af]"
+                aria-hidden="true"
+              />
+              <label className="sr-only" htmlFor="home-search">
+                Search products
+              </label>
+              <input
+                id="home-search"
+                value={term}
+                onChange={(event) => setTerm(event.target.value)}
+                placeholder="Search books, cycles, calculators, monitors…"
+                className="search-pill-input h-full w-full bg-transparent text-[16px] text-[#111827] placeholder-[#9ca3af] font-normal outline-none focus:outline-none border-none ring-0 focus:ring-0 shadow-none"
+              />
+              <button
+                type="submit"
+                className="flex h-10 sm:h-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-[#111827] px-6 text-[15px] font-medium text-white !text-white shadow-none transition-all hover:bg-black active:scale-[0.98]"
+              >
+                <span className="text-white !text-white font-medium">Search</span>
+              </button>
+            </div>
           </form>
         </div>
       </section>
-      <div className="page">
-        <section aria-labelledby="categories-heading">
-          <div className="section-heading">
-            <h2 id="categories-heading">Browse categories</h2>
-            <Link to="/browse">View all</Link>
-          </div>
-          {categories.isLoading ? (
-            <Loading />
-          ) : categories.isError ? (
-            <ErrorState
-              error={categories.error}
-              retry={() => void categories.refetch()}
-            />
-          ) : (
-            <div className="categories">
-              {categories.data?.map((category) => (
-                <Link
-                  className="category"
-                  key={category.id}
-                  to={`/browse?category=${category.id}`}
-                >
-                  {category.name}
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
+
+      {/* ─── Marketplace Content ─── */}
+      <div className="page pt-2 pb-24">
         <ProductSection title="Recently approved" query={recent} />
         <ProductSection title="Popular right now" query={popular} />
         {user ? (
@@ -125,9 +134,19 @@ export function HomePage() {
         ) : null}
         {user && saved.data?.length ? (
           <section className="section">
-            <div className="section-heading">
-              <h2>Saved for later</h2>
-              <Link to="/saved">See saved</Link>
+            <div className="mb-6 flex items-baseline justify-between border-b border-[#f0f0f0] pb-3">
+              <h2 className="text-2xl font-light tracking-[-0.025em] text-[#111827]">
+                Saved for later
+              </h2>
+              <Link
+                to="/saved"
+                className="group flex items-center gap-1 text-[14px] font-normal text-[#6b7280] hover:text-[#111827] transition-colors"
+              >
+                <span>See saved</span>
+                <span className="transition-transform duration-150 group-hover:translate-x-0.5">
+                  →
+                </span>
+              </Link>
             </div>
             <div className="product-grid">
               {saved.data.slice(0, 4).map((listing) => (
@@ -153,9 +172,19 @@ function ProductSection({
 }) {
   return (
     <section className="section">
-      <div className="section-heading">
-        <h2>{title}</h2>
-        <Link to="/browse">Browse all</Link>
+      <div className="mb-6 flex items-baseline justify-between border-b border-[#f0f0f0] pb-3">
+        <h2 className="text-2xl font-light tracking-[-0.025em] text-[#111827]">
+          {title}
+        </h2>
+        <Link
+          to="/browse"
+          className="group flex items-center gap-1 text-[14px] font-normal text-[#6b7280] hover:text-[#111827] transition-colors"
+        >
+          <span>Browse all</span>
+          <span className="transition-transform duration-150 group-hover:translate-x-0.5">
+            →
+          </span>
+        </Link>
       </div>
       {query.isLoading ? (
         <Loading />
