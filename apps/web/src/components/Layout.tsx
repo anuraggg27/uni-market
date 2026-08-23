@@ -1,6 +1,7 @@
 import { Home, ListPlus, MessageCircle, Search, UserRound } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Navbar } from './Navbar';
+import { RouteScrollRestoration } from './RouteScrollRestoration';
 
 const mobileLinks = [
   { to: '/', label: 'Home', icon: Home },
@@ -19,6 +20,7 @@ export function Layout() {
     <div
       className={`app-shell ${isChatRoute ? 'chat-layout' : ''} ${isConversationRoute ? 'chat-conversation-layout' : ''}`}
     >
+      <RouteScrollRestoration />
       <a className="skip-link" href="#main">
         Skip to content
       </a>
