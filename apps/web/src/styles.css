@@ -755,7 +755,7 @@ html.dark :where(
   .inbox-header,
   .chat-header,
   .chat-actions-menu,
-  .bubble,
+  [data-slot="bubble-content"],
   .new-message-jump,
   .composer,
   .metric,
@@ -1985,7 +1985,7 @@ html.dark :where(
   .inbox-header,
   .chat-header,
   .chat-actions-menu,
-  .bubble,
+  [data-slot="bubble-content"],
   .new-message-jump,
   .composer,
   .metric,
@@ -2052,7 +2052,9 @@ html.dark .browse-filter-divider {
 html.dark :where(.conversation-image, .chat-listing-image, .avatar) {
   background: #202a24;
 }
-html.dark .bubble.mine,
+html.dark
+  [data-slot="bubble"][data-variant="default"]
+  [data-slot="bubble-content"],
 html.dark .listing-form-actions .button.primary {
   border-color: #176b45;
   background: #176b45;
@@ -2734,54 +2736,144 @@ html.dark [data-site-header] :where(
   height: 15px;
   flex: 0 0 auto;
 }
-.bubble {
-  width: fit-content;
-  max-width: min(72%, 560px);
-  padding: 9px 11px 7px;
-  border: 1px solid #e6e8e6;
-  border-radius: 14px 14px 14px 4px;
-  background: white;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.bubble.mine {
-  margin-left: auto;
-  color: white;
-  border-color: var(--color-brand-dark);
-  border-radius: 14px 14px 4px 14px;
-  background: var(--color-brand-dark);
-}
-.bubble.failed {
-  border-color: #f4a6a6;
-}
-.bubble p {
-  margin: 0;
-  line-height: 1.38;
-}
-.bubble footer {
-  position: static;
-  max-width: none;
-  margin: 5px 0 0;
-  padding: 0;
+[data-slot="message-group"] {
   display: flex;
-  justify-content: flex-end;
+  flex-direction: column;
+  gap: 3px;
+  margin: 7px 0;
+}
+[data-slot="message"] {
+  display: flex;
+  align-items: flex-end;
   gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+[data-slot="message"][data-align="end"] {
+  flex-direction: row-reverse;
+}
+[data-slot="message-avatar"] {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 30px;
+}
+[data-slot="message"]:has([data-slot="message-footer"])
+  > [data-slot="message-avatar"] {
+  transform: translateY(-18px);
+}
+.message-avatar-fallback {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-line);
+  border-radius: 50%;
+  background: var(--color-surface-muted);
+  color: var(--color-brand);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+[data-slot="message-content"] {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  max-width: min(72%, 560px);
+}
+[data-slot="message"][data-align="end"] [data-slot="message-content"],
+[data-slot="bubble"][data-align="end"] {
+  align-items: flex-end;
+}
+[data-slot="message-header"],
+[data-slot="message-footer"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 14px;
+  padding: 0 4px;
   border: 0;
-  color: inherit;
+  color: var(--color-muted);
+  font-size: 0.68rem;
+  line-height: 1.2;
 }
-.bubble time,
-.bubble footer button {
-  font-size: 0.7rem;
-  opacity: 0.72;
+[data-slot="message-header"] {
+  font-weight: 650;
 }
-.bubble footer button {
+[data-slot="message-footer"] {
+  position: static;
+  width: auto;
+  max-width: none;
+  margin: 0;
+}
+[data-slot="message"][data-align="end"] [data-slot="message-footer"] {
+  justify-content: flex-end;
+}
+[data-slot="message-footer"] button {
   padding: 0;
   border: 0;
   background: transparent;
-  color: inherit;
+  color: #a13a3a;
   cursor: pointer;
+  font: inherit;
   font-weight: 700;
-  text-decoration: underline;
+}
+[data-slot="bubble"] {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+}
+[data-slot="bubble-content"] {
+  width: fit-content;
+  max-width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  line-height: 1.42;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+[data-slot="bubble"][data-variant="default"] [data-slot="bubble-content"] {
+  border-color: var(--color-brand);
+  background: var(--color-brand);
+  color: var(--color-on-brand);
+}
+[data-slot="bubble"][data-variant="secondary"] [data-slot="bubble-content"] {
+  background: var(--color-surface);
+}
+[data-slot="bubble"][data-variant="destructive"] [data-slot="bubble-content"] {
+  border-color: #d99b9b;
+  background: #fff5f5;
+  color: #842929;
+}
+html.dark .message-avatar-fallback {
+  color: var(--color-accent);
+}
+html.dark
+  [data-slot="bubble"][data-variant="destructive"]
+  [data-slot="bubble-content"] {
+  border-color: #7f4545;
+  background: #321d1d;
+  color: #f1b8b8;
+}
+[data-slot="message"][data-state="pending"] [data-slot="bubble-content"] {
+  opacity: 0.72;
+}
+[data-slot="message-group"]
+  > [data-slot="message"]:not(:last-child)
+  [data-slot="bubble"][data-align="start"]
+  [data-slot="bubble-content"] {
+  border-bottom-left-radius: 5px;
+}
+[data-slot="message-group"]
+  > [data-slot="message"]:not(:last-child)
+  [data-slot="bubble"][data-align="end"]
+  [data-slot="bubble-content"] {
+  border-bottom-right-radius: 5px;
 }
 .new-message-jump {
   position: absolute;
@@ -3462,7 +3554,7 @@ html.dark .site-footer-wordmark:hover > span:first-child {
   .chat-safety-note {
     max-width: calc(100% - 12px);
   }
-  .bubble {
+  [data-slot="message-content"] {
     max-width: 86%;
   }
   .composer {
@@ -3517,7 +3609,7 @@ html.dark .site-footer-wordmark:hover > span:first-child {
 .inbox-header,
 .chat-header,
 .chat-actions-menu,
-.bubble,
+[data-slot="bubble-content"],
 .new-message-jump,
 .composer,
 .metric,
@@ -3537,7 +3629,7 @@ table,
 .sell-button,
 .listing-form-actions .button.primary,
 .chat-send,
-.bubble.mine {
+[data-slot="bubble"][data-variant="default"] [data-slot="bubble-content"] {
   border-color: var(--color-brand);
   background: var(--color-brand);
   color: var(--color-on-brand);
@@ -4073,7 +4165,7 @@ html.dark :where(
   .inbox-header,
   .chat-header,
   .chat-actions-menu,
-  .bubble,
+  [data-slot="bubble-content"],
   .new-message-jump,
   .composer,
   .metric,
@@ -4129,7 +4221,9 @@ html.dark .conversation-link.active:hover {
   background: color-mix(in srgb, var(--color-plum) 38%, var(--color-surface));
 }
 
-html.dark .bubble.mine,
+html.dark
+  [data-slot="bubble"][data-variant="default"]
+  [data-slot="bubble-content"],
 html.dark .listing-form-actions .button.primary {
   border-color: var(--color-brand);
   background: var(--color-brand);

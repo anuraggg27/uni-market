@@ -33,6 +33,15 @@ import {
   type NotificationRecord,
 } from "../components/NotificationTray";
 import { ReportButton } from "../components/ReportButton";
+import { Bubble, BubbleContent } from "../components/ui/bubble";
+import {
+  Message,
+  MessageAvatar,
+  MessageContent,
+  MessageFooter,
+  MessageGroup,
+  MessageHeader,
+} from "../components/ui/message";
 import {
   DeleteConfirmationDialog,
   EmptyState,
@@ -653,6 +662,16 @@ type ChatMessage = {
 
 type RealtimeState = "connecting" | "connected" | "offline";
 
+function groupChatMessages(messages: ChatMessage[]) {
+  const groups: ChatMessage[][] = [];
+  for (const message of messages) {
+    const current = groups.at(-1);
+    if (current?.[0]?.senderId === message.senderId) current.push(message);
+    else groups.push([message]);
+  }
+  return groups;
+}
+
 export function ChatsPage() {
   const { conversationId } = useParams();
   const { user } = useAuth();
@@ -919,6 +938,7 @@ function ChatPanel({
       return true;
     });
   }, [optimistic, query.data]);
+  const messageGroups = useMemo(() => groupChatMessages(all), [all]);
 
   useEffect(() => {
     if (!query.isSuccess) return;
@@ -1092,9 +1112,11 @@ function ChatPanel({
             if (nearBottom.current) setHasNewMessages(false);
           }}
         >
-          <div className="chat-safety-note">
+          <div className="chat-safety-note" data-slot="chat-marker">
             <ShieldCheck aria-hidden="true" />
-            <span>Meet in public, inspect before paying & never share an OTP.</span>
+            <span>
+              Meet in public, inspect before paying & never share an OTP.
+            </span>
           </div>
           {query.isLoading ? (
             <Loading label="Loading messages" />
@@ -1106,34 +1128,84 @@ function ChatPanel({
               body="Ask a clear question about the product."
             />
           ) : (
-            all.map((message) => (
-              <article
-                className={`bubble ${message.senderId === user?.id ? "mine" : ""} ${message.failed ? "failed" : ""}`}
-                key={message.clientId || message.id}
-              >
-                <p>{message.body}</p>
-                <footer>
-                  <time dateTime={message.createdAt}>
-                    {message.failed
-                      ? "Not sent"
-                      : message.pending
-                        ? "Sending…"
-                        : new Intl.DateTimeFormat(undefined, {
-                            hour: "numeric",
-                            minute: "2-digit",
-                          }).format(new Date(message.createdAt))}
-                  </time>
-                  {message.failed ? (
-                    <button
-                      type="button"
-                      onClick={() => deliver(message.body, message.clientId)}
-                    >
-                      Retry
-                    </button>
-                  ) : null}
-                </footer>
-              </article>
-            ))
+            messageGroups.map((group) => {
+              const mine = group[0]?.senderId === user?.id;
+              return (
+                <MessageGroup key={group[0]?.clientId || group[0]?.id}>
+                  {group.map((message, index) => {
+                    const lastInGroup = index === group.length - 1;
+                    const align = mine ? "end" : "start";
+                    return (
+                      <Message
+                        align={align}
+                        data-state={
+                          message.failed
+                            ? "failed"
+                            : message.pending
+                              ? "pending"
+                              : "sent"
+                        }
+                        key={message.clientId || message.id}
+                      >
+                        {!mine ? (
+                          <MessageAvatar>
+                            {lastInGroup ? (
+                              <span className="message-avatar-fallback">
+                                {(conversation?.otherName ?? "U")
+                                  .trim()
+                                  .charAt(0)
+                                  .toUpperCase()}
+                              </span>
+                            ) : null}
+                          </MessageAvatar>
+                        ) : null}
+                        <MessageContent>
+                          {!mine && index === 0 ? (
+                            <MessageHeader>
+                              {conversation?.otherName ?? "Seller"}
+                            </MessageHeader>
+                          ) : null}
+                          <Bubble
+                            align={align}
+                            variant={
+                              message.failed
+                                ? "destructive"
+                                : mine
+                                  ? "default"
+                                  : "secondary"
+                            }
+                          >
+                            <BubbleContent>{message.body}</BubbleContent>
+                          </Bubble>
+                          <MessageFooter>
+                            <time dateTime={message.createdAt}>
+                              {message.failed
+                                ? "Not sent"
+                                : message.pending
+                                  ? "Sending…"
+                                  : new Intl.DateTimeFormat(undefined, {
+                                      hour: "numeric",
+                                      minute: "2-digit",
+                                    }).format(new Date(message.createdAt))}
+                            </time>
+                            {message.failed ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  deliver(message.body, message.clientId)
+                                }
+                              >
+                                Retry
+                              </button>
+                            ) : null}
+                          </MessageFooter>
+                        </MessageContent>
+                      </Message>
+                    );
+                  })}
+                </MessageGroup>
+              );
+            })
           )}
         </div>
         {hasNewMessages ? (
