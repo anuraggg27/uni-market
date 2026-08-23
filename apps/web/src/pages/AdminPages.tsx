@@ -135,62 +135,85 @@ export function PendingListings() {
     setParams(next);
   };
   return (
-    <div>
-      <div className="row between">
-        <div>
-          <h2>Pending listing queue</h2>
-          <p className="lede">
-            Review every image and field before making a decision.
-          </p>
+    <div className="admin-queue-page">
+      <div className="admin-queue-heading">
+        <h2>Pending listing queue</h2>
+        <p className="lede">
+          Review every image and field before making a decision.
+        </p>
+      </div>
+
+      <section
+        className="admin-filter-panel"
+        aria-labelledby="queue-filters-title"
+      >
+        <div className="admin-filter-heading">
+          <div>
+            <h3 id="queue-filters-title">Queue filters</h3>
+            <p>Focus the review list by seller, category, or risk signal.</p>
+          </div>
         </div>
-        <select
-          className="control"
-          aria-label="Sort queue"
-          value={params.get("sort") ?? "oldest"}
-          onChange={(e) => update("sort", e.target.value)}
-        >
-          <option value="oldest">Oldest first</option>
-          <option value="newest">Newest first</option>
-        </select>
-      </div>
-      <div className="filters">
-        <label>
-          Seller
-          <select
-            value={params.get("seller") ?? ""}
-            onChange={(e) => update("seller", e.target.value)}
-          >
-            <option value="">All sellers</option>
-            {sellers.data?.map((seller) => (
-              <option value={seller.id} key={seller.id}>
-                {seller.displayName}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Category
-          <select
-            value={params.get("category") ?? ""}
-            onChange={(e) => update("category", e.target.value)}
-          >
-            <option value="">All categories</option>
-            {categories.data?.map((category) => (
-              <option value={category.id} key={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="row">
-          <input
-            type="checkbox"
-            checked={params.get("flagged") === "true"}
-            onChange={(e) => update("flagged", e.target.checked ? "true" : "")}
-          />{" "}
-          Flagged keywords only
-        </label>
-      </div>
+
+        <div className="admin-filter-grid">
+          <label className="admin-filter-field">
+            <span>Sort by</span>
+            <select
+              value={params.get("sort") ?? "oldest"}
+              onChange={(e) => update("sort", e.target.value)}
+            >
+              <option value="oldest">Oldest first</option>
+              <option value="newest">Newest first</option>
+            </select>
+          </label>
+
+          <label className="admin-filter-field">
+            <span>Seller</span>
+            <select
+              value={params.get("seller") ?? ""}
+              onChange={(e) => update("seller", e.target.value)}
+            >
+              <option value="">All sellers</option>
+              {sellers.data?.map((seller) => (
+                <option value={seller.id} key={seller.id}>
+                  {seller.displayName}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="admin-filter-field">
+            <span>Category</span>
+            <select
+              value={params.get("category") ?? ""}
+              onChange={(e) => update("category", e.target.value)}
+            >
+              <option value="">All categories</option>
+              {categories.data?.map((category) => (
+                <option value={category.id} key={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="admin-keyword-toggle">
+            <input
+              type="checkbox"
+              checked={params.get("flagged") === "true"}
+              onChange={(e) =>
+                update("flagged", e.target.checked ? "true" : "")
+              }
+              aria-describedby="flagged-keywords-hint"
+            />
+            <span className="admin-toggle-control" aria-hidden="true" />
+            <span className="admin-toggle-copy">
+              <strong>Flagged only</strong>
+              <small id="flagged-keywords-hint">Show keyword matches</small>
+            </span>
+          </label>
+        </div>
+      </section>
+
       <QueryView query={query} emptyTitle="Queue is clear">
         {(rows) => (
           <div className="table-scroll">
