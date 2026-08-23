@@ -17,7 +17,7 @@ export class StorageService {
   private localRoot = resolve(process.cwd(), '.data/uploads');
   constructor(private config: AppConfig) {
     if (config.R2_ACCESS_KEY_ID && config.R2_SECRET_ACCESS_KEY && config.R2_BUCKET_NAME) {
-      this.s3 = new S3Client({ region: 'auto', endpoint: config.R2_ENDPOINT || `https://${config.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`, credentials: { accessKeyId: config.R2_ACCESS_KEY_ID, secretAccessKey: config.R2_SECRET_ACCESS_KEY } });
+      this.s3 = new S3Client({ region: 'auto', endpoint: config.R2_ENDPOINT || `https://${config.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`, credentials: { accessKeyId: config.R2_ACCESS_KEY_ID, secretAccessKey: config.R2_SECRET_ACCESS_KEY }, requestChecksumCalculation: 'WHEN_REQUIRED' });
     }
   }
 
@@ -63,9 +63,9 @@ export class StorageService {
       if (buffer.length > this.config.MAX_IMAGE_SIZE_MB * 1024 * 1024) throw new AppError(413, 'IMAGE_TOO_LARGE', 'Image is too large');
       const detected = await fileTypeFromBuffer(buffer);
       if (!detected || !ALLOWED.has(detected.mime)) throw new AppError(400, 'INVALID_IMAGE_SIGNATURE', 'The file is not a supported image');
-      const input = sharp(buffer, { failOn: 'error', limitInputPixels: this.config.MAX_IMAGE_DIMENSION ** 2 });
+      const input = sharp(buffer, { failOn: 'error', limitInputPixels: false });
       const metadata = await input.metadata();
-      if (!metadata.width || !metadata.height || metadata.width < this.config.MIN_IMAGE_WIDTH || metadata.height < this.config.MIN_IMAGE_HEIGHT || metadata.width > this.config.MAX_IMAGE_DIMENSION || metadata.height > this.config.MAX_IMAGE_DIMENSION) throw new AppError(400, 'INVALID_IMAGE_DIMENSIONS', 'Image dimensions are outside the allowed range');
+      if (!metadata.width || !metadata.height) throw new AppError(400, 'INVALID_IMAGE', 'Image validation failed');
       const sanitized = await input.rotate().resize({ width: 2200, height: 2200, fit: 'inside', withoutEnlargement: true }).webp({ quality: 84 }).toBuffer();
       const finalMeta = await sharp(sanitized).metadata();
       const objectKey = `listings/${listingId}/${randomUUID()}.webp`;

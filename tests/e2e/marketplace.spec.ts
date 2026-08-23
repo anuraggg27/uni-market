@@ -7,7 +7,7 @@ import {
 import AxeBuilder from "@axe-core/playwright";
 import sharp from "sharp";
 
-const API = "http://localhost:4000";
+const API = `http://127.0.0.1:${process.env.E2E_API_PORT ?? "4000"}`;
 async function signIn(
   context: BrowserContext,
   credential: string,
@@ -177,7 +177,9 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   const mod = await browser.newContext();
   await approve(mod, listingId);
   await page.goto(`/listing/${listingId}`);
-  await expect(page.getByText("Engineering mechanics book")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Engineering mechanics book", level: 1 }),
+  ).toBeVisible();
   const guest = await browser.newContext();
   const guestPage = await guest.newPage();
   await guestPage.goto("/browse");
@@ -218,7 +220,9 @@ test("E2E-02 rejected listing is corrected, resubmitted and approved", async ({
   const guest = await browser.newContext();
   const guestPage = await guest.newPage();
   await guestPage.goto(`/listing/${listing.id}`);
-  await expect(guestPage.getByText("Old calculator")).toBeVisible();
+  await expect(
+    guestPage.getByRole("heading", { name: "Old calculator", level: 1 }),
+  ).toBeVisible();
   await seller.close();
   await mod.close();
   await guest.close();
@@ -236,7 +240,7 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
   await signIn(buyer, "transaction-buyer");
   const buyerPage = await buyer.newPage();
   await buyerPage.goto(`/listing/${listing.id}`);
-  await buyerPage.getByRole("button", { name: "Save product" }).click();
+  await buyerPage.getByRole("button", { name: "Save", exact: true }).click();
   await buyerPage.getByRole("button", { name: "Contact seller" }).click();
   await expect(buyerPage).toHaveURL(/chats/);
   await buyerPage
@@ -247,7 +251,7 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
     buyerPage.getByText("Can we meet at the library tomorrow?"),
   ).toBeVisible();
   await buyerPage.goto(`/listing/${listing.id}`);
-  await buyerPage.getByRole("button", { name: "Request to buy" }).click();
+  await buyerPage.getByRole("button", { name: "Buy", exact: true }).click();
   const sellerPage = await seller.newPage();
   await sellerPage.goto("/transactions");
   await sellerPage.getByRole("button", { name: "Accept and reserve" }).click();
@@ -279,9 +283,11 @@ test("E2E-04 report, removal, seller notification and audit trail", async ({
   await signIn(reporter, "reporting-user");
   const page = await reporter.newPage();
   await page.goto(`/listing/${listing.id}`);
-  await page.getByRole("button", { name: "Report listing" }).click();
+  await page.getByRole("button", { name: "Report", exact: true }).click();
   await page.getByLabel("Reason").selectOption("MISLEADING_INFORMATION");
-  await page.getByLabel("Details").fill("This listing appears misleading.");
+  await page
+    .getByRole("textbox", { name: "Details", exact: true })
+    .fill("This listing appears misleading.");
   await page.getByRole("button", { name: "Submit report" }).click();
   const moderator = await mod.newPage();
   await moderator.goto("/admin/reports");

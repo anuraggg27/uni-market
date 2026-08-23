@@ -101,6 +101,12 @@ export function listingsRouter(db: Database, config: AppConfig, storage: Storage
     res.json({ data: updated });
   }));
 
+  router.delete('/listings/:id', requireAuth, asyncRoute(async (req, res) => {
+    const id = idSchema.parse(req.params.id);
+    const deleted = (await db.update(listings).set({ deletedAt: new Date(), updatedAt: new Date() }).where(and(eq(listings.id, id), eq(listings.sellerId, req.auth!.userId), isNull(listings.deletedAt))).returning({ id: listings.id }))[0];
+    if (!deleted) throw new AppError(404, 'LISTING_NOT_FOUND', 'Listing not found');
+    res.status(204).send();
+  }));
   router.post('/listings/:id/sold', requireVerified, (_req, _res, next) => next(new AppError(409, 'TRANSACTION_REQUIRED', 'Complete a transaction before a listing can be sold')));
 
   router.post('/listings/:id/duplicate', requireVerified, asyncRoute(async (req, res) => {

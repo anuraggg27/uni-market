@@ -1,14 +1,17 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Link,
   NavLink,
   Outlet,
+  useNavigate,
   useParams,
   useSearchParams,
 } from "react-router-dom";
 import { api, jsonBody } from "../api";
 import { useAuth } from "../auth";
 import {
+  DeleteConfirmationDialog,
   EmptyState,
   ErrorState,
   Loading,
@@ -123,6 +126,7 @@ export function PendingListings() {
   const query = useQuery({
     queryKey: ["admin-pending", params.toString()],
     queryFn: () => api<any[]>(`/api/admin/listings/pending?${params}`),
+    refetchInterval: 10_000,
   });
   const update = (name: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -240,6 +244,9 @@ export function PendingListings() {
 
 export function AdminListingReview() {
   const { listingId } = useParams();
+  const navigate = useNavigate();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [moderationDecision, setModerationDecision] = useState("APPROVE");
   const client = useQueryClient();
   const admin = useQuery({
     queryKey: ["admin-listing", listingId],
@@ -258,6 +265,13 @@ export function AdminListingReview() {
     onSuccess: () => {
       void client.invalidateQueries({ queryKey: ["admin-pending"] });
       void client.invalidateQueries({ queryKey: ["admin-listing", listingId] });
+    },
+  });
+  const deleteListing = useMutation({
+    mutationFn: () => api(`/api/admin/listings/${listingId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["admin-pending"] });
+      navigate("/admin/listings/pending");
     },
   });
   if (admin.isLoading || detail.isLoading) return <Loading />;
@@ -323,6 +337,26 @@ export function AdminListingReview() {
           <p>No previous rejection history.</p>
         )}
       </section>
+      <DeleteConfirmationDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="Delete listing?"
+        description={`Are you sure you want to delete "${item.title}"?`}
+        pending={deleteListing.isPending}
+        onConfirm={() => deleteListing.mutate()}
+      />
+      <section className="panel form">
+        <h3>Delete listing</h3>
+        <p>This hides the listing while retaining its audit and transaction history.</p>
+        <button
+          className="button danger"
+          onClick={() => setDeleteOpen(true)}
+          disabled={deleteListing.isPending}
+        >
+          Delete listing
+        </button>
+        {deleteListing.error ? <p className="field-error">{deleteListing.error.message}</p> : null}
+      </section>
       <form
         className="form panel"
         onSubmit={(e) => {
@@ -339,7 +373,7 @@ export function AdminListingReview() {
         <h3>Moderation decision</h3>
         <label className="field">
           <span>Decision</span>
-          <select name="decision">
+          <select name="decision" value={moderationDecision} onChange={(event) => setModerationDecision(event.target.value)}>
             <option value="APPROVE">Approve</option>
             <option value="REJECT">Reject</option>
             <option value="REQUEST_CHANGES">Request changes</option>
@@ -347,8 +381,8 @@ export function AdminListingReview() {
           </select>
         </label>
         <label className="field">
-          <span>Internal reason</span>
-          <textarea name="internalReason" required minLength={3} />
+          <span>Internal reason {moderationDecision === "APPROVE" ? "(optional)" : ""}</span>
+          <textarea name="internalReason" required={moderationDecision !== "APPROVE"} minLength={moderationDecision === "APPROVE" ? undefined : 3} />
         </label>
         <label className="field">
           <span>User-visible reason (required unless approving)</span>

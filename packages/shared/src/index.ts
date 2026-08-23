@@ -14,7 +14,7 @@ export const phoneSchema = z.string().regex(/^\+91[6-9]\d{9}$/, 'Enter a valid I
 
 export const listingInputSchema = z.object({
   title: z.string().trim().min(4).max(100),
-  description: z.string().trim().min(20).max(5000),
+  description: z.string().trim().min(10).max(5000),
   categoryId: idSchema,
   condition: z.enum(conditions),
   conditionExplanation: z.string().trim().max(1000).optional().default(''),

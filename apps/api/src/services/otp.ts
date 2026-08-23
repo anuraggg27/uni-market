@@ -62,7 +62,7 @@ export class OtpService {
     const conflict = (await this.db.select({ id: users.id }).from(users).where(and(eq(users.phoneE164, phoneE164), gt(users.phoneVerifiedAt, new Date(0)), ne(users.id, userId))).limit(1))[0];
     if (conflict) {
       await this.db.update(phoneVerifications).set({ invalidatedAt: now }).where(eq(phoneVerifications.id, verification.id));
-      throw new AppError(400, 'OTP_INVALID', GENERIC_FAILURE);
+      throw new AppError(409, 'PHONE_ALREADY_IN_USE', 'This phone number is already being used by another account');
     }
     await this.db.transaction(async (tx) => {
       await tx.update(users).set({ phoneE164, phoneVerifiedAt: now, updatedAt: now }).where(eq(users.id, userId));

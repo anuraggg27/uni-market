@@ -604,7 +604,7 @@ export function adminRouter(db: Database): Router {
           flagged: z.enum(["true", "false"]).optional(),
         })
         .parse(req.query);
-      const conditions = [eq(listings.moderationState, "PENDING")];
+      const conditions = [eq(listings.moderationState, "PENDING"), isNull(listings.deletedAt)];
       if (query.seller) conditions.push(eq(listings.sellerId, query.seller));
       if (query.category)
         conditions.push(eq(listings.categoryId, query.category));
@@ -668,7 +668,7 @@ export function adminRouter(db: Database): Router {
           })
           .from(listings)
           .innerJoin(users, eq(users.id, listings.sellerId))
-          .where(eq(listings.id, id))
+          .where(and(eq(listings.id, id), isNull(listings.deletedAt)))
           .limit(1)
       )[0];
       if (!listing)
@@ -693,6 +693,26 @@ export function adminRouter(db: Database): Router {
     }),
   );
 
+  router.delete(
+    "/listings/:id",
+    moderation,
+    asyncRoute(async (req, res) => {
+      const id = idSchema.parse(req.params.id);
+      const current = (await db.select().from(listings).where(and(eq(listings.id, id), isNull(listings.deletedAt))).limit(1))[0];
+      if (!current) throw new AppError(404, "LISTING_NOT_FOUND", "Listing not found");
+      const deletedAt = new Date();
+      await db.update(listings).set({ deletedAt, updatedAt: deletedAt }).where(eq(listings.id, id));
+      await audit(db, req, {
+        action: "LISTING_DELETE",
+        targetType: "LISTING",
+        targetId: id,
+        previousState: current,
+        newState: { deletedAt },
+        internalReason: "Listing deleted by administrator",
+      });
+      res.status(204).send();
+    }),
+  );
   router.post(
     "/listings/:id/decision",
     moderation,
@@ -701,7 +721,7 @@ export function adminRouter(db: Database): Router {
       const input = z
         .object({
           decision: z.enum(["APPROVE", "REJECT", "REQUEST_CHANGES", "REMOVE"]),
-          internalReason: z.string().trim().min(3).max(2000),
+          internalReason: z.string().trim().max(2000).default(""),
           userVisibleReason: z.string().trim().max(1000).optional(),
           note: z.string().trim().max(2000).optional(),
         })
@@ -711,6 +731,12 @@ export function adminRouter(db: Database): Router {
       )[0];
       if (!current)
         throw new AppError(404, "LISTING_NOT_FOUND", "Listing not found");
+      if (input.decision !== "APPROVE" && input.internalReason.length < 3)
+        throw new AppError(
+          400,
+          "REASON_REQUIRED",
+          "An internal reason is required",
+        );
       if (input.decision !== "APPROVE" && !input.userVisibleReason)
         throw new AppError(
           400,
@@ -801,7 +827,7 @@ export function adminRouter(db: Database): Router {
           moderationState: updated.moderationState,
           lifecycleState: updated.lifecycleState,
         },
-        internalReason: input.internalReason,
+        internalReason: input.internalReason || "Listing approved",
         userVisibleReason: input.userVisibleReason,
       });
       res.json({ data: updated });

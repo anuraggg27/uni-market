@@ -1,12 +1,21 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Building2,
+  CalendarDays,
+  ChevronRight,
   Heart,
+  ImageOff,
+  Hash,
   MapPin,
   MessageCircle,
+  Palette,
   Search,
   ShieldCheck,
+  SlidersHorizontal,
+  Sparkles,
   Star,
+  Tag,
 } from "lucide-react";
 import {
   Link,
@@ -29,6 +38,8 @@ import {
   StatusBadge,
 } from "../components/UI";
 
+import { HeroParticles } from "../components/HeroParticles";
+
 function useListings(search: string) {
   return useQuery({
     queryKey: ["listings", search],
@@ -45,7 +56,6 @@ function useCategories() {
 export function HomePage() {
   const navigate = useNavigate();
   const [term, setTerm] = useState("");
-  const categories = useCategories();
   const recent = useListings("?limit=8&sort=newest");
   const popular = useListings("?limit=8&sort=popular");
   const { user } = useAuth();
@@ -58,63 +68,76 @@ export function HomePage() {
     ? `?limit=4&location=${encodeURIComponent(user.campus)}`
     : "?limit=4";
   const nearby = useListings(nearbySearch);
+
   return (
     <>
-      <section className="search-shell">
-        <div className="search-inner">
-          <p className="eyebrow">Buy nearby. Sell simply.</p>
-          <h1>Find what you need around campus</h1>
+      {/* ─── Hero Section (Minimal / Antigravity inspired) ─── */}
+      <section className="relative flex min-h-[76vh] md:min-h-[82vh] flex-col items-center justify-center overflow-hidden px-4 py-16 text-center sm:px-6 md:py-24 bg-white">
+        <HeroParticles />
+        <div className="relative z-10 mx-auto flex max-w-5xl flex-col items-center">
+          {/* Eyebrow badge */}
+          <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-black/[0.08] bg-black/[0.02] px-3.5 py-1.5 text-[12px] sm:text-[13px] font-medium uppercase tracking-[0.2em] text-[#555555] backdrop-blur-sm select-none">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#176b45]" />
+            BUY NEARBY. SELL SIMPLY.
+          </div>
+
+          {/* Main Heading */}
+          <h1 className="mb-6 max-w-5xl text-5xl sm:text-7xl md:text-[84px] font-extralight tracking-[-0.04em] text-[#111827] leading-[1.04]">
+            <span className="font-extralight text-[#176b45]">
+              Find what you need
+            </span>{" "}
+            <span className="font-normal text-[#111827]">around campus</span>
+          </h1>
+
+          {/* Supporting text */}
+          <p className="mb-10 max-w-2xl text-lg sm:text-[20px] font-light leading-relaxed text-[#6b7280]">
+            The student marketplace for peer-to-peer textbook, tech, cycle, and
+            room essentials exchanges.
+          </p>
+
+          {/* Search Pill Component */}
           <form
-            className="search-form"
+            className="group relative w-full max-w-2xl sm:max-w-3xl"
             role="search"
             onSubmit={(event) => {
               event.preventDefault();
-              navigate(`/browse?q=${encodeURIComponent(term)}`);
+              if (term.trim()) {
+                navigate(`/browse?q=${encodeURIComponent(term.trim())}`);
+              } else {
+                navigate("/browse");
+              }
             }}
           >
-            <label className="sr-only" htmlFor="home-search">
-              Search products
-            </label>
-            <input
-              id="home-search"
-              value={term}
-              onChange={(event) => setTerm(event.target.value)}
-              placeholder="Search books, cycles, calculators…"
-            />
-            <button className="button primary" type="submit">
-              <Search aria-hidden="true" />
-              Search
-            </button>
+            <div className="relative flex h-14 sm:h-16 w-full items-center rounded-full border border-[#e5e7eb] bg-white/95 pl-5 pr-2 sm:pr-2.5 shadow-[0_8px_30px_rgba(0,0,0,0.04)] backdrop-blur-xl transition-all duration-200 hover:border-[#d1d5db] focus-within:border-[#9ca3af] focus-within:shadow-[0_12px_36px_rgba(0,0,0,0.08)]">
+              <Search
+                className="mr-3.5 size-5 shrink-0 text-[#9ca3af]"
+                aria-hidden="true"
+              />
+              <label className="sr-only" htmlFor="home-search">
+                Search products
+              </label>
+              <input
+                id="home-search"
+                value={term}
+                onChange={(event) => setTerm(event.target.value)}
+                placeholder="Search books, cycles, calculators, monitors…"
+                className="search-pill-input h-full w-full bg-transparent text-[16px] text-[#111827] placeholder-[#9ca3af] font-normal outline-none focus:outline-none border-none ring-0 focus:ring-0 shadow-none"
+              />
+              <button
+                type="submit"
+                className="flex h-10 sm:h-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-[#111827] px-6 text-[15px] font-medium text-white !text-white shadow-none transition-all hover:bg-black active:scale-[0.98]"
+              >
+                <span className="text-white !text-white font-medium">
+                  Search
+                </span>
+              </button>
+            </div>
           </form>
         </div>
       </section>
-      <div className="page">
-        <section aria-labelledby="categories-heading">
-          <div className="section-heading">
-            <h2 id="categories-heading">Browse categories</h2>
-            <Link to="/browse">View all</Link>
-          </div>
-          {categories.isLoading ? (
-            <Loading />
-          ) : categories.isError ? (
-            <ErrorState
-              error={categories.error}
-              retry={() => void categories.refetch()}
-            />
-          ) : (
-            <div className="categories">
-              {categories.data?.map((category) => (
-                <Link
-                  className="category"
-                  key={category.id}
-                  to={`/browse?category=${category.id}`}
-                >
-                  {category.name}
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
+
+      {/* ─── Marketplace Content ─── */}
+      <div className="page pt-2 pb-24">
         <ProductSection title="Recently approved" query={recent} />
         <ProductSection title="Popular right now" query={popular} />
         {user ? (
@@ -125,9 +148,19 @@ export function HomePage() {
         ) : null}
         {user && saved.data?.length ? (
           <section className="section">
-            <div className="section-heading">
-              <h2>Saved for later</h2>
-              <Link to="/saved">See saved</Link>
+            <div className="mb-6 flex items-baseline justify-between border-b border-[#f0f0f0] pb-3">
+              <h2 className="text-2xl font-light tracking-[-0.025em] text-[#111827]">
+                Saved for later
+              </h2>
+              <Link
+                to="/saved"
+                className="group flex items-center gap-1 text-[14px] font-normal text-[#6b7280] hover:text-[#111827] transition-colors"
+              >
+                <span>See saved</span>
+                <span className="transition-transform duration-150 group-hover:translate-x-0.5">
+                  →
+                </span>
+              </Link>
             </div>
             <div className="product-grid">
               {saved.data.slice(0, 4).map((listing) => (
@@ -153,9 +186,19 @@ function ProductSection({
 }) {
   return (
     <section className="section">
-      <div className="section-heading">
-        <h2>{title}</h2>
-        <Link to="/browse">Browse all</Link>
+      <div className="mb-6 flex items-baseline justify-between border-b border-[#f0f0f0] pb-3">
+        <h2 className="text-2xl font-light tracking-[-0.025em] text-[#111827]">
+          {title}
+        </h2>
+        <Link
+          to="/browse"
+          className="group flex items-center gap-1 text-[14px] font-normal text-[#6b7280] hover:text-[#111827] transition-colors"
+        >
+          <span>Browse all</span>
+          <span className="transition-transform duration-150 group-hover:translate-x-0.5">
+            →
+          </span>
+        </Link>
       </div>
       {query.isLoading ? (
         <Loading />
@@ -177,111 +220,382 @@ function ProductSection({
   );
 }
 
+type BrowseFilters = {
+  q: string;
+  category: string;
+  minPrice: string;
+  maxPrice: string;
+  condition: string;
+  sort: string;
+  location: string;
+  negotiable: boolean;
+};
+
+function filtersFromParams(params: URLSearchParams): BrowseFilters {
+  return {
+    q: params.get("q") ?? "",
+    category: params.get("category") ?? "",
+    minPrice: params.get("minPrice") ?? "",
+    maxPrice: params.get("maxPrice") ?? "",
+    condition: params.get("condition") ?? "",
+    sort: params.get("sort") ?? "newest",
+    location: params.get("location") ?? "",
+    negotiable: params.get("negotiable") === "true",
+  };
+}
+
 export function BrowsePage() {
   const [params, setParams] = useSearchParams();
-  const categories = useCategories();
   const serialized = params.toString();
+  const [filters, setFilters] = useState<BrowseFilters>(() =>
+    filtersFromParams(params),
+  );
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const categories = useCategories();
   const listings = useListings(serialized ? `?${serialized}` : "");
-  function update(name: string, value: string) {
-    const next = new URLSearchParams(params);
-    if (value) next.set(name, value);
-    else next.delete(name);
-    next.delete("page");
-    setParams(next);
+  const displayedProducts = listings.data ?? [];
+  const availableCategories = categories.data ?? [];
+
+  useEffect(() => {
+    setFilters(filtersFromParams(new URLSearchParams(serialized)));
+  }, [serialized]);
+
+  function updateFilter<Key extends keyof BrowseFilters>(
+    key: Key,
+    value: BrowseFilters[Key],
+  ) {
+    setFilters((current) => ({ ...current, [key]: value }));
   }
+
+  function applyFilters(event?: React.FormEvent) {
+    event?.preventDefault();
+    const next = new URLSearchParams();
+    if (filters.q.trim()) next.set("q", filters.q.trim());
+    if (filters.category) next.set("category", filters.category);
+    if (filters.minPrice) next.set("minPrice", filters.minPrice);
+    if (filters.maxPrice) next.set("maxPrice", filters.maxPrice);
+    if (filters.condition) next.set("condition", filters.condition);
+    if (filters.sort && filters.sort !== "newest")
+      next.set("sort", filters.sort);
+    if (filters.location.trim()) next.set("location", filters.location.trim());
+    if (filters.negotiable) next.set("negotiable", "true");
+    setParams(next);
+    setFiltersOpen(false);
+  }
+
+  function resetFilters() {
+    setFilters(filtersFromParams(new URLSearchParams()));
+    setParams({});
+    setFiltersOpen(false);
+  }
+
+  const inputClass =
+    "h-11 w-full rounded-xl border border-[#e5e7eb] bg-white px-3.5 text-[14px] font-normal text-[#111827] outline-none transition-colors placeholder:text-[#9ca3af] hover:border-[#d1d5db] focus:border-[#9ca3af] focus:ring-2 focus:ring-[#111827]/[0.04]";
+  const labelClass =
+    "mb-2 block text-[12px] font-medium tracking-[0.01em] text-[#6b7280]";
+
   return (
-    <div className="page">
-      <div className="page-header">
+    <div className="page !pt-10 sm:!pt-12">
+      <div className="mb-7 flex flex-col gap-4 sm:mb-9 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="eyebrow">Marketplace</p>
-          <h1>Browse products</h1>
+          <p className="eyebrow !mb-2">Marketplace</p>
+          <h1 className="font-normal text-[#111827]">Browse products</h1>
+          <p className="mt-2 text-[15px] font-normal text-[#6b7280]">
+            Find great items listed by students around you.
+          </p>
         </div>
-        <p className="lede">Only manually approved listings appear here.</p>
+        <p className="m-0 max-w-sm text-[13px] leading-relaxed text-[#6b7280] md:text-right">
+          Only manually approved listings appear here.
+        </p>
       </div>
-      <div className="filters" aria-label="Product filters">
-        <label>
-          Search
-          <input
-            value={params.get("q") ?? ""}
-            onChange={(e) => update("q", e.target.value)}
-            placeholder="What do you need?"
-          />
-        </label>
-        <label>
-          Category
-          <select
-            value={params.get("category") ?? ""}
-            onChange={(e) => update("category", e.target.value)}
+
+      <form
+        className="mb-8 hidden rounded-[20px] border border-[#e5e7eb] bg-white p-5 shadow-[0_8px_30px_rgba(17,24,39,0.025)] md:block lg:p-6"
+        aria-label="Product filters"
+        onSubmit={applyFilters}
+      >
+        <div className="grid grid-cols-3 gap-x-4 gap-y-5 xl:grid-cols-6">
+          <label className="min-w-0">
+            <span className={labelClass}>Search</span>
+            <span className="relative block">
+              <Search
+                className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#9ca3af]"
+                aria-hidden="true"
+              />
+              <input
+                className={`${inputClass} !pl-10`}
+                value={filters.q}
+                onChange={(event) => updateFilter("q", event.target.value)}
+                placeholder="What do you need?"
+              />
+            </span>
+          </label>
+          <label className="min-w-0">
+            <span className={labelClass}>Category</span>
+            <select
+              className={inputClass}
+              value={filters.category}
+              onChange={(event) => updateFilter("category", event.target.value)}
+            >
+              <option value="">All categories</option>
+              {availableCategories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="min-w-0">
+            <span className={labelClass}>Min price</span>
+            <input
+              className={inputClass}
+              inputMode="numeric"
+              value={filters.minPrice}
+              onChange={(event) => updateFilter("minPrice", event.target.value)}
+              placeholder="₹0"
+            />
+          </label>
+          <label className="min-w-0">
+            <span className={labelClass}>Max price</span>
+            <input
+              className={inputClass}
+              inputMode="numeric"
+              value={filters.maxPrice}
+              onChange={(event) => updateFilter("maxPrice", event.target.value)}
+              placeholder="Any"
+            />
+          </label>
+          <label className="min-w-0">
+            <span className={labelClass}>Condition</span>
+            <select
+              className={inputClass}
+              value={filters.condition}
+              onChange={(event) =>
+                updateFilter("condition", event.target.value)
+              }
+            >
+              <option value="">Any condition</option>
+              {["NEW", "LIKE_NEW", "GOOD", "FAIR", "POOR"].map((value) => (
+                <option key={value} value={value}>
+                  {value.replaceAll("_", " ")}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="min-w-0">
+            <span className={labelClass}>Sort</span>
+            <select
+              className={inputClass}
+              value={filters.sort}
+              onChange={(event) => updateFilter("sort", event.target.value)}
+            >
+              <option value="newest">Newest</option>
+              <option value="price_asc">Price: low to high</option>
+              <option value="price_desc">Price: high to low</option>
+              <option value="popular">Popular</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="my-5 h-px bg-[#eef0f2]" />
+
+        <div className="grid grid-cols-[minmax(240px,1fr)_auto_auto_auto] items-end gap-4">
+          <label className="min-w-0">
+            <span className={labelClass}>Location</span>
+            <span className="relative block">
+              <MapPin
+                className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#9ca3af]"
+                aria-hidden="true"
+              />
+              <input
+                className={`${inputClass} !pl-10`}
+                value={filters.location}
+                onChange={(event) =>
+                  updateFilter("location", event.target.value)
+                }
+                placeholder="Campus or area"
+              />
+            </span>
+          </label>
+          <label className="flex h-11 cursor-pointer items-center gap-2.5 whitespace-nowrap px-2 text-[14px] font-normal text-[#4b5563]">
+            <input
+              className="size-4 rounded border-[#d1d5db] accent-[#176b45]"
+              type="checkbox"
+              checked={filters.negotiable}
+              onChange={(event) =>
+                updateFilter("negotiable", event.target.checked)
+              }
+            />
+            Negotiable only
+          </label>
+          <button
+            type="submit"
+            className="h-11 rounded-full bg-[#111827] px-6 text-[14px] font-medium text-white transition-colors hover:bg-black"
           >
-            <option value="">All categories</option>
-            {categories.data?.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Min price
-          <input
-            inputMode="numeric"
-            value={params.get("minPrice") ?? ""}
-            onChange={(e) => update("minPrice", e.target.value)}
-            placeholder="₹0"
-          />
-        </label>
-        <label>
-          Max price
-          <input
-            inputMode="numeric"
-            value={params.get("maxPrice") ?? ""}
-            onChange={(e) => update("maxPrice", e.target.value)}
-            placeholder="Any"
-          />
-        </label>
-        <label>
-          Condition
-          <select
-            value={params.get("condition") ?? ""}
-            onChange={(e) => update("condition", e.target.value)}
+            Apply filters
+          </button>
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="h-11 rounded-full border border-[#e5e7eb] bg-white px-5 text-[14px] font-normal text-[#374151] transition-colors hover:border-[#d1d5db] hover:bg-[#fafafa]"
           >
-            <option value="">Any</option>
-            {["NEW", "LIKE_NEW", "GOOD", "FAIR", "POOR"].map((v) => (
-              <option key={v}>{v}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Sort
-          <select
-            value={params.get("sort") ?? "newest"}
-            onChange={(e) => update("sort", e.target.value)}
+            Reset
+          </button>
+        </div>
+      </form>
+
+      <form
+        className="mb-7 md:hidden"
+        aria-label="Product filters"
+        onSubmit={applyFilters}
+      >
+        <div className="flex gap-2.5">
+          <label className="relative min-w-0 flex-1">
+            <span className="sr-only">Search</span>
+            <Search
+              className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#9ca3af]"
+              aria-hidden="true"
+            />
+            <input
+              className={`${inputClass} !h-12 !rounded-full !pl-10`}
+              value={filters.q}
+              onChange={(event) => updateFilter("q", event.target.value)}
+              placeholder="Search products"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((open) => !open)}
+            className="flex h-12 shrink-0 items-center gap-2 rounded-full border border-[#e5e7eb] bg-white px-4 text-[14px] font-medium text-[#374151] transition-colors hover:border-[#d1d5db] hover:bg-[#fafafa]"
+            aria-expanded={filtersOpen}
           >
-            <option value="newest">Newest</option>
-            <option value="price_asc">Price: low to high</option>
-            <option value="price_desc">Price: high to low</option>
-            <option value="popular">Popular</option>
-          </select>
-        </label>
-        <label>
-          Location
-          <input
-            value={params.get("location") ?? ""}
-            onChange={(e) => update("location", e.target.value)}
-            placeholder="Campus or area"
-          />
-        </label>
-        <label className="row">
-          <input
-            type="checkbox"
-            checked={params.get("negotiable") === "true"}
-            onChange={(e) =>
-              update("negotiable", e.target.checked ? "true" : "")
-            }
-          />{" "}
-          Negotiable only
-        </label>
-      </div>
+            <SlidersHorizontal className="size-4" aria-hidden="true" />
+            Filters
+          </button>
+        </div>
+
+        {filtersOpen ? (
+          <div className="mt-3 rounded-2xl border border-[#e5e7eb] bg-white p-4 shadow-[0_10px_30px_rgba(17,24,39,0.04)]">
+            <div className="grid grid-cols-2 gap-3.5">
+              <label className="col-span-2">
+                <span className={labelClass}>Category</span>
+                <select
+                  className={inputClass}
+                  value={filters.category}
+                  onChange={(event) =>
+                    updateFilter("category", event.target.value)
+                  }
+                >
+                  <option value="">All categories</option>
+                  {availableCategories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span className={labelClass}>Min price</span>
+                <input
+                  className={inputClass}
+                  inputMode="numeric"
+                  value={filters.minPrice}
+                  onChange={(event) =>
+                    updateFilter("minPrice", event.target.value)
+                  }
+                  placeholder="₹0"
+                />
+              </label>
+              <label>
+                <span className={labelClass}>Max price</span>
+                <input
+                  className={inputClass}
+                  inputMode="numeric"
+                  value={filters.maxPrice}
+                  onChange={(event) =>
+                    updateFilter("maxPrice", event.target.value)
+                  }
+                  placeholder="Any"
+                />
+              </label>
+              <label>
+                <span className={labelClass}>Condition</span>
+                <select
+                  className={inputClass}
+                  value={filters.condition}
+                  onChange={(event) =>
+                    updateFilter("condition", event.target.value)
+                  }
+                >
+                  <option value="">Any</option>
+                  {["NEW", "LIKE_NEW", "GOOD", "FAIR", "POOR"].map((value) => (
+                    <option key={value} value={value}>
+                      {value.replaceAll("_", " ")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span className={labelClass}>Sort</span>
+                <select
+                  className={inputClass}
+                  value={filters.sort}
+                  onChange={(event) => updateFilter("sort", event.target.value)}
+                >
+                  <option value="newest">Newest</option>
+                  <option value="price_asc">Price: low to high</option>
+                  <option value="price_desc">Price: high to low</option>
+                  <option value="popular">Popular</option>
+                </select>
+              </label>
+              <label className="col-span-2">
+                <span className={labelClass}>Location</span>
+                <span className="relative block">
+                  <MapPin
+                    className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#9ca3af]"
+                    aria-hidden="true"
+                  />
+                  <input
+                    className={`${inputClass} !pl-10`}
+                    value={filters.location}
+                    onChange={(event) =>
+                      updateFilter("location", event.target.value)
+                    }
+                    placeholder="Campus or area"
+                  />
+                </span>
+              </label>
+            </div>
+            <label className="mt-4 flex cursor-pointer items-center gap-2.5 text-[14px] font-normal text-[#4b5563]">
+              <input
+                className="size-4 rounded border-[#d1d5db] accent-[#176b45]"
+                type="checkbox"
+                checked={filters.negotiable}
+                onChange={(event) =>
+                  updateFilter("negotiable", event.target.checked)
+                }
+              />
+              Negotiable only
+            </label>
+            <div className="mt-4 grid grid-cols-2 gap-2.5 border-t border-[#eef0f2] pt-4">
+              <button
+                type="submit"
+                className="h-11 rounded-full bg-[#111827] px-4 text-[14px] font-medium text-white transition-colors hover:bg-black"
+              >
+                Apply filters
+              </button>
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="h-11 rounded-full border border-[#e5e7eb] bg-white px-4 text-[14px] font-normal text-[#374151] transition-colors hover:border-[#d1d5db] hover:bg-[#fafafa]"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </form>
+
       {listings.isLoading ? (
         <Loading />
       ) : listings.isError ? (
@@ -289,34 +603,44 @@ export function BrowsePage() {
           error={listings.error}
           retry={() => void listings.refetch()}
         />
-      ) : !listings.data?.length ? (
-        <EmptyState
-          title="No products match"
-          body="Try a broader search or clear one of the filters."
-          action={
-            <button className="button secondary" onClick={() => setParams({})}>
-              Clear filters
-            </button>
-          }
-        />
+      ) : !displayedProducts.length ? (
+        <div className="flex min-h-[300px] flex-col items-center justify-center px-4 py-12 text-center sm:min-h-[340px]">
+          <div className="grid size-14 place-items-center rounded-full border border-[#e8eaed] bg-[#fafafa] text-[#9ca3af]">
+            <Search className="size-5" aria-hidden="true" />
+          </div>
+          <h2 className="mb-0 mt-5 text-xl font-medium tracking-[-0.02em] text-[#111827]">
+            No products match
+          </h2>
+          <p className="mb-5 mt-2 max-w-sm text-[14px] leading-relaxed text-[#6b7280]">
+            Try a broader search or clear one of the filters.
+          </p>
+          <button
+            type="button"
+            className="h-10 rounded-full border border-[#e5e7eb] bg-white px-5 text-[14px] font-normal text-[#374151] transition-colors hover:border-[#d1d5db] hover:bg-[#fafafa]"
+            onClick={resetFilters}
+          >
+            Clear filters
+          </button>
+        </div>
       ) : (
-        <div className="product-grid">
-          {listings.data.map((listing) => (
-            <ProductCard key={listing.id} listing={listing} />
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {displayedProducts.map((listing) => (
+            <ProductCard key={listing.id} listing={listing} variant="browse" />
           ))}
         </div>
       )}
     </div>
   );
 }
-
 export function ListingPage() {
   const { listingId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
   const client = useQueryClient();
+  const categories = useCategories();
   const [activeImage, setActiveImage] = useState(0);
   const [reportOpen, setReportOpen] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
   const query = useQuery({
     queryKey: ["listing", listingId],
     queryFn: () => api<any>(`/api/listings/${listingId}`),
@@ -364,142 +688,329 @@ export function ListingPage() {
     );
   const item = query.data!;
   const owner = user?.id === item.sellerId;
+  const images = Array.isArray(item.images) ? item.images : [];
+  const activeImageUrl = images[activeImage]?.url as string | undefined;
+  const listedAt = new Date(item.approvedAt ?? item.createdAt);
+  const listedLabel = Number.isNaN(listedAt.getTime())
+    ? null
+    : listedAt.toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+  const sellerRating = Number(item.seller?.rating);
+  const hasSellerRating = Number.isFinite(sellerRating);
+  const sellerName = item.seller?.displayName || "Marketplace seller";
+  const categoryName =
+    item.categoryName ||
+    categories.data?.find((category) => category.id === item.categoryId)
+      ?.name ||
+    "Marketplace";
+  const categoryHref = item.categoryId
+    ? `/browse?category=${encodeURIComponent(item.categoryId)}`
+    : "/browse";
+  const specificationCategoryName =
+    item.categoryName ||
+    item.category?.name ||
+    categories.data?.find((category) => category.id === item.categoryId)?.name ||
+    null;
+  const subcategoryName =
+    item.subcategoryName || item.subcategory?.name || null;
+  const categoryLabel = [specificationCategoryName, subcategoryName]
+    .filter((value, index, values) =>
+      Boolean(value) && values.indexOf(value) === index,
+    )
+    .join(" › ");
+  const postedAt = new Date(item.createdAt);
+  const postedLabel = Number.isNaN(postedAt.getTime())
+    ? null
+    : postedAt.toLocaleDateString("en-US");
+  const specificationText = (value: unknown) =>
+    typeof value === "string" && value.trim() ? value.trim() : null;
+  const conditionLabel = specificationText(item.condition)
+    ?.replaceAll("_", " ")
+    .toLocaleLowerCase()
+    .replace(/\b\w/g, (character) => character.toLocaleUpperCase());
+  const specifications = [
+    { label: "Category", value: categoryLabel || null, icon: Tag },
+    {
+      label: "Condition",
+      value: conditionLabel,
+      icon: Sparkles,
+    },
+    { label: "Brand", value: specificationText(item.brand), icon: Building2 },
+    { label: "Model", value: specificationText(item.model), icon: Hash },
+    { label: "Color", value: specificationText(item.color), icon: Palette },
+    { label: "Posted on", value: postedLabel, icon: CalendarDays },
+    { label: "Location", value: item.location || null, icon: MapPin },
+  ].filter((specification) => specification.value);
   return (
-    <div className="page">
-      <div className="detail-grid">
-        <section>
-          <img
-            className="gallery-main"
-            src={item.images[activeImage]?.url}
-            alt={`${item.title}, image ${activeImage + 1}`}
-            width={900}
-            height={675}
-          />
-          <div className="thumbs" aria-label="Product images">
-            {item.images.map((image: any, index: number) => (
-              <button
-                key={image.id}
-                onClick={() => setActiveImage(index)}
-                aria-label={`Show image ${index + 1}`}
-              >
-                <img src={image.url} alt="" />
-              </button>
-            ))}
+    <main className="mx-auto w-[calc(100%-24px)] max-w-[1280px] pb-24 pt-6 sm:w-[calc(100%-40px)] sm:pt-8 lg:w-[calc(100%-64px)]">
+      <nav
+        aria-label="Breadcrumb"
+        className="mb-6 flex min-w-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-1 text-[13px] text-[#7b8490] sm:mb-8 sm:text-sm"
+      >
+        <Link
+          className="shrink-0 transition-colors hover:text-[#111827]"
+          to="/browse"
+        >
+          Browse
+        </Link>
+        <ChevronRight
+          className="size-3.5 shrink-0 text-[#b0b6be]"
+          aria-hidden="true"
+        />
+        <Link
+          className="shrink-0 transition-colors hover:text-[#111827]"
+          to={categoryHref}
+        >
+          {categoryName}
+        </Link>
+        <ChevronRight
+          className="size-3.5 shrink-0 text-[#b0b6be]"
+          aria-hidden="true"
+        />
+        <span className="max-w-[15rem] truncate font-medium text-[#374151] sm:max-w-md">
+          {item.title}
+        </span>
+      </nav>
+      <div className="grid items-start gap-y-0 lg:grid-cols-[minmax(0,1.16fr)_minmax(400px,0.84fr)] lg:gap-x-14 lg:gap-y-12 xl:gap-x-16">
+        <section className="min-w-0" aria-label="Product gallery">
+          <div className="relative grid aspect-square w-full place-items-center overflow-hidden rounded-2xl border border-[#eceef0] bg-[#f7f8f7]">
+            {activeImageUrl && !imageFailed ? (
+              <img
+                className="h-full w-full object-contain"
+                src={activeImageUrl}
+                alt={`${item.title}, image ${activeImage + 1}`}
+                width={960}
+                height={960}
+                onError={() => setImageFailed(true)}
+              />
+            ) : (
+              <div className="flex flex-col items-center gap-3 text-[#9ca3af]">
+                <span className="grid size-12 place-items-center rounded-full border border-[#e2e5e8] bg-white">
+                  <ImageOff className="size-5" aria-hidden="true" />
+                </span>
+                <span className="text-sm">Image unavailable</span>
+              </div>
+            )}
           </div>
+
+          {images.length > 1 ? (
+            <div
+              className="mt-4 flex gap-3 overflow-x-auto pb-1"
+              aria-label="Product images"
+            >
+              {images.map((image: any, index: number) => (
+                <button
+                  type="button"
+                  key={image.id}
+                  onClick={() => {
+                    setActiveImage(index);
+                    setImageFailed(false);
+                  }}
+                  className={`size-16 shrink-0 overflow-hidden rounded-lg border bg-[#f7f8f7] p-0.5 transition-colors sm:size-[72px] ${
+                    activeImage === index
+                      ? "border-[#111827]"
+                      : "border-[#e5e7eb] hover:border-[#c8cdd2]"
+                  }`}
+                  aria-label={`Show image ${index + 1}`}
+                  aria-pressed={activeImage === index}
+                >
+                  <img
+                    className="h-full w-full rounded-[6px] object-cover"
+                    src={image.url}
+                    alt=""
+                  />
+                </button>
+              ))}
+            </div>
+          ) : null}
         </section>
-        <aside>
-          <div className="row">
+
+        <aside className="mt-10 min-w-0 lg:mt-0">
+          <div className="flex flex-wrap items-center gap-2">
             <StatusBadge value={item.lifecycleState} />
             {item.ownerPreview ? (
               <StatusBadge value={item.moderationState} />
             ) : null}
           </div>
+
           {item.ownerPreview && item.rejectionReason ? (
-            <div className="notice error" role="status">
-              <strong>Moderator feedback</strong>
-              <p>{item.rejectionReason}</p>
+            <div
+              className="mt-4 rounded-xl border border-[#fecaca] bg-[#fff8f8] p-4 text-sm text-[#7f1d1d]"
+              role="status"
+            >
+              <strong className="font-medium">Moderator feedback</strong>
+              <p className="mb-0 mt-1.5 leading-relaxed">
+                {item.rejectionReason}
+              </p>
             </div>
           ) : null}
-          <h1 className="detail-title">{item.title}</h1>
-          <div className="detail-price">{item.priceLabel}</div>
-          <div className="meta">
-            <span>{item.condition.replaceAll("_", " ")}</span>
-            <span>
-              <MapPin width={14} />
-              {item.location}
-            </span>
-            <span>
-              {new Date(item.approvedAt ?? item.createdAt).toLocaleDateString()}
-            </span>
+
+          <h1 className="mb-0 mt-6 text-[28px] font-medium leading-[1.14] tracking-[-0.035em] sm:text-[34px] xl:text-[36px] text-[#111827]">
+            {item.title}
+          </h1>
+          <p className="mb-0 mt-5 text-[26px] font-semibold leading-none tracking-[-0.025em] sm:text-[28px] text-[#111827]">
+            {item.priceLabel || "Price unavailable"}
+          </p>
+
+          <div className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-2 text-sm text-[#6b7280]">
+            {item.condition ? (
+              <span>{String(item.condition).replaceAll("_", " ")}</span>
+            ) : null}
+            {item.location ? (
+              <>
+                {item.condition ? <span aria-hidden="true">&bull;</span> : null}
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
+                  {item.location}
+                </span>
+              </>
+            ) : null}
           </div>
-          {item.negotiable ? (
-            <p>
-              <strong>Open to reasonable offers</strong>
+          {listedLabel ? (
+            <p className="mb-0 mt-2 text-[13px] text-[#8b929c]">
+              Listed {listedLabel}
             </p>
           ) : null}
-          <div className="seller-card">
-            {item.seller.avatarUrl ? (
-              <img className="avatar" src={item.seller.avatarUrl} alt="" />
-            ) : (
-              <span className="avatar">{item.seller.displayName[0]}</span>
-            )}
-            <div>
-              <Link to={`/seller/${item.seller.id}`}>
-                <strong>{item.seller.displayName}</strong>
-              </Link>
-              <div className="meta">
-                <span>
-                  <ShieldCheck width={14} />
-                  Phone verified
+          {item.negotiable ? (
+            <p className="mb-0 mt-3 text-[13px] font-medium text-[#176b45]">
+              Open to reasonable offers
+            </p>
+          ) : null}
+
+          <section
+            className="mt-8 border-y border-[#e8eaec] py-6"
+            aria-label="Seller"
+          >
+            <div className="flex items-center gap-3.5">
+              {item.seller?.avatarUrl ? (
+                <img
+                  className="size-14 rounded-full object-cover"
+                  src={item.seller.avatarUrl}
+                  alt=""
+                  width={56}
+                  height={56}
+                />
+              ) : (
+                <span className="grid size-14 shrink-0 place-items-center rounded-full bg-[#f1f3f2] text-[15px] font-medium text-[#374151]">
+                  {sellerName.charAt(0).toUpperCase()}
                 </span>
-                <span>
-                  <Star width={14} />
-                  {Number(item.seller.rating).toFixed(1)} (
-                  {item.seller.reviewCount})
-                </span>
-                <span>{item.seller.completedSales} sales</span>
+              )}
+              <div className="min-w-0">
+                <Link
+                  to={`/seller/${item.seller.id}`}
+                  className="block truncate text-[17px] font-medium text-[#111827] hover:text-black"
+                >
+                  {sellerName}
+                </Link>
+                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[13px] text-[#6b7280]">
+                  {item.seller.phoneVerifiedAt ? (
+                    <span className="inline-flex items-center gap-1">
+                      <ShieldCheck
+                        className="size-3.5 text-[#176b45]"
+                        aria-hidden="true"
+                      />
+                      Phone verified
+                    </span>
+                  ) : null}
+                  {hasSellerRating ? (
+                    <>
+                      <span aria-hidden="true">•</span>
+                      <span className="inline-flex items-center gap-1">
+                        <Star className="size-3.5" aria-hidden="true" />
+                        {sellerRating.toFixed(1)} (
+                        {item.seller.reviewCount ?? 0})
+                      </span>
+                    </>
+                  ) : null}
+                  {typeof item.seller.completedSales === "number" ? (
+                    <>
+                      <span aria-hidden="true">•</span>
+                      <span>{item.seller.completedSales} sales</span>
+                    </>
+                  ) : null}
+                </div>
               </div>
             </div>
+          </section>
+
+          <div className="mt-6">
+            {owner ? (
+              <Link
+                className="inline-flex h-11 w-full items-center justify-center rounded-full border border-[#dfe3e6] bg-white px-5 text-[14px] font-medium text-[#111827] transition-colors hover:border-[#c8cdd2] hover:bg-[#fafafa] sm:w-auto"
+                to={`/listing/${item.id}/edit`}
+              >
+                Edit listing
+              </Link>
+            ) : (
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  className="inline-flex h-12 w-full items-center justify-center rounded-full !bg-[#111827] px-7 text-[15px] font-medium !text-white transition-colors hover:!bg-black disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => buy.mutate()}
+                  disabled={buy.isPending || item.lifecycleState !== "ACTIVE"}
+                >
+                  Buy
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-[#dfe3e6] bg-white px-5 text-[14px] font-medium text-[#111827] transition-colors hover:border-[#c8cdd2] hover:bg-[#fafafa] disabled:opacity-50"
+                  onClick={() => contact.mutate()}
+                  disabled={contact.isPending}
+                >
+                  <MessageCircle className="size-4" aria-hidden="true" />
+                  Contact seller
+                </button>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[#e5e7eb] bg-white px-3 text-[13px] font-normal text-[#4b5563] transition-colors hover:bg-[#fafafa] disabled:opacity-50"
+                    onClick={() => save.mutate()}
+                    disabled={save.isPending}
+                  >
+                    <Heart className="size-3.5" aria-hidden="true" />
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex h-10 items-center justify-center rounded-full border border-[#e5e7eb] bg-white px-3 text-[13px] font-normal text-[#4b5563] transition-colors hover:bg-[#fafafa]"
+                    onClick={() => setReportOpen((value) => !value)}
+                    aria-expanded={reportOpen}
+                  >
+                    Report
+                  </button>
+                </div>
+                {[contact, buy, save].map((mutation, index) =>
+                  mutation.error ? (
+                    <p className="field-error" key={index}>
+                      {mutation.error.message}
+                    </p>
+                  ) : null,
+                )}
+              </div>
+            )}
           </div>
-          {owner ? (
-            <Link className="button primary" to={`/listing/${item.id}/edit`}>
-              Edit listing
-            </Link>
-          ) : (
-            <div className="stack">
-              <button
-                className="button primary"
-                onClick={() => contact.mutate()}
-                disabled={contact.isPending}
-              >
-                <MessageCircle />
-                Contact seller
-              </button>
-              <button
-                className="button secondary"
-                onClick={() => buy.mutate()}
-                disabled={buy.isPending || item.lifecycleState !== "ACTIVE"}
-              >
-                Request to buy
-              </button>
-              <button
-                className="button secondary"
-                onClick={() => save.mutate()}
-                disabled={save.isPending}
-              >
-                <Heart />
-                Save product
-              </button>
-              <button
-                className="button secondary"
-                onClick={() => setReportOpen((v) => !v)}
-              >
-                Report listing
-              </button>
-              {[contact, buy, save].map((m, i) =>
-                m.error ? (
-                  <p className="field-error" key={i}>
-                    {m.error.message}
-                  </p>
-                ) : null,
-              )}
-            </div>
-          )}
+
           {reportOpen ? (
             <form
-              className="panel form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const f = new FormData(e.currentTarget);
+              className="mt-5 grid gap-4 rounded-2xl border border-[#e5e7eb] bg-white p-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const form = new FormData(event.currentTarget);
                 report.mutate({
-                  reason: String(f.get("reason")),
-                  details: String(f.get("details")),
+                  reason: String(form.get("reason")),
+                  details: String(form.get("details")),
                 });
               }}
             >
-              <label className="field">
-                <span>Reason</span>
-                <select name="reason">
+              <label className="grid gap-1.5 text-[13px] font-medium text-[#374151]">
+                Reason
+                <select
+                  name="reason"
+                  className="h-11 rounded-lg border border-[#dfe3e6] bg-white px-3 text-sm font-normal"
+                >
                   {reportReasons.map((reason) => (
                     <option value={reason} key={reason}>
                       {reason.replaceAll("_", " ")}
@@ -507,38 +1018,122 @@ export function ListingPage() {
                   ))}
                 </select>
               </label>
-              <label className="field">
-                <span>Details</span>
-                <textarea name="details" maxLength={1500} />
+              <label className="grid gap-1.5 text-[13px] font-medium text-[#374151]">
+                Details
+                <textarea
+                  name="details"
+                  maxLength={1500}
+                  className="min-h-24 resize-y rounded-lg border border-[#dfe3e6] bg-white p-3 text-sm font-normal"
+                />
               </label>
-              <button className="button danger">Submit report</button>
+              <button
+                className="h-10 rounded-full border border-[#fca5a5] bg-[#fff8f8] px-4 text-sm font-medium text-[#9f2020]"
+                disabled={report.isPending}
+              >
+                Submit report
+              </button>
               {report.error ? (
                 <p className="field-error">{report.error.message}</p>
               ) : null}
             </form>
           ) : null}
-          <SafetyReminder compact />
+
+          <div className="mt-6">
+            <SafetyReminder />
+          </div>
         </aside>
+          {specifications.length ? (
+            <section
+              className="order-4 mt-4 rounded-2xl border border-[#e5e7eb] bg-white p-5 sm:p-6 lg:order-none lg:col-start-2 lg:row-start-2 lg:mt-0"
+              aria-labelledby="product-specifications-heading"
+            >
+              <h2
+                id="product-specifications-heading"
+                className="mb-4 mt-0 text-[15px] font-medium text-[#111827]"
+              >
+                Product details
+              </h2>
+              <dl className="m-0 divide-y divide-[#f0f1f2]">
+                {specifications.map(({ label, value, icon: Icon }) => (
+                  <div
+                    className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] gap-4 py-3 first:pt-0 last:pb-0"
+                    key={label}
+                  >
+                    <dt className="flex min-w-0 items-start gap-2 text-[13px] text-[#7b8490]">
+                      <Icon
+                        className="mt-0.5 size-3.5 shrink-0 text-[#9ca3af]"
+                        aria-hidden="true"
+                      />
+                      <span>{label}</span>
+                    </dt>
+                    <dd className="m-0 min-w-0 break-words text-[13px] leading-5 text-[#303640]">
+                      {value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          ) : null}
+
+
+      {item.description ||
+      item.conditionExplanation ||
+      item.defects ||
+      item.meetupPoint ? (
+        <section
+          className="order-3 mt-10 rounded-2xl border border-[#e5e7eb] bg-white p-5 sm:p-6 lg:order-none lg:col-start-1 lg:row-start-2 lg:mt-0"
+          aria-labelledby="about-product-heading"
+        >
+          <h2
+            id="about-product-heading"
+            className="mb-5 mt-0 text-xs font-semibold uppercase tracking-[0.1em] text-[#6b7280]"
+          >
+            About this product
+          </h2>
+          {item.description ? (
+            <p className="m-0 text-[15px] leading-7 text-[#303640] sm:text-base">
+              {item.description}
+            </p>
+          ) : null}
+
+          {item.defects || item.conditionExplanation || item.meetupPoint ? (
+            <dl className="mb-0 mt-7 grid gap-6 border-t border-[#eceef0] pt-6">
+              {item.defects ? (
+                <div>
+                  <dt className="text-[11px] font-semibold uppercase tracking-[0.09em] text-[#7b8490]">
+                    Known issues
+                  </dt>
+                  <dd className="mb-0 ml-0 mt-2 text-[14px] leading-6 text-[#374151]">
+                    {item.defects}
+                  </dd>
+                </div>
+              ) : null}
+              {item.conditionExplanation ? (
+                <div>
+                  <dt className="text-[11px] font-semibold uppercase tracking-[0.09em] text-[#7b8490]">
+                    Condition details
+                  </dt>
+                  <dd className="mb-0 ml-0 mt-2 text-[14px] leading-6 text-[#374151]">
+                    {item.conditionExplanation}
+                  </dd>
+                </div>
+              ) : null}
+              {item.meetupPoint ? (
+                <div>
+                  <dt className="text-[11px] font-semibold uppercase tracking-[0.09em] text-[#7b8490]">
+                    Preferred meetup
+                  </dt>
+                  <dd className="mb-0 ml-0 mt-2 text-[14px] leading-6 text-[#374151]">
+                    {item.meetupPoint}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+          ) : null}
+        </section>
+      ) : null}
       </div>
-      <section className="section panel">
-        <h2>About this product</h2>
-        <p>{item.description}</p>
-        <dl>
-          <dt>
-            <strong>Known issues</strong>
-          </dt>
-          <dd>{item.defects || "None disclosed"}</dd>
-          <dt>
-            <strong>Condition details</strong>
-          </dt>
-          <dd>{item.conditionExplanation || "No additional notes"}</dd>
-          <dt>
-            <strong>Preferred meetup</strong>
-          </dt>
-          <dd>{item.meetupPoint || "Arrange a public location in chat"}</dd>
-        </dl>
-      </section>
-    </div>
+    </main>
   );
 }
 
@@ -741,10 +1336,9 @@ export function LoginPage() {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
   useEffect(() => {
     if (user) {
-      navigate(
-        postLoginDestination(user, (location.state as any)?.from),
-        { replace: true },
-      );
+      navigate(postLoginDestination(user, (location.state as any)?.from), {
+        replace: true,
+      });
       return;
     }
     if (!clientId) return;
