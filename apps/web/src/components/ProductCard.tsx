@@ -102,7 +102,7 @@ function BrowseProductCard({ listing }: { listing: any }) {
       </Link>
 
       <div className="flex flex-1 flex-col p-4 sm:p-[18px]">
-        <p className="mb-2 min-h-4 truncate text-[11px] font-medium uppercase tracking-[0.06em] text-[#7b8490]">
+        <p className="mb-2 min-h-4 truncate text-[11px] font-medium uppercase tracking-[0.06em] text-[#6b7280]">
           {details || "Campus marketplace"}
         </p>
         <h3 className="mb-2 line-clamp-2 min-h-[2.5rem] text-[16px] font-medium leading-[1.3] tracking-[-0.015em] text-[#111827]">

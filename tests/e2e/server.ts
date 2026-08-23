@@ -9,6 +9,11 @@ import * as schema from "../../apps/api/src/db/schema";
 import type { GoogleVerifier } from "../../apps/api/src/services/google";
 import { attachSocket } from "../../apps/api/src/socket";
 
+const apiPort = Number(process.env.E2E_API_PORT ?? "4000");
+const webPort = Number(process.env.E2E_WEB_PORT ?? "5173");
+const apiUrl = `http://127.0.0.1:${apiPort}`;
+const webUrl = `http://127.0.0.1:${webPort}`;
+
 const client = new PGlite();
 const db = drizzle(client, { schema });
 await migrate(db, {
@@ -40,9 +45,9 @@ const config = loadConfig({
   NODE_ENV: "test",
   APP_ENV: "e2e",
   DEV_MODE: "true",
-  PORT: "4000",
-  CLIENT_URL: "http://localhost:5173",
-  API_URL: "http://localhost:4000",
+  PORT: String(apiPort),
+  CLIENT_URL: webUrl,
+  API_URL: apiUrl,
   DATABASE_URL: "pglite://:memory:",
   SESSION_SECRET: "e2e-session-secret-at-least-32-chars",
   CSRF_SECRET: "e2e-csrf-secret-at-least-32-chars",
@@ -52,7 +57,7 @@ const config = loadConfig({
 const app = createApp({ db, config, googleVerifier: verifier });
 const server = createServer(app);
 attachSocket(server, db, config);
-server.listen(4000, "127.0.0.1");
+server.listen(apiPort, "127.0.0.1");
 for (const signal of ["SIGINT", "SIGTERM"] as const)
   process.on(signal, () =>
     server.close(() => void client.close().then(() => process.exit(0))),
