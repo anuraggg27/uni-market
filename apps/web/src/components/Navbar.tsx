@@ -147,8 +147,8 @@ export const Navbar = () => {
       data-site-header
       className={`sticky top-0 z-40 w-full transition-all duration-300 ease-in-out ${
         isScrolled
-          ? "bg-white/60 backdrop-blur-xl backdrop-saturate-150 shadow-[0_1px_0_rgba(0,0,0,0.05)]"
-          : "bg-white/25 backdrop-blur-xl backdrop-saturate-150"
+          ? "bg-surface/60 backdrop-blur-xl backdrop-saturate-150 shadow-[0_1px_0_rgba(0,0,0,0.05)]"
+          : "bg-surface/25 backdrop-blur-xl backdrop-saturate-150"
       } ${isVisible ? "translate-y-0" : "-translate-y-full"}`}
     >
       <div className="mx-auto max-w-[1240px] px-4 sm:px-6">
@@ -157,9 +157,9 @@ export const Navbar = () => {
           <div className="flex shrink-0 items-center">
             <Link
               to="/"
-              className="flex items-center gap-1.5 text-[20px] font-semibold tracking-[-0.035em] text-[#111827] transition-opacity hover:opacity-85"
+              className="flex items-center gap-1.5 text-[20px] font-semibold tracking-[-0.035em] text-ink transition-opacity hover:opacity-85"
             >
-              <span className="text-[#176b45]">Uni</span>
+              <span className="text-accent">Uni</span>
               <span>Market</span>
             </Link>
           </div>
@@ -170,25 +170,25 @@ export const Navbar = () => {
               <NavigationMenuList className="gap-1.5">
                 {/* Browse Dropdown */}
                 <NavigationMenuItem>
-                  <NavigationMenuTrigger className="navbar-primary-link text-[15px] !font-semibold !text-[#6b7280] transition-colors hover:!text-[#111827] dark:hover:!text-white dark:data-[state=open]:!text-white">
+                  <NavigationMenuTrigger className="navbar-primary-link text-[15px] !font-semibold !text-muted transition-colors hover:!text-ink dark:hover:!text-ink dark:data-[state=open]:!text-ink">
                     Browse
                   </NavigationMenuTrigger>
                   <NavigationMenuContent>
-                    <div className="grid w-[580px] grid-cols-2 gap-1.5 p-3.5 bg-white shadow-[0_16px_36px_rgba(0,0,0,0.06)] rounded-2xl border border-[#ebebeb]">
+                    <div className="grid w-[580px] grid-cols-2 gap-1.5 p-3.5 bg-surface shadow-[0_16px_36px_rgba(0,0,0,0.06)] rounded-2xl border border-line">
                       {DROPDOWN_ITEMS.map((item, index) => {
                         const href = getCategoryHref(item, categories);
                         return (
                           <NavigationMenuLink
                             asChild
                             key={index}
-                            className="rounded-xl p-2.5 transition-colors duration-150 hover:bg-[#f5f6f5] group block outline-none focus:bg-[#f5f6f5]"
+                            className="rounded-xl p-2.5 transition-colors duration-150 hover:bg-surface-muted group block outline-none focus:bg-surface-muted"
                           >
                             <Link to={href}>
                               <div>
-                                <p className="mb-0.5 text-[15px] font-medium text-[#111827] group-hover:text-[#176b45] transition-colors leading-tight">
+                                <p className="mb-0.5 text-[15px] font-medium text-ink group-hover:text-accent transition-colors leading-tight">
                                   {item.title}
                                 </p>
-                                <p className="text-[13px] text-[#6b7280] font-normal leading-snug line-clamp-1">
+                                <p className="text-[13px] text-muted font-normal leading-snug line-clamp-1">
                                   {item.description}
                                 </p>
                               </div>
@@ -208,7 +208,7 @@ export const Navbar = () => {
                   >
                     <NavLink
                       to="/saved"
-                      className="navbar-primary-link !font-semibold !text-[#6b7280] hover:!text-[#111827] dark:hover:!text-white"
+                      className="navbar-primary-link !font-semibold !text-muted hover:!text-ink dark:hover:!text-ink"
                     >
                       Saved
                     </NavLink>
@@ -223,7 +223,7 @@ export const Navbar = () => {
                   >
                     <NavLink
                       to="/chats"
-                      className="navbar-primary-link !font-semibold !text-[#6b7280] hover:!text-[#111827] dark:hover:!text-white"
+                      className="navbar-primary-link !font-semibold !text-muted hover:!text-ink dark:hover:!text-ink"
                     >
                       Chats
                     </NavLink>
@@ -238,7 +238,7 @@ export const Navbar = () => {
                   >
                     <NavLink
                       to="/my-listings"
-                      className="navbar-primary-link !font-semibold !text-[#6b7280] hover:!text-[#111827] dark:hover:!text-white"
+                      className="navbar-primary-link !font-semibold !text-muted hover:!text-ink dark:hover:!text-ink"
                     >
                       My listings
                     </NavLink>
@@ -254,7 +254,7 @@ export const Navbar = () => {
                     >
                       <NavLink
                         to="/admin"
-                        className="navbar-primary-link !font-semibold !text-[#6b7280] hover:!text-[#111827] dark:hover:!text-white"
+                        className="navbar-primary-link !font-semibold !text-muted hover:!text-ink dark:hover:!text-ink"
                       >
                         Admin
                       </NavLink>
@@ -275,7 +275,7 @@ export const Navbar = () => {
                   variant="outline"
                   size="sm"
                   asChild
-                  className="h-9 px-3.5 text-[14px] font-normal text-[#111827] bg-white border border-[#e5e7eb] rounded-full hover:bg-[#fafafa] hover:border-[#d1d5db] transition-all shadow-none"
+                  className="h-9 px-3.5 text-[14px] font-normal text-ink bg-surface border border-line rounded-full hover:bg-surface-muted hover:border-line transition-all shadow-none"
                 >
                   <NavLink to="/profile">{user.displayName}</NavLink>
                 </Button>
@@ -285,7 +285,7 @@ export const Navbar = () => {
                 variant="outline"
                 size="sm"
                 asChild
-                className="h-9 px-4 text-[14px] font-normal text-[#111827] bg-white border border-[#e5e7eb] rounded-full hover:bg-[#fafafa] hover:border-[#d1d5db] transition-all shadow-none"
+                className="h-9 px-4 text-[14px] font-normal text-ink bg-surface border border-line rounded-full hover:bg-surface-muted hover:border-line transition-all shadow-none"
               >
                 <Link to="/login">Sign in</Link>
               </Button>
@@ -293,9 +293,9 @@ export const Navbar = () => {
             <Button
               size="sm"
               asChild
-              className="h-9 px-4 text-[14px] font-medium text-white !text-white bg-[#176b45] hover:bg-[#0a482c] rounded-full transition-colors shadow-none"
+              className="h-9 px-4 text-[14px] font-medium text-on-brand !text-on-brand bg-brand hover:bg-brand-hover rounded-full transition-colors shadow-none"
             >
-              <Link to="/sell" className="text-white !text-white font-medium">
+              <Link to="/sell" className="text-on-brand !text-on-brand font-medium">
                 Sell
               </Link>
             </Button>
@@ -311,7 +311,7 @@ export const Navbar = () => {
                 variant="outline"
                 size="sm"
                 asChild
-                className="h-8 px-3 text-[13px] font-normal text-[#111827] bg-white border border-[#e5e7eb] rounded-full"
+                className="h-8 px-3 text-[13px] font-normal text-ink bg-surface border border-line rounded-full"
               >
                 <Link to="/login">Sign in</Link>
               </Button>
@@ -319,9 +319,9 @@ export const Navbar = () => {
             <Button
               size="sm"
               asChild
-              className="h-8 px-3 text-[13px] font-medium text-white !text-white bg-[#111827] hover:bg-black rounded-full"
+              className="h-8 px-3 text-[13px] font-medium text-on-brand !text-on-brand bg-brand hover:bg-brand-hover rounded-full"
             >
-              <Link to="/sell" className="text-white !text-white">
+              <Link to="/sell" className="text-on-brand !text-on-brand">
                 Sell
               </Link>
             </Button>
@@ -330,7 +330,7 @@ export const Navbar = () => {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="h-8 w-8 rounded-full border-[#e5e7eb] text-[#111827]"
+                  className="h-8 w-8 rounded-full border-line text-ink"
                   aria-label="Open menu"
                 >
                   <MenuIcon className="h-4 w-4" />
@@ -338,16 +338,16 @@ export const Navbar = () => {
               </SheetTrigger>
               <SheetContent
                 side="top"
-                className="max-h-screen overflow-auto bg-white/95 backdrop-blur-xl border-b border-[#ececec]"
+                className="max-h-screen overflow-auto bg-surface/95 backdrop-blur-xl border-b border-line"
               >
-                <SheetHeader className="border-b border-[#f0f0f0] pb-3">
+                <SheetHeader className="border-b border-line pb-3">
                   <SheetTitle>
                     <Link
                       to="/"
                       onClick={() => setOpen(false)}
-                      className="flex items-center gap-1.5 text-[20px] font-semibold tracking-[-0.03em] text-[#111827]"
+                      className="flex items-center gap-1.5 text-[20px] font-semibold tracking-[-0.03em] text-ink"
                     >
-                      <span className="text-[#176b45]">Uni</span>
+                      <span className="text-accent">Uni</span>
                       <span>Market</span>
                     </Link>
                   </SheetTitle>
@@ -355,7 +355,7 @@ export const Navbar = () => {
                 <div className="flex flex-col p-4">
                   <Accordion type="single" collapsible className="mt-2 mb-2">
                     <AccordionItem value="browse" className="border-none">
-                      <AccordionTrigger className="text-[15px] font-medium text-[#111827] hover:no-underline py-2.5">
+                      <AccordionTrigger className="text-[15px] font-medium text-ink hover:no-underline py-2.5">
                         Browse
                       </AccordionTrigger>
                       <AccordionContent>
@@ -367,13 +367,13 @@ export const Navbar = () => {
                                 to={href}
                                 key={index}
                                 onClick={() => setOpen(false)}
-                                className="rounded-xl p-2.5 transition-colors hover:bg-black/[0.03] block"
+                                className="rounded-xl p-2.5 transition-colors hover:bg-brand-hover/[0.03] block"
                               >
                                 <div>
-                                  <p className="mb-0.5 text-[14px] font-medium text-[#111827]">
+                                  <p className="mb-0.5 text-[14px] font-medium text-ink">
                                     {item.title}
                                   </p>
-                                  <p className="text-[12px] text-[#6b7280] line-clamp-1">
+                                  <p className="text-[12px] text-muted line-clamp-1">
                                     {item.description}
                                   </p>
                                 </div>
@@ -384,25 +384,25 @@ export const Navbar = () => {
                       </AccordionContent>
                     </AccordionItem>
                   </Accordion>
-                  <div className="flex flex-col gap-3 py-2 border-t border-[#f0f0f0]">
+                  <div className="flex flex-col gap-3 py-2 border-t border-line">
                     <Link
                       to="/saved"
                       onClick={() => setOpen(false)}
-                      className="text-[15px] font-normal text-[#4b5563] hover:text-[#111827] transition-colors py-1"
+                      className="text-[15px] font-normal text-muted hover:text-ink transition-colors py-1"
                     >
                       Saved
                     </Link>
                     <Link
                       to="/chats"
                       onClick={() => setOpen(false)}
-                      className="text-[15px] font-normal text-[#4b5563] hover:text-[#111827] transition-colors py-1"
+                      className="text-[15px] font-normal text-muted hover:text-ink transition-colors py-1"
                     >
                       Chats
                     </Link>
                     <Link
                       to="/my-listings"
                       onClick={() => setOpen(false)}
-                      className="text-[15px] font-normal text-[#4b5563] hover:text-[#111827] transition-colors py-1"
+                      className="text-[15px] font-normal text-muted hover:text-ink transition-colors py-1"
                     >
                       My listings
                     </Link>
@@ -410,7 +410,7 @@ export const Navbar = () => {
                       <Link
                         to="/admin"
                         onClick={() => setOpen(false)}
-                        className="text-[15px] font-medium text-[#176b45] transition-colors py-1"
+                        className="text-[15px] font-medium text-accent transition-colors py-1"
                       >
                         Admin
                       </Link>
@@ -420,26 +420,26 @@ export const Navbar = () => {
                         <Link
                           to="/notifications"
                           onClick={() => setOpen(false)}
-                          className="text-[15px] font-normal text-[#4b5563] hover:text-[#111827] transition-colors py-1"
+                          className="text-[15px] font-normal text-muted hover:text-ink transition-colors py-1"
                         >
                           Notifications
                         </Link>
                         <Link
                           to="/profile"
                           onClick={() => setOpen(false)}
-                          className="text-[15px] font-normal text-[#4b5563] hover:text-[#111827] transition-colors py-1"
+                          className="text-[15px] font-normal text-muted hover:text-ink transition-colors py-1"
                         >
                           Profile ({user.displayName})
                         </Link>
                       </>
                     ) : null}
                   </div>
-                  <div className="mt-4 pt-3 border-t border-[#f0f0f0] flex flex-col gap-2.5">
+                  <div className="mt-4 pt-3 border-t border-line flex flex-col gap-2.5">
                     {!user ? (
                       <Button
                         variant="outline"
                         asChild
-                        className="h-10 text-[14px] font-normal text-[#111827] bg-white border border-[#e5e7eb] rounded-full"
+                        className="h-10 text-[14px] font-normal text-ink bg-surface border border-line rounded-full"
                       >
                         <Link to="/login" onClick={() => setOpen(false)}>
                           Sign in
@@ -448,12 +448,12 @@ export const Navbar = () => {
                     ) : null}
                     <Button
                       asChild
-                      className="h-10 text-[14px] font-medium text-white !text-white bg-[#111827] hover:bg-black rounded-full"
+                      className="h-10 text-[14px] font-medium text-on-brand !text-on-brand bg-brand hover:bg-brand-hover rounded-full"
                     >
                       <Link
                         to="/sell"
                         onClick={() => setOpen(false)}
-                        className="text-white !text-white font-medium"
+                        className="text-on-brand !text-on-brand font-medium"
                       >
                         Sell
                       </Link>

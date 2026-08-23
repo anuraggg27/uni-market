@@ -5,14 +5,28 @@
   --font-sans:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", sans-serif;
-  --color-ink: #111827;
-  --color-muted: #6b7280;
-  --color-canvas: #ffffff;
-  --color-line: #f0f0f0;
-  --color-brand: #176b45;
-  --color-brand-dark: #0d4a2e;
-  --color-accent: #f5b942;
-  --color-soft: #f8faf8;
+  /* Uni Market source palette */
+  --color-carbon: #101211;
+  --color-plum: #48252f;
+  --color-sandalwood: #857861;
+  --color-almond: #e7d4bb;
+
+  /* Semantic light-theme colors */
+  --color-ink: #101211;
+  --color-muted: #6b6255;
+  --color-canvas: #f8f2ea;
+  --color-surface: #fffaf4;
+  --color-surface-muted: #efe4d6;
+  --color-line: #d8c8b3;
+  --color-brand: #48252f;
+  --color-brand-hover: #351a22;
+  --color-brand-dark: #351a22;
+  --color-accent: #48252f;
+  --color-accent-strong: #351a22;
+  --color-on-brand: #fff9f2;
+  --color-focus: #48252f;
+  --color-soft: #f1e7da;
+  --color-success: #2f7652;
 }
 
 * {
@@ -27,7 +41,8 @@ html {
 body {
   margin: 0;
   min-width: 320px;
-  background: #ffffff;
+  color: var(--color-ink);
+  background: var(--color-canvas);
 }
 a {
   color: inherit;
@@ -46,7 +61,7 @@ textarea {
   outline-offset: 3px;
 }
 :focus-visible {
-  outline: 2px solid #111827;
+  outline: 2px solid var(--color-focus);
 }
 button:disabled {
   cursor: not-allowed;
@@ -692,6 +707,198 @@ html:not(.dark) .market-card-placeholder-icon {
       inset 0 1px 0 rgb(255 255 255 / 0.96);
   }
 }
+
+.site-footer {
+  border-color: var(--color-line);
+  background: var(--color-surface);
+}
+
+.site-footer-intro p,
+.site-footer-columns h2,
+.site-footer-utility {
+  color: var(--color-muted);
+}
+
+.site-footer-intro p strong,
+.site-footer-columns a,
+.site-footer-wordmark {
+  color: var(--color-ink);
+}
+
+.site-footer-wordmark > span:first-child,
+.site-footer-columns a:hover,
+.site-footer-utility a:hover {
+  color: var(--color-accent);
+}
+
+.site-footer-wordmark:hover {
+  color: var(--color-plum);
+}
+
+.site-footer-wordmark:hover > span:first-child {
+  color: var(--color-sandalwood);
+}
+
+.site-footer-utility {
+  border-color: var(--color-line);
+}
+
+html.dark .theme-toggle,
+html.dark .marketplace-search-trigger,
+html.dark .marketplace-search-dialog,
+html.dark :where(
+  .filters,
+  .panel,
+  .listing-section,
+  .list,
+  .chat-shell,
+  .inbox-header,
+  .chat-header,
+  .chat-actions-menu,
+  .bubble,
+  .new-message-jump,
+  .composer,
+  .metric,
+  .admin-nav,
+  table,
+  .confirm-dialog,
+  .security-dialog,
+  .mobile-nav
+) {
+  border-color: var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+html.dark :where(
+  .field input,
+  .field select,
+  .field textarea,
+  input.control,
+  select.control,
+  textarea.control,
+  .composer textarea
+) {
+  border-color: var(--color-line);
+  background: #141615;
+  color: var(--color-ink);
+}
+
+html.dark :where(
+  .safety,
+  .listing-form .safety,
+  .photo-upload-label,
+  .pricing-options,
+  .messages,
+  .chat-safety-note
+) {
+  border-color: var(--color-line);
+  background: var(--color-soft);
+}
+
+html.dark .conversation-link:hover,
+html.dark :where(.chat-back:hover, .chat-actions summary:hover) {
+  background: var(--color-surface-muted);
+}
+
+html.dark .conversation-link.active,
+html.dark .conversation-link.active:hover {
+  background: color-mix(in srgb, var(--color-plum) 38%, var(--color-surface));
+}
+
+html.dark .listing-form .field input:focus,
+html.dark .listing-form .field select:focus,
+html.dark .listing-form .field textarea:focus,
+html.dark .listing-form .listing-file-input:focus + .photo-upload-label {
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 3px rgb(201 151 164 / 0.14);
+}
+
+html.dark [data-site-header] {
+  border-color: rgb(133 120 97 / 0.2);
+  background: rgb(16 18 17 / 0.62) !important;
+  box-shadow: 0 1px 0 rgb(231 212 187 / 0.05) !important;
+}
+
+html.dark [data-site-header] :where(
+  [data-slot="navigation-menu-trigger"],
+  [data-slot="navigation-menu-link"]
+):hover,
+html.dark [data-site-header] [data-slot="navigation-menu-trigger"][data-state="open"],
+html.dark [data-site-header] :where(
+  [data-slot="navigation-menu-trigger"],
+  [data-slot="navigation-menu-link"]
+):focus,
+html.dark [data-site-header] :where(
+  [data-slot="navigation-menu-trigger"],
+  [data-slot="navigation-menu-link"]
+):focus-visible {
+  background-color: rgb(231 212 187 / 0.08) !important;
+  color: var(--color-ink) !important;
+}
+
+html.dark .marketplace-search-overlay {
+  background: rgb(16 18 17 / 0.76);
+}
+
+html.dark .marketplace-search-form,
+html.dark .marketplace-search-footer {
+  border-color: var(--color-line);
+}
+
+html.dark .marketplace-search-form input,
+html.dark .marketplace-search-result,
+html.dark .marketplace-search-empty strong {
+  color: var(--color-ink);
+}
+
+html.dark .marketplace-search-close:hover,
+html.dark .marketplace-search-result:hover,
+html.dark .marketplace-search-result:focus-visible {
+  border-color: var(--color-line);
+  background: var(--color-surface-muted);
+  color: var(--color-ink);
+}
+
+html.dark .marketplace-search-result-image,
+html.dark .marketplace-search-trigger kbd,
+html.dark .marketplace-search-footer kbd {
+  border-color: var(--color-line);
+  background: var(--color-soft);
+}
+
+html.dark .marketplace-search-result-price,
+html.dark .marketplace-search-footer button {
+  color: var(--color-accent);
+}
+
+html.dark .site-footer {
+  border-color: var(--color-line);
+  background: var(--color-canvas);
+}
+
+html.dark .site-footer-intro p strong,
+html.dark .site-footer-columns a,
+html.dark .site-footer-wordmark {
+  color: var(--color-ink);
+}
+
+html.dark .site-footer-wordmark > span:first-child,
+html.dark .site-footer-columns a:hover,
+html.dark .site-footer-utility a:hover {
+  color: var(--color-accent);
+}
+
+html.dark .site-footer-intro p,
+html.dark .site-footer-columns h2,
+html.dark .site-footer-utility {
+  color: var(--color-muted);
+}
+
+html.dark .site-footer-utility {
+  border-color: var(--color-line);
+}
+
 .product-image {
   display: block;
   width: 100%;
@@ -1670,31 +1877,39 @@ html.dark .listing-report-submit:hover {
 
 /* App-wide dark theme */
 html.dark {
-  --color-ink: #f3f6f4;
-  --color-muted: #9ca7a1;
-  --color-canvas: #0b100d;
-  --color-line: #28322c;
-  --color-brand: #4bc287;
-  --color-brand-dark: #36a975;
-  --color-soft: #151d18;
+  --color-ink: #e7d4bb;
+  --color-muted: #b8a995;
+  --color-canvas: #101211;
+  --color-surface: #171918;
+  --color-surface-muted: #211e1c;
+  --color-line: #403831;
+  --color-brand: #48252f;
+  --color-brand-hover: #5b303d;
+  --color-brand-dark: #48252f;
+  --color-accent: #c997a4;
+  --color-accent-strong: #e0b7c1;
+  --color-on-brand: #f8ecdc;
+  --color-focus: #c997a4;
+  --color-soft: #1d1f1d;
+  --color-success: #76c598;
   color-scheme: dark;
-  background: #0b100d;
+  background: var(--color-canvas);
 }
 html.dark body,
 html.dark .app-shell {
   color: var(--color-ink);
-  background: #0b100d;
+  background: var(--color-canvas);
 }
 html.dark :focus-visible {
-  outline-color: #7adba8;
+  outline-color: var(--color-focus);
 }
 html.dark .skip-link {
-  border-color: #7adba8;
-  background: #121a16;
-  color: #f3f6f4;
+  border-color: var(--color-focus);
+  background: var(--color-surface);
+  color: var(--color-ink);
 }
 html.dark ::selection {
-  background: rgb(75 194 135 / 0.35);
+  background: rgb(201 151 164 / 0.38);
 }
 html.dark .marketplace-search-trigger {
   border-color: #344139;
@@ -3128,4 +3343,820 @@ html.dark .site-footer-wordmark:hover > span:first-child {
   .site-footer-utility nav {
     gap: 16px;
   }
+}
+
+/* Uni Market semantic color system
+   Source palette: Carbon Powder, Plum Wine, Golden Sandalwood, Almond Light. */
+::selection {
+  background: rgb(72 37 47 / 0.2);
+}
+
+.skip-link,
+.topbar,
+.filters,
+.panel,
+.listing-section,
+.list,
+.chat-shell,
+.inbox-header,
+.chat-header,
+.chat-actions-menu,
+.bubble,
+.new-message-jump,
+.composer,
+.metric,
+.admin-nav,
+table,
+.confirm-dialog,
+.security-dialog,
+.mobile-nav,
+.site-footer,
+.marketplace-search-dialog {
+  border-color: var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+.button.primary,
+.sell-button,
+.listing-form-actions .button.primary,
+.chat-send,
+.bubble.mine {
+  border-color: var(--color-brand);
+  background: var(--color-brand);
+  color: var(--color-on-brand);
+}
+
+.button.primary:hover,
+.sell-button:hover,
+.listing-form-actions .button.primary:hover,
+.chat-send:hover {
+  border-color: var(--color-brand-hover);
+  background: var(--color-brand-hover);
+}
+
+.button.secondary,
+.photo-upload-icon,
+.photo-upload-action {
+  border-color: var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+.button.secondary:hover {
+  border-color: var(--color-sandalwood);
+  background: var(--color-surface-muted);
+}
+
+.eyebrow,
+.brand span,
+.safety svg,
+.price-control,
+.marketplace-search-result-price,
+.marketplace-search-footer button {
+  color: var(--color-accent);
+}
+
+.section-heading h2,
+.section-heading a:hover,
+.desktop-nav a.active,
+.admin-nav a.active {
+  color: var(--color-ink);
+}
+
+.section-heading a,
+.lede,
+.hint,
+.meta,
+.metric span,
+.safety p {
+  color: var(--color-muted);
+}
+
+.field input,
+.field select,
+.field textarea,
+input.control,
+select.control,
+textarea.control,
+.composer textarea {
+  border-color: var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+:where(input, textarea)::placeholder {
+  color: var(--color-muted);
+  opacity: 0.82;
+}
+
+.listing-section {
+  border-color: var(--color-line);
+  background: var(--color-surface);
+}
+
+.listing-form .field > span:first-child,
+.listing-form .negotiable-control {
+  color: var(--color-muted);
+}
+
+.listing-form .field input,
+.listing-form .field select,
+.listing-form .field textarea,
+.listing-form .price-control {
+  border-color: var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+.listing-form .field input:hover,
+.listing-form .field select:hover,
+.listing-form .field textarea:hover {
+  border-color: var(--color-sandalwood);
+}
+
+.listing-form .field input:focus,
+.listing-form .field select:focus,
+.listing-form .field textarea:focus,
+.price-control:focus-within {
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 3px rgb(72 37 47 / 0.13);
+}
+
+.photo-upload-label,
+.pricing-options,
+.photo-preview {
+  border-color: var(--color-line);
+  background: var(--color-soft);
+}
+
+.photo-upload-label:hover {
+  border-color: var(--color-focus);
+  background: var(--color-surface-muted);
+}
+
+.listing-file-input:focus + .photo-upload-label {
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 3px rgb(72 37 47 / 0.15);
+}
+
+.pricing-choice span {
+  color: var(--color-muted);
+}
+
+.pricing-choice input:checked + span {
+  background: var(--color-brand);
+  color: var(--color-on-brand);
+}
+
+.pricing-choice input:focus-visible + span {
+  outline-color: var(--color-focus);
+}
+
+.listing-form .safety,
+.safety {
+  border-color: var(--color-line);
+  background: var(--color-soft);
+}
+
+.browse-filter-divider {
+  background: var(--color-line) !important;
+}
+
+.theme-toggle {
+  border-color: var(--color-line);
+  background: color-mix(in srgb, var(--color-surface) 84%, transparent);
+  color: var(--color-muted);
+  box-shadow: 0 1px 3px rgb(72 37 47 / 0.08);
+}
+
+.theme-toggle:hover {
+  border-color: var(--color-sandalwood);
+  background: var(--color-surface);
+}
+
+.theme-toggle svg:first-child {
+  color: var(--color-sandalwood);
+}
+
+.theme-toggle-thumb {
+  background: var(--color-almond);
+  box-shadow: 0 1px 4px rgb(16 18 17 / 0.2);
+}
+
+.theme-toggle[aria-pressed="true"] .theme-toggle-thumb {
+  background: var(--color-plum);
+}
+
+[data-site-header] {
+  border-color: color-mix(in srgb, var(--color-line) 72%, transparent);
+  background: color-mix(in srgb, var(--color-surface) 68%, transparent) !important;
+  box-shadow: 0 1px 0 rgb(72 37 47 / 0.06) !important;
+  backdrop-filter: blur(24px) saturate(135%);
+  -webkit-backdrop-filter: blur(24px) saturate(135%);
+}
+
+[data-site-header] :where(
+  [data-slot="navigation-menu-trigger"],
+  [data-slot="navigation-menu-link"]
+):hover,
+[data-site-header] [data-slot="navigation-menu-trigger"][data-state="open"],
+[data-site-header] :where(
+  [data-slot="navigation-menu-trigger"],
+  [data-slot="navigation-menu-link"]
+):focus-visible {
+  background-color: color-mix(
+    in srgb,
+    var(--color-sandalwood) 14%,
+    transparent
+  ) !important;
+  color: var(--color-ink) !important;
+}
+
+.marketplace-search-trigger {
+  border-color: var(--color-line);
+  background: color-mix(in srgb, var(--color-surface) 78%, transparent);
+  color: var(--color-muted);
+}
+
+.marketplace-search-trigger:hover {
+  border-color: var(--color-sandalwood);
+  background: var(--color-surface-muted);
+  color: var(--color-ink);
+}
+
+.marketplace-search-trigger kbd,
+.marketplace-search-footer kbd {
+  border-color: var(--color-line);
+  background: var(--color-soft);
+  color: var(--color-muted);
+}
+
+.marketplace-search-overlay {
+  background: rgb(16 18 17 / 0.62);
+}
+
+.marketplace-search-dialog {
+  box-shadow: 0 28px 90px rgb(16 18 17 / 0.28);
+}
+
+.marketplace-search-form,
+.marketplace-search-footer {
+  border-color: var(--color-line);
+}
+
+.marketplace-search-form > svg,
+.marketplace-search-close,
+.marketplace-search-result-copy > span,
+.marketplace-search-result > svg,
+.marketplace-search-empty,
+.marketplace-search-status,
+.marketplace-search-footer {
+  color: var(--color-muted);
+}
+
+.marketplace-search-form input,
+.marketplace-search-result,
+.marketplace-search-empty strong {
+  color: var(--color-ink);
+}
+
+.marketplace-search-close:hover,
+.marketplace-search-result:hover,
+.marketplace-search-result:focus-visible {
+  border-color: var(--color-line);
+  background: var(--color-surface-muted);
+  color: var(--color-ink);
+}
+
+.marketplace-search-result-image {
+  border-color: var(--color-line);
+  background: var(--color-soft);
+  color: var(--color-sandalwood);
+}
+
+/* Cards keep their existing proportions and interactions; only their color
+   language changes to the new warm/plum identity. */
+.market-card {
+  border-color: rgb(133 120 97 / 0.38);
+  background:
+    radial-gradient(circle at 8% 0%, rgb(72 37 47 / 0.2), transparent 38%),
+    linear-gradient(145deg, #201b1c 0%, #161616 60%, #101211 100%);
+  box-shadow:
+    0 12px 30px rgb(16 18 17 / 0.2),
+    inset 0 1px 0 rgb(231 212 187 / 0.04);
+}
+
+.market-card::after {
+  background: radial-gradient(
+    circle at 50% 100%,
+    rgb(72 37 47 / 0.22),
+    transparent 50%
+  );
+}
+
+.market-card:focus-within {
+  border-color: rgb(201 151 164 / 0.7);
+  outline-color: rgb(201 151 164 / 0.32);
+}
+
+.market-card-link,
+.market-card-content h3 {
+  color: var(--color-almond);
+}
+
+.market-card-visual {
+  border-color: rgb(133 120 97 / 0.24);
+  background: #1a1c1a;
+  box-shadow: inset 0 0 0 1px rgb(231 212 187 / 0.025);
+}
+
+.market-card-image-tint {
+  background: linear-gradient(
+    180deg,
+    transparent 45%,
+    rgb(72 37 47 / 0.22) 100%
+  );
+  box-shadow: inset 0 -24px 36px rgb(16 18 17 / 0.12);
+}
+
+.market-card-category {
+  border-color: rgb(201 151 164 / 0.42);
+  background: rgb(72 37 47 / 0.64);
+  color: var(--color-almond);
+}
+
+.market-card-state {
+  border-color: rgb(231 212 187 / 0.18);
+  background: rgb(16 18 17 / 0.76);
+  color: var(--color-almond);
+}
+
+.market-card-price {
+  color: var(--color-accent);
+}
+
+.market-card-meta {
+  color: var(--color-muted);
+}
+
+.market-card-condition {
+  color: var(--color-almond);
+}
+
+.market-card-condition::before {
+  background: var(--color-success);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-success) 14%, transparent);
+}
+
+.market-card-meta svg {
+  color: var(--color-sandalwood);
+}
+
+.market-card-cta {
+  border-color: rgb(201 151 164 / 0.36);
+  background: var(--color-brand);
+  color: var(--color-on-brand);
+}
+
+.market-card-placeholder {
+  background:
+    radial-gradient(circle at 50% 45%, rgb(72 37 47 / 0.2), transparent 38%),
+    linear-gradient(145deg, #211d1e, #151716);
+  color: var(--color-muted);
+}
+
+.market-card-placeholder-orbit {
+  border-color: rgb(201 151 164 / 0.13);
+  box-shadow:
+    0 0 0 22px rgb(72 37 47 / 0.08),
+    0 0 0 44px rgb(72 37 47 / 0.04);
+}
+
+.market-card-placeholder-icon {
+  border-color: rgb(201 151 164 / 0.26);
+  background: rgb(72 37 47 / 0.4);
+  color: var(--color-almond);
+}
+
+@media (hover: hover) {
+  .market-card:hover {
+    border-color: rgb(201 151 164 / 0.64);
+    box-shadow:
+      0 16px 36px rgb(16 18 17 / 0.26),
+      0 0 22px rgb(72 37 47 / 0.16),
+      inset 0 1px 0 rgb(231 212 187 / 0.05);
+  }
+
+  .market-card:hover .market-card-cta {
+    border-color: rgb(231 212 187 / 0.3);
+    background: var(--color-brand-hover);
+    box-shadow:
+      0 5px 14px rgb(16 18 17 / 0.28),
+      inset 0 1px 0 rgb(231 212 187 / 0.08);
+  }
+}
+
+html:not(.dark) .market-card {
+  border-color: var(--color-line);
+  background:
+    radial-gradient(circle at 8% 0%, rgb(72 37 47 / 0.055), transparent 40%),
+    linear-gradient(
+      145deg,
+      var(--color-surface) 0%,
+      #fbf4eb 62%,
+      #f2e6d8 100%
+    );
+  box-shadow:
+    0 12px 28px rgb(72 37 47 / 0.08),
+    inset 0 1px 0 rgb(255 250 244 / 0.95);
+}
+
+html:not(.dark) .market-card::after {
+  background: radial-gradient(
+    circle at 50% 100%,
+    rgb(72 37 47 / 0.09),
+    transparent 52%
+  );
+}
+
+html:not(.dark) .market-card-link,
+html:not(.dark) .market-card-content h3 {
+  color: var(--color-ink);
+}
+
+html:not(.dark) .market-card-visual {
+  border-color: rgb(133 120 97 / 0.3);
+  background: var(--color-soft);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 250 244 / 0.72),
+    0 1px 3px rgb(72 37 47 / 0.05);
+}
+
+html:not(.dark) .market-card-image-tint {
+  background: linear-gradient(
+    180deg,
+    transparent 52%,
+    rgb(72 37 47 / 0.08) 100%
+  );
+  box-shadow: inset 0 -18px 28px rgb(72 37 47 / 0.035);
+}
+
+html:not(.dark) .market-card-category {
+  border-color: rgb(72 37 47 / 0.28);
+  background: rgb(231 212 187 / 0.7);
+  color: var(--color-plum);
+  box-shadow: 0 2px 8px rgb(72 37 47 / 0.08);
+}
+
+html:not(.dark) .market-card-state {
+  border-color: rgb(133 120 97 / 0.26);
+  background: rgb(255 250 244 / 0.9);
+  color: var(--color-muted);
+}
+
+html:not(.dark) .market-card-price {
+  color: var(--color-plum);
+}
+
+html:not(.dark) .market-card-meta {
+  color: var(--color-muted);
+}
+
+html:not(.dark) .market-card-condition {
+  color: var(--color-ink);
+}
+
+html:not(.dark) .market-card-placeholder {
+  background:
+    radial-gradient(circle at 50% 45%, rgb(72 37 47 / 0.08), transparent 40%),
+    linear-gradient(145deg, var(--color-soft), var(--color-surface-muted));
+  color: var(--color-muted);
+}
+
+html:not(.dark) .market-card-placeholder-orbit {
+  border-color: rgb(72 37 47 / 0.1);
+  box-shadow:
+    0 0 0 22px rgb(72 37 47 / 0.035),
+    0 0 0 44px rgb(72 37 47 / 0.018);
+}
+
+html:not(.dark) .market-card-placeholder-icon {
+  border-color: rgb(72 37 47 / 0.2);
+  background: rgb(255 250 244 / 0.82);
+  color: var(--color-plum);
+}
+
+@media (hover: hover) {
+  html:not(.dark) .market-card:hover {
+    border-color: rgb(72 37 47 / 0.46);
+    box-shadow:
+      0 16px 34px rgb(72 37 47 / 0.12),
+      0 0 18px rgb(72 37 47 / 0.06),
+      inset 0 1px 0 rgb(255 250 244 / 0.98);
+  }
+}
+
+/* Dark-theme component overrides stay last so legacy high-specificity rules
+   cannot reintroduce the previous green palette. */
+.tabs button,
+.tabs a {
+  color: var(--color-muted);
+}
+
+.tabs .active,
+html.dark .tabs .active {
+  border-bottom-color: var(--color-accent);
+  color: var(--color-ink);
+}
+
+.site-footer {
+  border-color: var(--color-line);
+  background: var(--color-surface);
+}
+
+.site-footer-intro p,
+.site-footer-columns h2,
+.site-footer-utility {
+  color: var(--color-muted);
+}
+
+.site-footer-intro p strong,
+.site-footer-columns a,
+.site-footer-wordmark {
+  color: var(--color-ink);
+}
+
+.site-footer-wordmark > span:first-child,
+.site-footer-columns a:hover,
+.site-footer-utility a:hover {
+  color: var(--color-accent);
+}
+
+.site-footer-wordmark:hover {
+  color: var(--color-plum);
+}
+
+.site-footer-wordmark:hover > span:first-child {
+  color: var(--color-sandalwood);
+}
+
+.site-footer-utility {
+  border-color: var(--color-line);
+}
+
+html.dark .theme-toggle,
+html.dark .marketplace-search-trigger,
+html.dark .marketplace-search-dialog,
+html.dark :where(
+  .filters,
+  .panel,
+  .listing-section,
+  .list,
+  .chat-shell,
+  .inbox-header,
+  .chat-header,
+  .chat-actions-menu,
+  .bubble,
+  .new-message-jump,
+  .composer,
+  .metric,
+  .admin-nav,
+  table,
+  .confirm-dialog,
+  .security-dialog,
+  .mobile-nav
+) {
+  border-color: var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+html.dark :where(
+  .field input,
+  .field select,
+  .field textarea,
+  input.control,
+  select.control,
+  textarea.control,
+  .composer textarea
+) {
+  border-color: var(--color-line);
+  background: #141615;
+  color: var(--color-ink);
+}
+
+html.dark :where(
+  .safety,
+  .listing-form .safety,
+  .photo-upload-label,
+  .pricing-options,
+  .messages,
+  .chat-safety-note
+) {
+  border-color: var(--color-line);
+  background: var(--color-soft);
+}
+
+html.dark .photo-upload-label:hover {
+  border-color: var(--color-focus);
+  background: var(--color-surface-muted);
+}
+
+html.dark .conversation-link:hover,
+html.dark :where(.chat-back:hover, .chat-actions summary:hover) {
+  background: var(--color-surface-muted);
+}
+
+html.dark .conversation-link.active,
+html.dark .conversation-link.active:hover {
+  background: color-mix(in srgb, var(--color-plum) 38%, var(--color-surface));
+}
+
+html.dark .bubble.mine,
+html.dark .listing-form-actions .button.primary {
+  border-color: var(--color-brand);
+  background: var(--color-brand);
+  color: var(--color-on-brand);
+}
+
+html.dark .listing-form .listing-section {
+  border-color: var(--color-line);
+  background: var(--color-surface);
+}
+
+html.dark .listing-form .field > span:first-child,
+html.dark .listing-form .negotiable-control,
+html.dark .listing-form .safety p {
+  color: var(--color-muted);
+}
+
+html.dark .listing-form .field input,
+html.dark .listing-form .field select,
+html.dark .listing-form .field textarea,
+html.dark .listing-form .price-control,
+html.dark .listing-form .photo-upload-label,
+html.dark .listing-form .pricing-options,
+html.dark .listing-form .photo-preview {
+  border-color: var(--color-line);
+  background: #141615;
+  color: var(--color-ink);
+}
+
+html.dark .listing-form .field input:hover,
+html.dark .listing-form .field select:hover,
+html.dark .listing-form .field textarea:hover {
+  border-color: var(--color-sandalwood);
+}
+
+html.dark .listing-form .field input:focus,
+html.dark .listing-form .field select:focus,
+html.dark .listing-form .field textarea:focus,
+html.dark .listing-form .listing-file-input:focus + .photo-upload-label {
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 3px rgb(201 151 164 / 0.14);
+}
+
+html.dark .listing-form .safety {
+  border-color: var(--color-line);
+  background: var(--color-soft);
+}
+
+html.dark .listing-form-actions .button.secondary {
+  border-color: var(--color-line);
+  background: var(--color-surface-muted);
+  color: var(--color-ink);
+}
+
+html.dark .listing-form-actions .button.secondary:hover {
+  border-color: var(--color-sandalwood);
+  background: color-mix(
+    in srgb,
+    var(--color-sandalwood) 16%,
+    var(--color-surface)
+  );
+}
+
+html.dark .skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface) 25%,
+    var(--color-surface-muted) 50%,
+    var(--color-surface) 75%
+  );
+  background-size: 200% 100%;
+}
+
+html.dark .status {
+  background: var(--color-surface-muted);
+  color: var(--color-ink);
+}
+
+html.dark .tabs .active,
+html.dark .admin-nav a.active,
+html.dark .mobile-nav a.active {
+  border-color: var(--color-accent);
+  color: var(--color-ink);
+}
+
+html.dark .theme-toggle {
+  border-color: var(--color-line);
+  background: color-mix(in srgb, var(--color-surface) 86%, transparent);
+  color: var(--color-muted);
+}
+
+html.dark .theme-toggle:hover {
+  border-color: var(--color-sandalwood);
+  background: var(--color-surface-muted);
+}
+
+html.dark .theme-toggle svg:first-child,
+html.dark .theme-toggle svg:last-child,
+html.dark .theme-toggle-compact svg {
+  color: var(--color-ink);
+}
+
+html.dark [data-site-header] {
+  border-color: rgb(133 120 97 / 0.2);
+  background: rgb(16 18 17 / 0.62) !important;
+  box-shadow: 0 1px 0 rgb(231 212 187 / 0.05) !important;
+}
+
+html.dark [data-site-header] :where(
+  [data-slot="navigation-menu-trigger"],
+  [data-slot="navigation-menu-link"]
+):hover,
+html.dark [data-site-header] [data-slot="navigation-menu-trigger"][data-state="open"],
+html.dark [data-site-header] :where(
+  [data-slot="navigation-menu-trigger"],
+  [data-slot="navigation-menu-link"]
+):focus,
+html.dark [data-site-header] :where(
+  [data-slot="navigation-menu-trigger"],
+  [data-slot="navigation-menu-link"]
+):focus-visible {
+  background-color: rgb(231 212 187 / 0.08) !important;
+  color: var(--color-ink) !important;
+}
+
+html.dark .marketplace-search-overlay {
+  background: rgb(16 18 17 / 0.76);
+}
+
+html.dark .marketplace-search-form,
+html.dark .marketplace-search-footer {
+  border-color: var(--color-line);
+}
+
+html.dark .marketplace-search-form input,
+html.dark .marketplace-search-result,
+html.dark .marketplace-search-empty strong {
+  color: var(--color-ink);
+}
+
+html.dark .marketplace-search-close:hover,
+html.dark .marketplace-search-result:hover,
+html.dark .marketplace-search-result:focus-visible {
+  border-color: var(--color-line);
+  background: var(--color-surface-muted);
+  color: var(--color-ink);
+}
+
+html.dark .marketplace-search-result-image,
+html.dark .marketplace-search-trigger kbd,
+html.dark .marketplace-search-footer kbd {
+  border-color: var(--color-line);
+  background: var(--color-soft);
+}
+
+html.dark .marketplace-search-result-price,
+html.dark .marketplace-search-footer button {
+  color: var(--color-accent);
+}
+
+html.dark .site-footer {
+  border-color: var(--color-line);
+  background: var(--color-canvas);
+}
+
+html.dark .site-footer-intro p strong,
+html.dark .site-footer-columns a,
+html.dark .site-footer-wordmark {
+  color: var(--color-ink);
+}
+
+html.dark .site-footer-wordmark > span:first-child,
+html.dark .site-footer-columns a:hover,
+html.dark .site-footer-utility a:hover {
+  color: var(--color-accent);
+}
+
+html.dark .site-footer-intro p,
+html.dark .site-footer-columns h2,
+html.dark .site-footer-utility {
+  color: var(--color-muted);
+}
+
+html.dark .site-footer-utility {
+  border-color: var(--color-line);
 }

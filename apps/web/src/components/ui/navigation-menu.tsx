@@ -58,7 +58,7 @@ function NavigationMenuItem({
 }
 
 const navigationMenuTriggerStyle = cva(
-  'group inline-flex h-9 w-max items-center justify-center rounded-md px-3.5 py-2 text-[15px] font-medium text-[#2d3748] transition-colors duration-150 hover:bg-[#f2f6f3] hover:text-[#18201b] focus:bg-[#f2f6f3] focus:text-[#18201b] focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:text-[#176b45] data-[active]:font-semibold data-[state=open]:bg-[#f2f6f3] data-[state=open]:text-[#18201b]',
+  'group inline-flex h-9 w-max items-center justify-center rounded-md px-3.5 py-2 text-[15px] font-medium text-ink transition-colors duration-150 hover:bg-surface-muted hover:text-ink focus:bg-surface-muted focus:text-ink focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:text-accent data-[active]:font-semibold data-[state=open]:bg-surface-muted data-[state=open]:text-ink',
 );
 
 function NavigationMenuTrigger({
@@ -78,7 +78,7 @@ function NavigationMenuTrigger({
     >
       {children}
       <ChevronDown
-        className="relative top-px size-3.5 text-[#627066] transition-transform duration-200 group-data-[state=open]:rotate-180"
+        className="relative top-px size-3.5 text-muted transition-transform duration-200 group-data-[state=open]:rotate-180"
         aria-hidden="true"
       />
     </NavigationMenuPrimitive.Trigger>
@@ -93,7 +93,7 @@ function NavigationMenuContent({
     <NavigationMenuPrimitive.Content
       data-slot="navigation-menu-content"
       className={cn(
-        'data-[motion^=from-]:animate-in data-[motion^=to-]:animate-out data-[motion^=from-]:fade-in data-[motion^=to-]:fade-out data-[motion=from-end]:slide-in-from-right-52 data-[motion=from-start]:slide-in-from-left-52 data-[motion=to-end]:slide-out-to-right-52 data-[motion=to-start]:slide-out-to-left-52 top-0 left-0 w-full bg-white md:absolute md:w-auto',
+        'data-[motion^=from-]:animate-in data-[motion^=to-]:animate-out data-[motion^=from-]:fade-in data-[motion^=to-]:fade-out data-[motion=from-end]:slide-in-from-right-52 data-[motion=from-start]:slide-in-from-left-52 data-[motion=to-end]:slide-out-to-right-52 data-[motion=to-start]:slide-out-to-left-52 top-0 left-0 w-full bg-surface md:absolute md:w-auto',
         className,
       )}
       {...props}
@@ -126,7 +126,7 @@ function NavigationMenuViewport({
       <NavigationMenuPrimitive.Viewport
         data-slot="navigation-menu-viewport"
         className={cn(
-          'origin-top-center bg-white text-[#111827] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-90 relative mt-2.5 h-[var(--radix-navigation-menu-viewport-height)] w-full overflow-hidden rounded-2xl border border-[#ebebeb] shadow-[0_16px_36px_rgba(0,0,0,0.06)] md:w-[var(--radix-navigation-menu-viewport-width)]',
+          'origin-top-center bg-surface text-ink data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-90 relative mt-2.5 h-[var(--radix-navigation-menu-viewport-height)] w-full overflow-hidden rounded-2xl border border-line shadow-[0_16px_36px_rgba(0,0,0,0.06)] md:w-[var(--radix-navigation-menu-viewport-width)]',
           className,
         )}
         {...props}
@@ -148,7 +148,7 @@ function NavigationMenuIndicator({
       )}
       {...props}
     >
-      <div className="bg-[#dce4de] relative top-[60%] h-2 w-2 rotate-45 rounded-tl-sm shadow-md" />
+      <div className="bg-line relative top-[60%] h-2 w-2 rotate-45 rounded-tl-sm shadow-md" />
     </NavigationMenuPrimitive.Indicator>
   );
 }

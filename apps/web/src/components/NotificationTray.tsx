@@ -131,7 +131,7 @@ export function NotificationTray({ mobile = false }: { mobile?: boolean }) {
       <button
         type="button"
         onClick={toggle}
-        className={`relative grid rounded-full text-[#4b5563] transition-colors hover:bg-black/[0.04] hover:text-[#111827] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#176b45]/30 ${
+        className={`relative grid rounded-full text-muted transition-colors hover:bg-brand-hover/[0.04] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30 ${
           mobile ? "size-8" : "size-9"
         }`}
         aria-label={
@@ -145,7 +145,7 @@ export function NotificationTray({ mobile = false }: { mobile?: boolean }) {
         <Bell className="m-auto size-4" aria-hidden="true" />
         {unreadCount ? (
           <span
-            className="absolute right-1.5 top-1.5 size-2 rounded-full border-2 border-white bg-[#176b45]"
+            className="absolute right-1.5 top-1.5 size-2 rounded-full border-2 border-surface bg-brand"
             aria-hidden="true"
           />
         ) : null}
@@ -153,7 +153,7 @@ export function NotificationTray({ mobile = false }: { mobile?: boolean }) {
 
       {mounted ? (
         <section
-          className={`z-50 flex max-h-[min(580px,calc(100vh-84px))] flex-col overflow-hidden rounded-[18px] border border-[#e7e9e8] bg-white shadow-[0_18px_50px_rgba(17,24,39,0.12)] transition duration-[180ms] ease-out motion-reduce:transition-none ${
+          className={`z-50 flex max-h-[min(580px,calc(100vh-84px))] flex-col overflow-hidden rounded-[18px] border border-line bg-surface shadow-[0_18px_50px_rgba(17,24,39,0.12)] transition duration-[180ms] ease-out motion-reduce:transition-none ${
             mobile
               ? "fixed left-3 right-3 top-[68px]"
               : "absolute right-0 top-[calc(100%+12px)] w-[400px]"
@@ -161,20 +161,20 @@ export function NotificationTray({ mobile = false }: { mobile?: boolean }) {
           role="dialog"
           aria-label="Notifications"
         >
-          <header className="flex shrink-0 items-center justify-between gap-4 border-b border-[#eef0ef] bg-white px-5 py-4">
+          <header className="flex shrink-0 items-center justify-between gap-4 border-b border-line bg-surface px-5 py-4">
             <div>
-              <h2 className="m-0 text-[16px] font-semibold tracking-[-0.02em] text-[#111827]">
+              <h2 className="m-0 text-[16px] font-semibold tracking-[-0.02em] text-ink">
                 Notifications
               </h2>
               {unreadCount ? (
-                <p className="mb-0 mt-0.5 text-[11px] text-[#7b8490]">
+                <p className="mb-0 mt-0.5 text-[11px] text-muted">
                   {unreadCount} unread
                 </p>
               ) : null}
             </div>
             <button
               type="button"
-              className="rounded-md px-1 py-1 text-[12px] font-medium text-[#176b45] transition-colors hover:text-[#0d4a2e] disabled:cursor-default disabled:text-[#a4aba7]"
+              className="rounded-md px-1 py-1 text-[12px] font-medium text-accent transition-colors hover:text-accent-strong disabled:cursor-default disabled:text-muted"
               onClick={() => readAll.mutate()}
               disabled={!unreadCount || readAll.isPending}
             >
@@ -187,7 +187,7 @@ export function NotificationTray({ mobile = false }: { mobile?: boolean }) {
               <div className="grid gap-3 p-5" role="status">
                 {[0, 1, 2].map((item) => (
                   <span
-                    className="h-[72px] animate-pulse rounded-xl bg-[#f4f6f5]"
+                    className="h-[72px] animate-pulse rounded-xl bg-surface-muted"
                     key={item}
                   />
                 ))}
@@ -195,12 +195,12 @@ export function NotificationTray({ mobile = false }: { mobile?: boolean }) {
               </div>
             ) : query.isError ? (
               <div className="px-6 py-10 text-center">
-                <p className="m-0 text-sm font-medium text-[#374151]">
+                <p className="m-0 text-sm font-medium text-ink">
                   Could not load notifications
                 </p>
                 <button
                   type="button"
-                  className="mt-2 text-xs font-medium text-[#176b45]"
+                  className="mt-2 text-xs font-medium text-accent"
                   onClick={() => void query.refetch()}
                 >
                   Try again
@@ -208,18 +208,18 @@ export function NotificationTray({ mobile = false }: { mobile?: boolean }) {
               </div>
             ) : !trayNotifications.length ? (
               <div className="grid justify-items-center px-6 py-11 text-center">
-                <span className="grid size-10 place-items-center rounded-full bg-[#f2f6f3] text-[#176b45]">
+                <span className="grid size-10 place-items-center rounded-full bg-surface-muted text-accent">
                   <Bell className="size-[18px]" aria-hidden="true" />
                 </span>
-                <h3 className="mb-0 mt-3 text-sm font-semibold text-[#111827]">
+                <h3 className="mb-0 mt-3 text-sm font-semibold text-ink">
                   You&apos;re all caught up
                 </h3>
-                <p className="mb-0 mt-1 text-xs text-[#7b8490]">
+                <p className="mb-0 mt-1 text-xs text-muted">
                   No new notifications right now.
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-[#f0f2f1]">
+              <div className="divide-y divide-line">
                 {trayNotifications.map((notification) => {
                   const Icon = getNotificationIcon(notification.type);
                   const unread = !notification.readAt;
@@ -227,8 +227,8 @@ export function NotificationTray({ mobile = false }: { mobile?: boolean }) {
                     <Link
                       to={notification.href}
                       key={notification.id}
-                      className={`relative flex gap-3 px-4 py-3.5 transition-colors hover:bg-[#f7f9f7] ${
-                        unread ? "bg-[#f5f9f6]" : "bg-white"
+                      className={`relative flex gap-3 px-4 py-3.5 transition-colors hover:bg-surface-muted ${
+                        unread ? "bg-surface-muted" : "bg-surface"
                       }`}
                       onClick={() => {
                         if (unread) read.mutate(notification.id);
@@ -238,15 +238,15 @@ export function NotificationTray({ mobile = false }: { mobile?: boolean }) {
                       <span
                         className={`mt-0.5 grid size-9 shrink-0 place-items-center rounded-full ${
                           unread
-                            ? "bg-[#e7f2eb] text-[#176b45]"
-                            : "bg-[#f3f4f4] text-[#6b7280]"
+                            ? "bg-surface-muted text-accent"
+                            : "bg-surface-muted text-muted"
                         }`}
                       >
                         <Icon className="size-4" aria-hidden="true" />
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex items-start gap-2">
-                          <strong className="min-w-0 flex-1 text-[13px] font-semibold leading-5 text-[#20252b]">
+                          <strong className="min-w-0 flex-1 text-[13px] font-semibold leading-5 text-ink">
                             {notification.title}
                             {unread ? (
                               <span className="sr-only">, unread</span>
@@ -254,16 +254,16 @@ export function NotificationTray({ mobile = false }: { mobile?: boolean }) {
                           </strong>
                           {unread ? (
                             <span
-                              className="mt-1.5 size-1.5 shrink-0 rounded-full bg-[#176b45]"
+                              className="mt-1.5 size-1.5 shrink-0 rounded-full bg-brand"
                               aria-hidden="true"
                             />
                           ) : null}
                         </span>
-                        <span className="mt-0.5 line-clamp-2 block text-[12px] leading-[1.45] text-[#667069]">
+                        <span className="mt-0.5 line-clamp-2 block text-[12px] leading-[1.45] text-muted">
                           {notification.body}
                         </span>
                         <time
-                          className="mt-1.5 block text-[10px] text-[#929994]"
+                          className="mt-1.5 block text-[10px] text-muted"
                           dateTime={notification.createdAt}
                         >
                           {formatNotificationTime(notification.createdAt)}
@@ -276,11 +276,11 @@ export function NotificationTray({ mobile = false }: { mobile?: boolean }) {
             )}
           </div>
 
-          <div className="shrink-0 border-t border-[#eef0ef] bg-white px-2">
+          <div className="shrink-0 border-t border-line bg-surface px-2">
             <Link
               to="/notifications"
               onClick={close}
-              className="flex min-h-10 items-center justify-center rounded-xl text-[12px] font-semibold text-[#176b45] transition-colors hover:bg-[#f4f8f5]"
+              className="flex min-h-10 items-center justify-center rounded-xl text-[12px] font-semibold text-accent transition-colors hover:bg-surface-muted"
             >
               View all notifications <span aria-hidden="true">&nbsp;→</span>
             </Link>
