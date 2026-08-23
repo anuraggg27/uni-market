@@ -23,6 +23,28 @@ import { communicationRouter } from "./routes/communication.js";
 import { reputationRouter, transactionsRouter } from "./routes/transactions.js";
 import { adminRouter, userOperationsRouter } from "./routes/operations.js";
 
+function r2ConnectSources(config: AppConfig): string[] {
+  const endpoint =
+    config.R2_ENDPOINT ||
+    (config.CLOUDFLARE_ACCOUNT_ID
+      ? `https://${config.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`
+      : "");
+  if (!endpoint) return [];
+
+  const endpointUrl = new URL(endpoint);
+  const origins = new Set([endpointUrl.origin]);
+  if (
+    config.R2_BUCKET_NAME &&
+    endpointUrl.hostname.endsWith(".r2.cloudflarestorage.com") &&
+    !endpointUrl.hostname.startsWith(`${config.R2_BUCKET_NAME}.`)
+  ) {
+    const bucketUrl = new URL(endpointUrl.origin);
+    bucketUrl.hostname = `${config.R2_BUCKET_NAME}.${endpointUrl.hostname}`;
+    origins.add(bucketUrl.origin);
+  }
+  return [...origins];
+}
+
 export function createApp(deps: {
   db: Database;
   config: AppConfig;
@@ -66,6 +88,7 @@ export function createApp(deps: {
             config.API_URL,
             "https://accounts.google.com",
             "wss:",
+            ...r2ConnectSources(config),
           ],
           styleSrc: ["'self'", "'unsafe-inline'", "https://accounts.google.com"],
         },

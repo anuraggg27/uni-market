@@ -22,7 +22,7 @@ class FakeGoogleVerifier implements GoogleVerifier {
 export async function setup() {
   const client = new PGlite(); const db = drizzle(client, { schema });
   await migrate(db, { migrationsFolder: resolve(process.cwd(), 'apps/api/drizzle') });
-  const config = loadConfig({ NODE_ENV: 'test', APP_ENV: 'test', DEV_MODE: 'true', CLIENT_URL: 'http://localhost:5173', API_URL: 'http://localhost:4000', DATABASE_URL: 'pglite://:memory:', SESSION_SECRET: 'test-session-secret-at-least-32-chars', CSRF_SECRET: 'test-csrf-secret-at-least-32-chars', SMTP_FROM_EMAIL: 'test@example.com' });
+  const config = loadConfig({ NODE_ENV: 'test', APP_ENV: 'test', DEV_MODE: 'true', CLIENT_URL: 'http://localhost:5173', API_URL: 'http://localhost:4000', DATABASE_URL: 'pglite://:memory:', SESSION_SECRET: 'test-session-secret-at-least-32-chars', CSRF_SECRET: 'test-csrf-secret-at-least-32-chars', SMTP_FROM_EMAIL: 'test@example.com', R2_BUCKET_NAME: 'uni-market-test', R2_ENDPOINT: 'https://test-account.r2.cloudflarestorage.com' });
   const app = createApp({ db, config, googleVerifier: new FakeGoogleVerifier() });
   const category = (await db.insert(schema.categories).values({ name: 'Books', slug: 'books' }).returning())[0]!;
   return { client, db, config, app, category };
