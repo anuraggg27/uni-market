@@ -143,8 +143,8 @@ export const Navbar = () => {
     <header
       className={`sticky top-0 z-40 w-full transition-all duration-300 ease-in-out ${
         isScrolled
-          ? "bg-white/85 backdrop-blur-md shadow-[0_1px_0_rgba(0,0,0,0.03)]"
-          : "bg-transparent"
+          ? "bg-white/60 backdrop-blur-xl backdrop-saturate-150 shadow-[0_1px_0_rgba(0,0,0,0.05)]"
+          : "bg-white/25 backdrop-blur-xl backdrop-saturate-150"
       } ${isVisible ? "translate-y-0" : "-translate-y-full"}`}
     >
       <div className="mx-auto max-w-[1240px] px-4 sm:px-6">

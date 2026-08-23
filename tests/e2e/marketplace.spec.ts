@@ -167,7 +167,23 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
     .toBuffer();
   await page
     .getByLabel(/Product images/)
-    .setInputFiles({ name: "book.jpg", mimeType: "image/jpeg", buffer: image });
+    .setInputFiles([
+      { name: "book.jpg", mimeType: "image/jpeg", buffer: image },
+      { name: "book-detail.jpg", mimeType: "image/jpeg", buffer: image },
+    ]);
+  await expect(
+    page.getByAltText("Selected product image: book.jpg"),
+  ).toBeVisible();
+  await expect(
+    page.getByAltText("Selected product image: book-detail.jpg"),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Remove book-detail.jpg" }).click();
+  await expect(
+    page.getByAltText("Selected product image: book-detail.jpg"),
+  ).toHaveCount(0);
+  await expect(
+    page.getByAltText("Selected product image: book.jpg"),
+  ).toBeVisible();
   await page.getByRole("button", { name: "Save private draft" }).click();
   await expect(page).toHaveURL(/listing\//);
   const listingId = page.url().split("/").pop()!;

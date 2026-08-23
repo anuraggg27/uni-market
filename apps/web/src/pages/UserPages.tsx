@@ -14,9 +14,11 @@ import { z } from "zod";
 import {
   ArrowDown,
   ArrowLeft,
+  ImagePlus,
   MoreHorizontal,
   SendHorizontal,
   ShieldCheck,
+  X,
 } from "lucide-react";
 import { api, clearCsrf, jsonBody } from "../api";
 import { useAuth } from "../auth";
@@ -52,6 +54,8 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
     enabled: edit && Boolean(listingId),
   });
   const [images, setImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
   const [serverError, setServerError] = useState("");
   const form = useForm<
@@ -98,6 +102,22 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
   }, [existing.data, form]);
   const priceType = form.watch("priceType");
   const condition = form.watch("condition");
+  useEffect(() => {
+    const previews = images.map((file) => URL.createObjectURL(file));
+    setImagePreviews(previews);
+    return () => previews.forEach((preview) => URL.revokeObjectURL(preview));
+  }, [images]);
+  function addImages(files: FileList | null) {
+    if (!files?.length) return;
+    const selectedFiles = Array.from(files);
+    setImages((current) => [...current, ...selectedFiles].slice(0, 8));
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+  function removeImage(index: number) {
+    setImages((current) =>
+      current.filter((_, imageIndex) => imageIndex !== index),
+    );
+  }
   async function uploadFiles(id: string) {
     for (const file of images) {
       const ticket = await api<any>(`/api/uploads/listings/${id}/presign`, {
@@ -150,8 +170,8 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
       </div>
     );
   return (
-    <div className="page narrow">
-      <div className="page-header">
+    <div className="page listing-form-page">
+      <div className="page-header listing-form-header">
         <div>
           <p className="eyebrow">{edit ? "Update" : "Sell"}</p>
           <h1>{edit ? "Edit your listing" : "List a product"}</h1>
@@ -161,39 +181,66 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
           </p>
         </div>
       </div>
-      <form className="form" onSubmit={form.handleSubmit(submit)}>
-        <fieldset className="fieldset">
+      <form className="listing-form" onSubmit={form.handleSubmit(submit)}>
+        <fieldset className="listing-section listing-photo-section">
           <legend>Photos</legend>
-          <label className="field">
-            <span>
-              Product images{" "}
-              {edit
-                ? "(additions require reapproval)"
-                : "(required before submission)"}
-            </span>
+          <p className="listing-section-intro">
+            Add clear photos of your product.
+          </p>
+          <div className="photo-uploader">
             <input
+              ref={fileInputRef}
+              id="listing-images"
+              className="listing-file-input"
+              aria-label="Product images"
               type="file"
               accept="image/jpeg,image/png,image/webp"
               multiple
-              onChange={(e) =>
-                setImages(Array.from(e.target.files ?? []).slice(0, 8))
-              }
+              onChange={(event) => addImages(event.target.files)}
             />
+            <label className="photo-upload-label" htmlFor="listing-images">
+              <span className="photo-upload-icon" aria-hidden="true">
+                <ImagePlus />
+              </span>
+              <span className="photo-upload-copy">
+                <strong>Upload photos</strong>
+                <span>PNG, JPG or WebP · Up to 8 images, 5 MB each</span>
+              </span>
+              <span className="photo-upload-action">Choose photos</span>
+            </label>
             <p className="hint">
-              JPEG, PNG or WebP. Up to 8 images, 5 MB each. Metadata is removed.
+              Metadata is removed.{" "}
+              {edit
+                ? "New photos require reapproval."
+                : "At least one photo is required before submission."}
             </p>
-          </label>
+          </div>
           {images.length ? (
-            <div className="row">
-              {images.map((file) => (
-                <span className="status" key={`${file.name}-${file.size}`}>
-                  {file.name}
-                </span>
+            <div className="photo-preview-grid" aria-live="polite">
+              {images.map((file, index) => (
+                <figure
+                  className="photo-preview"
+                  key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
+                >
+                  <img
+                    src={imagePreviews[index]}
+                    alt={`Selected product image: ${file.name}`}
+                  />
+                  {index === 0 ? <figcaption>Cover</figcaption> : null}
+                  <button
+                    type="button"
+                    className="photo-remove"
+                    onClick={() => removeImage(index)}
+                    aria-label={`Remove ${file.name}`}
+                  >
+                    <X aria-hidden="true" />
+                  </button>
+                </figure>
               ))}
             </div>
           ) : null}
         </fieldset>
-        <fieldset className="fieldset form">
+        <fieldset className="listing-section listing-section-fields">
           <legend>Product details</legend>
           <label className="field">
             <span>Title</span>
@@ -253,62 +300,79 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
             </label>
           </div>
         </fieldset>
-        <fieldset className="fieldset form">
-          <legend>Price</legend>
-          <div className="row">
+        <fieldset className="listing-section listing-section-fields pricing-section">
+          <legend>Pricing</legend>
+          <div className="pricing-options" aria-label="Price type">
             {(["FIXED", "RANGE", "FREE"] as const).map((value) => (
-              <label className="row" key={value}>
+              <label className="pricing-choice" key={value}>
                 <input
                   type="radio"
                   value={value}
                   {...form.register("priceType")}
                 />
-                {value[0] + value.slice(1).toLowerCase()}
+                <span>{value[0] + value.slice(1).toLowerCase()}</span>
               </label>
             ))}
           </div>
-          {priceType === "FIXED" ? (
-            <label className="field">
-              <span>Price (₹)</span>
-              <input
-                type="number"
-                {...form.register("exactPrice", { valueAsNumber: true })}
-              />
-              <FieldError>
-                {form.formState.errors.exactPrice?.message}
-              </FieldError>
-            </label>
-          ) : null}
-          {priceType === "RANGE" ? (
-            <div className="form-grid">
-              <label className="field">
-                <span>Minimum (₹)</span>
-                <input
-                  type="number"
-                  {...form.register("minimumPrice", { valueAsNumber: true })}
-                />
-                <FieldError>
-                  {form.formState.errors.minimumPrice?.message}
-                </FieldError>
-              </label>
-              <label className="field">
-                <span>Maximum (₹)</span>
-                <input
-                  type="number"
-                  {...form.register("maximumPrice", { valueAsNumber: true })}
-                />
+          {priceType !== "FREE" ? (
+            <div className="price-entry-row">
+              {priceType === "FIXED" ? (
+                <label className="field">
+                  <span>Price</span>
+                  <span className="price-control">
+                    <span aria-hidden="true">₹</span>
+                    <input
+                      aria-label="Price (₹)"
+                      type="number"
+                      {...form.register("exactPrice", { valueAsNumber: true })}
+                    />
+                  </span>
+                  <FieldError>
+                    {form.formState.errors.exactPrice?.message}
+                  </FieldError>
+                </label>
+              ) : (
+                <div className="form-grid price-range-grid">
+                  <label className="field">
+                    <span>Minimum</span>
+                    <span className="price-control">
+                      <span aria-hidden="true">₹</span>
+                      <input
+                        aria-label="Minimum (₹)"
+                        type="number"
+                        {...form.register("minimumPrice", {
+                          valueAsNumber: true,
+                        })}
+                      />
+                    </span>
+                    <FieldError>
+                      {form.formState.errors.minimumPrice?.message}
+                    </FieldError>
+                  </label>
+                  <label className="field">
+                    <span>Maximum</span>
+                    <span className="price-control">
+                      <span aria-hidden="true">₹</span>
+                      <input
+                        aria-label="Maximum (₹)"
+                        type="number"
+                        {...form.register("maximumPrice", {
+                          valueAsNumber: true,
+                        })}
+                      />
+                    </span>
+                  </label>
+                </div>
+              )}
+              <label className="negotiable-control">
+                <input type="checkbox" {...form.register("negotiable")} />
+                <span>Price is negotiable</span>
               </label>
             </div>
           ) : null}
-          {priceType !== "FREE" ? (
-            <label className="row">
-              <input type="checkbox" {...form.register("negotiable")} />
-              Price is negotiable
-            </label>
-          ) : null}
         </fieldset>
-        <fieldset className="fieldset form">
-          <legend>General location</legend>
+        <fieldset className="listing-section listing-section-fields">
+          <legend>Location &amp; meetup</legend>
           <label className="field">
             <span>Campus, hostel area or neighbourhood</span>
             <input
@@ -330,7 +394,7 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
         </fieldset>
         <SafetyReminder />
         {serverError ? <p className="field-error">{serverError}</p> : null}
-        <div className="row between">
+        <div className="listing-form-actions">
           <Link className="button secondary" to="/my-listings">
             Cancel
           </Link>
