@@ -776,14 +776,14 @@ export function ListingPage() {
       </nav>
       <div className="grid items-start gap-y-0 lg:grid-cols-[minmax(0,1.16fr)_minmax(400px,0.84fr)] lg:gap-x-14 lg:gap-y-12 xl:gap-x-16">
         <section className="min-w-0" aria-label="Product gallery">
-          <div className="relative grid aspect-square w-full place-items-center overflow-hidden rounded-2xl border border-[#eceef0] bg-[#f7f8f7]">
+          <div className="relative grid aspect-[4/3] w-full place-items-center overflow-hidden rounded-2xl border border-[#eceef0] bg-[#f7f8f7]">
             {activeImageUrl && !imageFailed ? (
               <img
                 className="h-full w-full object-contain"
                 src={activeImageUrl}
                 alt={`${item.title}, image ${activeImage + 1}`}
                 width={960}
-                height={960}
+                height={720}
                 onError={() => setImageFailed(true)}
               />
             ) : (
