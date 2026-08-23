@@ -6,7 +6,7 @@ export const logger = pino({
     paths: [
       'req.headers.authorization', 'req.headers.cookie', 'res.headers.set-cookie',
       '*.otp', '*.code', '*.credential', '*.token', '*.password', '*.secret',
-      'OTP_SERVICE_API_KEY', 'R2_SECRET_ACCESS_KEY', 'SMTP_PASSWORD', 'SESSION_SECRET', 'CSRF_SECRET'
+      'MSG91_AUTH_KEY', 'MSG91_TOKEN_AUTH', 'R2_SECRET_ACCESS_KEY', 'SMTP_PASSWORD', 'SESSION_SECRET', 'CSRF_SECRET'
     ],
     censor: '[REDACTED]'
   }

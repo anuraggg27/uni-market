@@ -32,8 +32,14 @@ const schema = z
       .string()
       .min(32)
       .default("development-csrf-secret-change-me-1234"),
-    OTP_SERVICE_API_KEY: z.string().default(""),
-    OTP_SERVICE_BASE_URL: z.string().url().default("https://2factor.in/API/V1"),
+    MSG91_WIDGET_ID: z.string().default(""),
+    MSG91_TOKEN_AUTH: z.string().default(""),
+    MSG91_AUTH_KEY: z.string().default(""),
+    MSG91_OTP_LENGTH: z.coerce.number().int().min(4).max(8).default(4),
+    MSG91_VERIFY_ACCESS_TOKEN_URL: z
+      .string()
+      .url()
+      .default("https://api.msg91.com/api/v5/widget/verifyAccessToken"),
     SMTP_HOST: z.string().default(""),
     SMTP_PORT: z.coerce.number().int().default(587),
     SMTP_SECURE: booleanString.default(false),
@@ -74,7 +80,9 @@ const schema = z
         "GOOGLE_CLIENT_ID",
         "SESSION_SECRET",
         "CSRF_SECRET",
-        "OTP_SERVICE_API_KEY",
+        "MSG91_WIDGET_ID",
+        "MSG91_TOKEN_AUTH",
+        "MSG91_AUTH_KEY",
         "R2_ACCESS_KEY_ID",
         "R2_SECRET_ACCESS_KEY",
         "R2_BUCKET_NAME",

@@ -26,6 +26,15 @@ import {
 import { api, clearCsrf, jsonBody } from "../api";
 import { useAuth } from "../auth";
 import { shouldFollowNewMessage } from "../chat-scroll";
+import {
+  initializeMsg91,
+  msg91AccessToken,
+  msg91Identifier,
+  msg91RequestId,
+  retryMsg91Otp,
+  sendMsg91Otp,
+  verifyMsg91Otp,
+} from "../msg91";
 import { ProductCard } from "../components/ProductCard";
 import {
   formatNotificationTime,
@@ -1838,23 +1847,75 @@ export function SettingsPage() {
   const [code, setCode] = useState("");
   const [codeSent, setCodeSent] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [requestId, setRequestId] = useState<string>();
+  const verificationConfig = useQuery({
+    queryKey: ["phone-verification-config"],
+    queryFn: () =>
+      api<
+        | { provider: "development"; otpLength: number; retryAfter: number }
+        | {
+            provider: "msg91";
+            widgetId: string;
+            tokenAuth: string;
+            otpLength: number;
+            retryAfter: number;
+          }
+      >("/api/phone/config"),
+    enabled: !user?.phoneVerifiedAt,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
   const send = useMutation({
-    mutationFn: () =>
-      api<{ retryAfter: number }>("/api/phone/send", {
+    mutationFn: async () => {
+      const provider = verificationConfig.data;
+      if (!provider) throw new Error("Phone verification is not ready");
+      await api("/api/phone/check-availability", {
         method: "POST",
         ...jsonBody({ phone }),
-      }),
-    onSuccess: ({ retryAfter }) => {
+      });
+      if (provider.provider === "development") {
+        const result = await api<{ retryAfter: number }>("/api/phone/send", {
+          method: "POST",
+          ...jsonBody({ phone }),
+        });
+        return { ...result, requestId: undefined };
+      }
+
+      await initializeMsg91({
+        widgetId: provider.widgetId,
+        tokenAuth: provider.tokenAuth,
+        captchaRenderId: "msg91-captcha",
+      });
+      const result = codeSent
+        ? await retryMsg91Otp(requestId)
+        : await sendMsg91Otp(msg91Identifier(phone));
+      return {
+        retryAfter: provider.retryAfter,
+        requestId: msg91RequestId(result) ?? requestId,
+      };
+    },
+    onSuccess: ({ retryAfter, requestId: nextRequestId }) => {
       setCodeSent(true);
       setResendCooldown(retryAfter);
+      setRequestId(nextRequestId);
     },
   });
   const verify = useMutation({
-    mutationFn: () =>
-      api("/api/phone/verify", {
+    mutationFn: async () => {
+      const provider = verificationConfig.data;
+      if (!provider) throw new Error("Phone verification is not ready");
+      if (provider.provider === "development") {
+        return api("/api/phone/verify", {
+          method: "POST",
+          ...jsonBody({ phone, code }),
+        });
+      }
+
+      const result = await verifyMsg91Otp(code, requestId);
+      return api("/api/phone/verify-provider", {
         method: "POST",
-        ...jsonBody({ phone, code }),
-      }),
+        ...jsonBody({ phone, accessToken: msg91AccessToken(result) }),
+      });
+    },
     onSuccess: () => void refresh(),
   });
   const logout = useMutation({
@@ -1873,6 +1934,7 @@ export function SettingsPage() {
     );
     return () => window.clearTimeout(timer);
   }, [resendCooldown]);
+  const otpLength = verificationConfig.data?.otpLength ?? 4;
   return (
     <div className="page narrow">
       <div className="page-header">
@@ -1897,18 +1959,33 @@ export function SettingsPage() {
               <span>Indian mobile number</span>
               <input
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  if (codeSent) {
+                    setCodeSent(false);
+                    setCode("");
+                    setRequestId(undefined);
+                    setResendCooldown(0);
+                  }
+                }}
                 placeholder="9876543210"
                 inputMode="tel"
+                autoComplete="tel"
+                disabled={send.isPending || verify.isPending}
               />
             </label>
+            <div id="msg91-captcha" />
             <button
               className="button secondary"
               onClick={() => send.mutate()}
-              disabled={send.isPending || resendCooldown > 0}
+              disabled={
+                verificationConfig.isPending ||
+                send.isPending ||
+                resendCooldown > 0
+              }
             >
               {send.isPending
-                ? "Sending..."
+                ? "Sending…"
                 : codeSent
                   ? resendCooldown > 0
                     ? `Resend code in ${resendCooldown}s`
@@ -1918,20 +1995,27 @@ export function SettingsPage() {
             {codeSent ? (
               <>
                 <label className="field">
-                  <span>6-digit code</span>
+                  <span>{otpLength}-digit code</span>
                   <input
                     value={code}
-                    onChange={(e) => setCode(e.target.value)}
+                    onChange={(e) =>
+                      setCode(e.target.value.replace(/\D/g, "").slice(0, otpLength))
+                    }
                     inputMode="numeric"
-                    maxLength={6}
+                    autoComplete="one-time-code"
+                    maxLength={otpLength}
                   />
                 </label>
                 <button
                   className="button primary"
                   onClick={() => verify.mutate()}
-                  disabled={verify.isPending}
+                  disabled={
+                    verify.isPending ||
+                    code.length !== otpLength ||
+                    !/^\d+$/.test(code)
+                  }
                 >
-                  Verify phone
+                  {verify.isPending ? "Verifying…" : "Verify phone"}
                 </button>
               </>
             ) : null}
@@ -1940,6 +2024,11 @@ export function SettingsPage() {
             ) : null}
             {verify.error ? (
               <p className="field-error">{verify.error.message}</p>
+            ) : null}
+            {verificationConfig.error ? (
+              <p className="field-error">
+                {verificationConfig.error.message}
+              </p>
             ) : null}
           </>
         )}
