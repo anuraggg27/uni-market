@@ -2,7 +2,7 @@
 
 A mobile-first marketplace where students can buy and sell used products, communicate privately, and complete offline exchanges. Registration accepts any verified Google account; institution details are optional.
 
-The application is a TypeScript npm workspace with a Vite/React frontend, Express/Socket.IO API, Drizzle data layer, Neon PostgreSQL production connection, PGlite local/test fallback, and private Cloudflare R2 image pipeline.
+The application is a TypeScript npm workspace with a Vite/React frontend, Express/Socket.IO API, Drizzle data layer, Neon PostgreSQL connections, a PGlite fallback for isolated local/test runs, and a private Cloudflare R2 image pipeline.
 
 ## Prerequisites
 
@@ -20,7 +20,7 @@ npm run db:seed
 npm run dev
 ```
 
-Open `http://localhost:5173`. The API listens at `http://localhost:4000`. The default `DATABASE_URL=pglite://.data/marketplace` needs no external database.
+Open `http://localhost:5173`. The API listens at `http://localhost:4000`. Use the isolated Neon staging database for shared development, or `DATABASE_URL=pglite://.data/marketplace` for a disposable local database.
 
 Set `DEV_MODE=true` locally to disable external SMS and accept only `999999`. The API logs that development mode is active without logging the code. The configuration validator refuses to start when `NODE_ENV=production` and `DEV_MODE=true`.
 
@@ -62,7 +62,7 @@ For Google Identity Services, configure `http://localhost`, `http://localhost:51
 
 Draft image uploads use a short-lived signed PUT URL to a random temporary key. Finalization verifies ownership, byte size, actual JPEG/PNG/WebP signature, dimensions, and configured limits; Sharp re-encodes the image as WebP and strips metadata. The temporary object is deleted. Pending images remain private and read URLs are short lived. When R2 credentials are absent outside production, an equivalent signed local storage adapter supports development and tests.
 
-Apply [infra/r2-cors.json](infra/r2-cors.json) to the bucket after replacing the example origin. Never expose R2 keys to Vite variables.
+Production uses the private `uni-market` bucket and [infra/r2-cors.json](infra/r2-cors.json). Local development uses the separate private `uni-market-staging` bucket and [infra/r2-cors.staging.json](infra/r2-cors.staging.json), whose browser access is limited to `http://localhost:5173`. Set the `R2_*` variables only in the API environment; never expose R2 keys through `VITE_*` variables.
 
 ## Listing moderation
 

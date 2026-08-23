@@ -38,5 +38,4 @@ Moderation and lifecycle are separate axes. Public discovery always filters `APP
 
 ## External service fallbacks
 
-PGlite replaces Neon locally and in isolated tests. Signed local image storage mirrors R2 authorization and validation semantics. Development OTP prevents external SMS. SMTP jobs remain persisted even when SMTP is not configured. Production startup rejects these unsafe fallbacks.
-
+The shared development environment uses isolated Neon and R2 staging resources. PGlite and signed local image storage remain available for disposable local and isolated test runs, with matching authorization and validation semantics. Development OTP prevents external SMS. SMTP jobs remain persisted even when SMTP is not configured. Production startup rejects these unsafe fallbacks.
