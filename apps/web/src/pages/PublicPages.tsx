@@ -1032,7 +1032,7 @@ export function ListingPage() {
                   </button>
                   <button
                     type="button"
-                    className="inline-flex h-10 items-center justify-center rounded-full border border-[#e5e7eb] bg-white px-3 text-[13px] font-normal text-[#4b5563] transition-colors hover:bg-[#fafafa]"
+                    className="listing-report-trigger inline-flex h-10 items-center justify-center rounded-full border px-3 text-[13px] font-medium transition-colors"
                     onClick={() => setReportOpen((value) => !value)}
                     aria-expanded={reportOpen}
                   >
@@ -1084,7 +1084,7 @@ export function ListingPage() {
                 />
               </label>
               <button
-                className="h-10 rounded-full border border-[#fca5a5] bg-[#fff8f8] px-4 text-sm font-medium text-[#9f2020]"
+                className="listing-report-submit h-10 rounded-full border px-4 text-sm font-semibold transition-colors"
                 disabled={report.isPending}
               >
                 Submit report
