@@ -1,5 +1,5 @@
 import { parse as parseCookie } from 'cookie';
-import { and, eq, gt, isNull, or } from 'drizzle-orm';
+import { and, eq, gt, isNull, ne, or } from 'drizzle-orm';
 import type { Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
 import { messageSchema } from '@campus-market/shared';
@@ -23,11 +23,22 @@ export function attachSocket(server: HttpServer, db: Database, config: AppConfig
   });
   io.on('connection', (socket) => {
     const userId = socket.data.userId as string;
+    // A private user room keeps the inbox live even when no conversation is open.
+    // Socket.IO creates a new server-side socket after reconnecting, so joining it
+    // here also restores delivery without requiring a page refresh.
+    void socket.join(`user:${userId}`);
     socket.on('conversation:subscribe', async (conversationId: unknown, acknowledge?: (result: unknown) => void) => {
       if (typeof conversationId !== 'string') return acknowledge?.({ ok: false });
       const member = (await db.select({ id: conversations.id }).from(conversations).where(and(eq(conversations.id, conversationId), or(eq(conversations.buyerId, userId), eq(conversations.sellerId, userId)))).limit(1))[0];
       if (!member) return acknowledge?.({ ok: false, error: 'Forbidden' });
       await socket.join(`conversation:${conversationId}`); acknowledge?.({ ok: true });
+    });
+    socket.on('conversation:read', async (conversationId: unknown, acknowledge?: (result: unknown) => void) => {
+      if (typeof conversationId !== 'string') return acknowledge?.({ ok: false });
+      const member = (await db.select({ id: conversations.id }).from(conversations).where(and(eq(conversations.id, conversationId), or(eq(conversations.buyerId, userId), eq(conversations.sellerId, userId)))).limit(1))[0];
+      if (!member) return acknowledge?.({ ok: false, error: 'Forbidden' });
+      await db.update(messages).set({ readAt: new Date() }).where(and(eq(messages.conversationId, conversationId), ne(messages.senderId, userId), isNull(messages.readAt)));
+      acknowledge?.({ ok: true });
     });
     socket.on('message:send', async (payload: unknown, acknowledge?: (result: unknown) => void) => {
       try {
@@ -48,7 +59,11 @@ export function attachSocket(server: HttpServer, db: Database, config: AppConfig
           if (!conversation.firstMessageEmailQueuedAt) { await tx.update(conversations).set({ firstMessageEmailQueuedAt: new Date() }).where(and(eq(conversations.id, conversation.id), isNull(conversations.firstMessageEmailQueuedAt))); await tx.insert(emailOutbox).values({ recipientUserId: otherId, template: 'first-conversation-message', payload: { conversationId: conversation.id }, dedupeKey: `first-conversation-message:${conversation.id}` }).onConflictDoNothing(); }
           return message;
         });
-        io.to(`conversation:${conversation.id}`).emit('message:new', created); acknowledge?.({ ok: true, data: created });
+        io.to(`conversation:${conversation.id}`)
+          .to(`user:${conversation.buyerId}`)
+          .to(`user:${conversation.sellerId}`)
+          .emit('message:new', created);
+        acknowledge?.({ ok: true, data: created });
       } catch (error) { logger.warn({ err: error, userId }, 'socket message rejected'); acknowledge?.({ ok: false, error: 'Invalid message' }); }
     });
     socket.on('listing:watch', async (listingId: unknown) => { if (typeof listingId === 'string') { await socket.join(`listing:${listingId}`); const count = io.sockets.adapter.rooms.get(`listing:${listingId}`)?.size ?? 0; if (count > 1) io.to(`listing:${listingId}`).emit('listing:viewers', { count, approximate: true }); } });

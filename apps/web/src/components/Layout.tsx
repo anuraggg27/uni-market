@@ -1,5 +1,5 @@
 import { Home, ListPlus, MessageCircle, Search, UserRound } from 'lucide-react';
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Navbar } from './Navbar';
 
 const mobileLinks = [
@@ -11,8 +11,14 @@ const mobileLinks = [
 ];
 
 export function Layout() {
+  const { pathname } = useLocation();
+  const isChatRoute = pathname === '/chats' || pathname.startsWith('/chats/');
+  const isConversationRoute = pathname.startsWith('/chats/');
+
   return (
-    <div className="app-shell">
+    <div
+      className={`app-shell ${isChatRoute ? 'chat-layout' : ''} ${isConversationRoute ? 'chat-conversation-layout' : ''}`}
+    >
       <a className="skip-link" href="#main">
         Skip to content
       </a>

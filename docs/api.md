@@ -20,12 +20,12 @@ Public listing query parameters are `q`, `category`, `minPrice`, `maxPrice`, `co
 The handshake authenticates `campus_session`. Verified, non-suspended users may emit:
 
 - `conversation:subscribe(conversationId, acknowledgement)`; membership is checked.
+- `conversation:read(conversationId, acknowledgement)`; marks only the authenticated participant's incoming messages as read.
 - `message:send({ conversationId, clientId, body }, acknowledgement)`; sender identity comes from the session.
-- `listing:view:join(listingId)` / `listing:view:leave(listingId)`; broadcasts approximate connection count without viewer identity.
+- `listing:watch(listingId)`; broadcasts approximate connection count without viewer identity.
 
-Server events include `message:new` and viewer-count updates. `clientId` makes optimistic retries idempotent. The REST message history remains the source of truth after reconnect.
+Server events include `message:new` and viewer-count updates. Each authenticated socket joins a private server-managed user room, so inbox updates do not depend on an open conversation and delivery is restored after reconnect. `clientId` makes optimistic retries idempotent. The REST message history remains the source of truth and is polled briefly when the socket is unavailable.
 
 ## State rules
 
 Listing moderation: `PENDING → APPROVED|REJECTED|REMOVED`. Listing lifecycle: `DRAFT → ACTIVE → RESERVED → SOLD`, with `EXPIRED` and `WITHDRAWN` alternatives. Transaction: `REQUESTED → RESERVED → HANDED_OVER → COMPLETED`, with participant cancellation or an audited dispute override. Unsupported transitions return conflict/authorization errors.
-

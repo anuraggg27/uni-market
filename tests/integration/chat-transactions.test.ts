@@ -16,6 +16,35 @@ describe('chat acceptance',()=>{
   it('CHAT-02 returns one unique conversation for repeated starts',async()=>{const first=await buyer.agent.post('/api/conversations').set(buyer.headers).send({listingId:listing.id}).expect(201);const second=await buyer.agent.post('/api/conversations').set(buyer.headers).send({listingId:listing.id}).expect(200);expect(second.body.data.id).toBe(first.body.data.id);expect(await ctx.db.select().from(schema.conversations)).toHaveLength(1);});
   it('CHAT-03 rejects unrelated conversation reads',async()=>{const c=await conversation();const outsider=await login(ctx.app,'chat-outsider');await verifyPhone(outsider,'9976543210');await outsider.agent.get(`/api/conversations/${c.id}/messages`).expect(403);});
   it('CHAT-04 websocket rejects arbitrary room subscriptions',async()=>{const c=await conversation();const outsider=await login(ctx.app,'socket-outsider');await verifyPhone(outsider,'9965432109');const server=createServer(ctx.app);const io=attachSocket(server,ctx.db,ctx.config);await new Promise<void>((resolve)=>server.listen(0,resolve));const address=server.address();const port=typeof address==='object'&&address?address.port:0;const socket=socketClient(`http://127.0.0.1:${port}`,{extraHeaders:{Cookie:outsider.cookie},transports:['websocket']});const result=await new Promise<any>((resolve,reject)=>{socket.on('connect',()=>socket.emit('conversation:subscribe',c.id,resolve));socket.on('connect_error',reject);});expect(result.ok).toBe(false);socket.close();await new Promise<void>((resolve)=>io.close(()=>resolve()));await new Promise<void>((resolve)=>server.close(()=>resolve()));});
+  it('delivers new messages to the recipient inbox after reconnect without a refresh',async()=>{
+    const c=await conversation();
+    const server=createServer(ctx.app);
+    const io=attachSocket(server,ctx.db,ctx.config);
+    await new Promise<void>((resolve)=>server.listen(0,resolve));
+    const address=server.address();
+    const port=typeof address==='object'&&address?address.port:0;
+    const sellerSocket=socketClient(`http://127.0.0.1:${port}`,{extraHeaders:{Cookie:seller.cookie},transports:['websocket']});
+    const buyerSocket=socketClient(`http://127.0.0.1:${port}`,{extraHeaders:{Cookie:buyer.cookie},transports:['websocket']});
+    try {
+      await Promise.all([
+        new Promise<void>((resolve,reject)=>{sellerSocket.once('connect',resolve);sellerSocket.once('connect_error',reject);}),
+        new Promise<void>((resolve,reject)=>{buyerSocket.once('connect',resolve);buyerSocket.once('connect_error',reject);}),
+      ]);
+      sellerSocket.disconnect();
+      const reconnected=new Promise<void>((resolve,reject)=>{sellerSocket.once('connect',resolve);sellerSocket.once('connect_error',reject);});
+      sellerSocket.connect();
+      await reconnected;
+      const incoming=new Promise<any>((resolve)=>sellerSocket.once('message:new',resolve));
+      const acknowledgement=new Promise<any>((resolve)=>buyerSocket.emit('message:send',{conversationId:c.id,body:'Visible without refreshing',clientId:crypto.randomUUID()},resolve));
+      expect((await acknowledgement).ok).toBe(true);
+      expect((await incoming).body).toBe('Visible without refreshing');
+    } finally {
+      sellerSocket.close();
+      buyerSocket.close();
+      await new Promise<void>((resolve)=>io.close(()=>resolve()));
+      await new Promise<void>((resolve)=>server.close(()=>resolve()));
+    }
+  });
   it('CHAT-05 persists messages and CHAT-07 queues exactly one first-message email',async()=>{const c=await conversation();await buyer.agent.post(`/api/conversations/${c.id}/messages`).set(buyer.headers).send({body:'Is the textbook still available?',clientId:crypto.randomUUID()}).expect(201);await buyer.agent.post(`/api/conversations/${c.id}/messages`).set(buyer.headers).send({body:'I can meet tomorrow.',clientId:crypto.randomUUID()}).expect(201);const reopened=await buyer.agent.get(`/api/conversations/${c.id}/messages`).expect(200);expect(reopened.body.data).toHaveLength(2);expect((await ctx.db.select().from(schema.emailOutbox)).filter((job)=>job.template==='first-conversation-message')).toHaveLength(1);});
   it('CHAT-06 duplicate client IDs are idempotent after reconnect',async()=>{const c=await conversation();const clientId=crypto.randomUUID();await buyer.agent.post(`/api/conversations/${c.id}/messages`).set(buyer.headers).send({body:'One message',clientId}).expect(201);await buyer.agent.post(`/api/conversations/${c.id}/messages`).set(buyer.headers).send({body:'One message',clientId}).expect(200);expect(await ctx.db.select().from(schema.messages)).toHaveLength(1);});
   it('CHAT-08 throttles excessive message traffic',async()=>{const c=await conversation();let status=0;for(let i=0;i<12;i++){const response=await buyer.agent.post(`/api/conversations/${c.id}/messages`).set(buyer.headers).send({body:`Message ${i}`,clientId:crypto.randomUUID()});status=response.status;if(status===429)break;}expect(status).toBe(429);});

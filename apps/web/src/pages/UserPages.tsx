@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,8 +11,16 @@ import {
 } from "react-router-dom";
 import { listingInputSchema, type ListingInput } from "@campus-market/shared";
 import { z } from "zod";
+import {
+  ArrowDown,
+  ArrowLeft,
+  MoreHorizontal,
+  SendHorizontal,
+  ShieldCheck,
+} from "lucide-react";
 import { api, clearCsrf, jsonBody } from "../api";
 import { useAuth } from "../auth";
+import { shouldFollowNewMessage } from "../chat-scroll";
 import { ProductCard } from "../components/ProductCard";
 import { ReportButton } from "../components/ReportButton";
 import {
@@ -547,25 +555,144 @@ function socket() {
     chatSocket = io(API_URL, { withCredentials: true, autoConnect: true });
   return chatSocket;
 }
+
+type ChatConversation = {
+  id: string;
+  listingId: string;
+  listingTitle: string;
+  lifecycleState: string;
+  otherUserId: string;
+  otherName: string;
+  unread: number;
+  coverImageUrl: string | null;
+  lastMessageAt: string;
+};
+
+type ChatMessage = {
+  id: string;
+  clientId: string;
+  conversationId: string;
+  senderId: string;
+  body: string;
+  createdAt: string;
+  pending?: boolean;
+  failed?: boolean;
+};
+
+type RealtimeState = "connecting" | "connected" | "offline";
+
 export function ChatsPage() {
   const { conversationId } = useParams();
+  const { user } = useAuth();
+  const client = useQueryClient();
+  const activeConversation = useRef(conversationId);
+  const [realtimeState, setRealtimeState] =
+    useState<RealtimeState>("connecting");
   const conversations = useQuery({
     queryKey: ["conversations"],
-    queryFn: () => api<any[]>("/api/conversations"),
+    queryFn: () => api<ChatConversation[]>("/api/conversations"),
+    refetchInterval: realtimeState === "connected" ? false : 5_000,
   });
   const selectedConversation = conversations.data?.find(
     (conversation) => conversation.id === conversationId,
   );
+
+  useEffect(() => {
+    activeConversation.current = conversationId;
+  }, [conversationId]);
+
+  useEffect(() => {
+    const realtime = socket();
+    const connected = () => setRealtimeState("connected");
+    const disconnected = () => setRealtimeState("connecting");
+    const unavailable = () => setRealtimeState("offline");
+    const receive = (message: ChatMessage) => {
+      const openConversation = activeConversation.current;
+      if (message.conversationId === openConversation) {
+        client.setQueryData<ChatMessage[]>(
+          ["messages", openConversation],
+          (current = []) =>
+            current.some((item) => item.id === message.id)
+              ? current
+              : [...current, message],
+        );
+        realtime.emit("conversation:read", openConversation);
+      }
+
+      const currentConversations = client.getQueryData<ChatConversation[]>([
+        "conversations",
+      ]);
+      if (
+        !currentConversations?.some(
+          (item) => item.id === message.conversationId,
+        )
+      ) {
+        void client.invalidateQueries({ queryKey: ["conversations"] });
+      } else {
+        client.setQueryData<ChatConversation[]>(
+          ["conversations"],
+          (current = []) => {
+            const updated = current.map((item) =>
+              item.id === message.conversationId
+                ? {
+                    ...item,
+                    lastMessageAt: message.createdAt,
+                    unread:
+                      message.conversationId === openConversation ||
+                      message.senderId === user?.id
+                        ? 0
+                        : item.unread + 1,
+                  }
+                : item,
+            );
+            return updated.sort(
+              (a, b) =>
+                new Date(b.lastMessageAt).getTime() -
+                new Date(a.lastMessageAt).getTime(),
+            );
+          },
+        );
+      }
+    };
+
+    realtime.on("connect", connected);
+    realtime.on("disconnect", disconnected);
+    realtime.on("connect_error", unavailable);
+    realtime.on("message:new", receive);
+    if (realtime.connected) connected();
+    else realtime.connect();
+
+    return () => {
+      realtime.off("connect", connected);
+      realtime.off("disconnect", disconnected);
+      realtime.off("connect_error", unavailable);
+      realtime.off("message:new", receive);
+      realtime.disconnect();
+    };
+  }, [client, user?.id]);
+
   return (
-    <div className="page">
-      <div className="page-header">
-        <div>
-          <p className="eyebrow">Private messages</p>
-          <h1>Chats</h1>
-        </div>
-      </div>
+    <div className="page chat-page">
       <div className={`chat-shell ${conversationId ? "has-conversation" : ""}`}>
-        <div className="conversation-list">
+        <aside className="conversation-list" aria-label="Conversations">
+          <header className="inbox-header">
+            <div>
+              <p className="eyebrow">Private</p>
+              <h1>Messages</h1>
+            </div>
+            <span
+              className={`realtime-state ${realtimeState}`}
+              role="status"
+              aria-live="polite"
+            >
+              <span aria-hidden="true" />
+              {realtimeState === "connected"
+                ? "Live"
+                : realtimeState === "offline"
+                  ? "Retrying"
+                  : "Connecting"}
+            </span>
+          </header>
           {conversations.isLoading ? (
             <Loading />
           ) : conversations.isError ? (
@@ -583,12 +710,28 @@ export function ChatsPage() {
                 key={c.id}
               >
                 {c.coverImageUrl ? (
-                  <img className="avatar" src={c.coverImageUrl} alt="" />
+                  <img
+                    className="conversation-image"
+                    src={c.coverImageUrl}
+                    alt=""
+                    width="52"
+                    height="52"
+                  />
                 ) : (
-                  <span className="avatar">{c.otherName[0]}</span>
+                  <span className="conversation-image" aria-hidden="true">
+                    {c.otherName[0]}
+                  </span>
                 )}
-                <span>
-                  <strong>{c.otherName}</strong>
+                <span className="conversation-copy">
+                  <span className="conversation-name-row">
+                    <strong>{c.otherName}</strong>
+                    <time>
+                      {new Intl.DateTimeFormat(undefined, {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      }).format(new Date(c.lastMessageAt))}
+                    </time>
+                  </span>
                   <small>{c.listingTitle}</small>
                 </span>
                 {c.unread ? (
@@ -602,11 +745,12 @@ export function ChatsPage() {
               </Link>
             ))
           )}
-        </div>
+        </aside>
         {conversationId ? (
           <ChatPanel
             id={conversationId}
-            otherUserId={selectedConversation?.otherUserId}
+            conversation={selectedConversation}
+            realtimeState={realtimeState}
           />
         ) : (
           <div className="chat-panel">
@@ -620,84 +764,232 @@ export function ChatsPage() {
     </div>
   );
 }
-function ChatPanel({ id, otherUserId }: { id: string; otherUserId?: string }) {
+function ChatPanel({
+  id,
+  conversation,
+  realtimeState,
+}: {
+  id: string;
+  conversation: ChatConversation | undefined;
+  realtimeState: RealtimeState;
+}) {
   const { user } = useAuth();
   const client = useQueryClient();
-  const bottom = useRef<HTMLDivElement>(null);
+  const messagesElement = useRef<HTMLDivElement>(null);
+  const nearBottom = useRef(true);
+  const initialScrollComplete = useRef(false);
+  const latestMessage = useRef<string | undefined>(undefined);
   const [draft, setDraft] = useState("");
-  const [optimistic, setOptimistic] = useState<any[]>([]);
+  const [optimistic, setOptimistic] = useState<ChatMessage[]>([]);
+  const [hasNewMessages, setHasNewMessages] = useState(false);
   const query = useQuery({
     queryKey: ["messages", id],
-    queryFn: () => api<any[]>(`/api/conversations/${id}/messages`),
+    queryFn: () => api<ChatMessage[]>(`/api/conversations/${id}/messages`),
+    refetchInterval: realtimeState === "connected" ? false : 5_000,
   });
   const block = useMutation({
-    mutationFn: () => api(`/api/blocks/${otherUserId}`, { method: "POST" }),
+    mutationFn: () =>
+      api(`/api/blocks/${conversation?.otherUserId}`, { method: "POST" }),
   });
-  useEffect(() => {
-    const s = socket();
-    s.emit("conversation:subscribe", id);
-    const listener = (message: any) => {
-      if (message.conversationId === id) {
-        setOptimistic((current) =>
-          current.filter((m) => m.clientId !== message.clientId),
-        );
-        client.setQueryData<any[]>(["messages", id], (old = []) =>
-          old.some((m) => m.id === message.id) ? old : [...old, message],
-        );
-      }
-    };
-    s.on("message:new", listener);
-    return () => {
-      s.off("message:new", listener);
-    };
+
+  const receiveMessage = useCallback((message: ChatMessage) => {
+    setOptimistic((current) =>
+      current.filter((item) => item.clientId !== message.clientId),
+    );
+    client.setQueryData<ChatMessage[]>(["messages", id], (current = []) =>
+      current.some((item) => item.id === message.id)
+        ? current
+        : [...current, message],
+    );
   }, [client, id]);
+
   useEffect(() => {
-    bottom.current?.scrollIntoView({ behavior: "smooth" });
-  }, [query.data, optimistic]);
+    const realtime = socket();
+    const subscribe = () => {
+      realtime.emit("conversation:subscribe", id, (result: { ok: boolean }) => {
+        if (result?.ok) realtime.emit("conversation:read", id);
+      });
+    };
+    const listener = (message: ChatMessage) => {
+      if (message.conversationId === id) receiveMessage(message);
+    };
+    realtime.on("connect", subscribe);
+    realtime.on("message:new", listener);
+    if (realtime.connected) subscribe();
+    else realtime.connect();
+    return () => {
+      realtime.off("connect", subscribe);
+      realtime.off("message:new", listener);
+    };
+  }, [id, receiveMessage]);
+
+  useEffect(() => {
+    initialScrollComplete.current = false;
+    latestMessage.current = undefined;
+    nearBottom.current = true;
+    setHasNewMessages(false);
+  }, [id]);
+
+  useEffect(() => {
+    if (!query.isSuccess) return;
+    client.setQueryData<ChatConversation[]>(["conversations"], (current = []) =>
+      current.map((item) => (item.id === id ? { ...item, unread: 0 } : item)),
+    );
+  }, [client, id, query.isSuccess]);
+
+  const all = useMemo(() => {
+    const merged = [...(query.data ?? []), ...optimistic];
+    const seen = new Set<string>();
+    return merged.filter((message) => {
+      const identity = message.clientId || message.id;
+      if (seen.has(identity)) return false;
+      seen.add(identity);
+      return true;
+    });
+  }, [optimistic, query.data]);
+
+  useEffect(() => {
+    if (!query.isSuccess) return;
+    const container = messagesElement.current;
+    if (!container) return;
+    const newest = all.at(-1);
+    const identity = newest?.clientId || newest?.id;
+
+    if (!initialScrollComplete.current) {
+      const frame = requestAnimationFrame(() => {
+        container.scrollTop = container.scrollHeight;
+        initialScrollComplete.current = true;
+        latestMessage.current = identity;
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+
+    if (!identity || identity === latestMessage.current) return;
+    latestMessage.current = identity;
+    if (
+      newest &&
+      shouldFollowNewMessage(nearBottom.current, newest.senderId, user?.id)
+    ) {
+      const frame = requestAnimationFrame(() => {
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            ? "auto"
+            : "smooth",
+        });
+        setHasNewMessages(false);
+      });
+      return () => cancelAnimationFrame(frame);
+    }
+    setHasNewMessages(true);
+  }, [all, query.isSuccess, user?.id]);
+
+  function deliver(body: string, clientId: string) {
+    const pendingMessage: ChatMessage = {
+      id: clientId,
+      clientId,
+      conversationId: id,
+      body,
+      senderId: user?.id ?? "",
+      createdAt: new Date().toISOString(),
+      pending: true,
+    };
+    setOptimistic((current) => {
+      const exists = current.some((message) => message.clientId === clientId);
+      return exists
+        ? current.map((message) =>
+            message.clientId === clientId
+              ? { ...message, pending: true, failed: false }
+              : message,
+          )
+        : [...current, pendingMessage];
+    });
+    socket()
+      .timeout(8_000)
+      .emit(
+      "message:send",
+      { conversationId: id, clientId, body },
+        (error: Error | null, result: { ok: boolean; data?: ChatMessage }) => {
+          if (!error && result?.ok && result.data) {
+            receiveMessage(result.data);
+            return;
+          }
+          setOptimistic((current) =>
+            current.map((message) =>
+              message.clientId === clientId
+                ? { ...message, pending: false, failed: true }
+                : message,
+            ),
+          );
+        },
+      );
+  }
+
   function send() {
     const body = draft.trim();
     if (!body) return;
     setDraft("");
-    const clientId = crypto.randomUUID();
-    setOptimistic((v) => [
-      ...v,
-      {
-        id: clientId,
-        clientId,
-        body,
-        senderId: user?.id,
-        createdAt: new Date().toISOString(),
-        pending: true,
-      },
-    ]);
-    socket().emit(
-      "message:send",
-      { conversationId: id, clientId, body },
-      (result: any) => {
-        if (!result.ok)
-          setOptimistic((v) =>
-            v.map((m) =>
-              m.clientId === clientId
-                ? { ...m, pending: false, failed: true }
-                : m,
-            ),
-          );
-      },
-    );
+    deliver(body, crypto.randomUUID());
   }
-  const all = [...(query.data ?? []), ...optimistic];
+
+  function jumpToLatest() {
+    const container = messagesElement.current;
+    if (!container) return;
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "auto"
+        : "smooth",
+    });
+    nearBottom.current = true;
+    setHasNewMessages(false);
+  }
+
   return (
     <section className="chat-panel">
       <header className="chat-header">
-        <div className="row between">
-          <Link to="/chats">← All chats</Link>
-          <div className="row">
+        <Link className="chat-back" to="/chats" aria-label="Back to chats">
+          <ArrowLeft aria-hidden="true" />
+        </Link>
+        {conversation?.coverImageUrl ? (
+          <img
+            className="chat-listing-image"
+            src={conversation.coverImageUrl}
+            alt=""
+            width="44"
+            height="44"
+          />
+        ) : (
+          <span className="chat-listing-image" aria-hidden="true" />
+        )}
+        <div className="chat-context">
+          <strong>{conversation?.otherName ?? "Conversation"}</strong>
+          {conversation ? (
+            <Link to={`/listing/${conversation.listingId}`}>
+              {conversation.listingTitle}
+            </Link>
+          ) : (
+            <span>Loading listing…</span>
+          )}
+        </div>
+        <span
+          className={`realtime-state chat-realtime ${realtimeState}`}
+          role="status"
+        >
+          <span aria-hidden="true" />
+          {realtimeState === "connected" ? "Live" : "Reconnecting"}
+        </span>
+        <details className="chat-actions">
+          <summary aria-label="Conversation actions">
+            <MoreHorizontal aria-hidden="true" />
+          </summary>
+          <div className="chat-actions-menu">
             <ReportButton
               targetType="CONVERSATION"
               targetId={id}
               label="Report chat"
             />
-            {otherUserId ? (
+            {conversation?.otherUserId ? (
               <button
                 className="button small danger"
                 type="button"
@@ -707,43 +999,81 @@ function ChatPanel({ id, otherUserId }: { id: string; otherUserId?: string }) {
                 {block.isSuccess ? "Blocked" : "Block user"}
               </button>
             ) : null}
+            {block.error ? (
+              <p className="field-error">{block.error.message}</p>
+            ) : null}
           </div>
-        </div>
-        {block.error ? (
-          <p className="field-error">{block.error.message}</p>
-        ) : null}
+        </details>
       </header>
-      <div className="messages" aria-live="polite">
-        {query.isLoading ? (
-          <Loading />
-        ) : query.isError ? (
-          <ErrorState error={query.error} />
-        ) : !all.length ? (
-          <EmptyState
-            title="No messages yet"
-            body="Ask a clear question about the product."
-          />
-        ) : (
-          all.map((m) => (
-            <div
-              className={`bubble ${m.senderId === user?.id ? "mine" : ""}`}
-              key={m.id}
-            >
-              {m.body}
-              <time>
-                {m.failed
-                  ? "Failed to send"
-                  : m.pending
-                    ? "Sending…"
-                    : new Date(m.createdAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-              </time>
-            </div>
-          ))
-        )}
-        <div ref={bottom} />
+      <div className="messages-wrap">
+        <div
+          className="messages"
+          ref={messagesElement}
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions"
+          onScroll={(event) => {
+            const element = event.currentTarget;
+            nearBottom.current =
+              element.scrollHeight - element.scrollTop - element.clientHeight <
+              96;
+            if (nearBottom.current) setHasNewMessages(false);
+          }}
+        >
+          <div className="chat-safety-note">
+            <ShieldCheck aria-hidden="true" />
+            <span>Meet in public, inspect before paying & never share an OTP.</span>
+          </div>
+          {query.isLoading ? (
+            <Loading label="Loading messages" />
+          ) : query.isError ? (
+            <ErrorState error={query.error} retry={() => void query.refetch()} />
+          ) : !all.length ? (
+            <EmptyState
+              title="Start the conversation"
+              body="Ask a clear question about the product."
+            />
+          ) : (
+            all.map((message) => (
+              <article
+                className={`bubble ${message.senderId === user?.id ? "mine" : ""} ${message.failed ? "failed" : ""}`}
+                key={message.clientId || message.id}
+              >
+                <p>{message.body}</p>
+                <footer>
+                  <time dateTime={message.createdAt}>
+                    {message.failed
+                      ? "Not sent"
+                      : message.pending
+                        ? "Sending…"
+                        : new Intl.DateTimeFormat(undefined, {
+                            hour: "numeric",
+                            minute: "2-digit",
+                          }).format(new Date(message.createdAt))}
+                  </time>
+                  {message.failed ? (
+                    <button
+                      type="button"
+                      onClick={() => deliver(message.body, message.clientId)}
+                    >
+                      Retry
+                    </button>
+                  ) : null}
+                </footer>
+              </article>
+            ))
+          )}
+        </div>
+        {hasNewMessages ? (
+          <button
+            className="new-message-jump"
+            type="button"
+            onClick={jumpToLatest}
+          >
+            <ArrowDown aria-hidden="true" />
+            New messages
+          </button>
+        ) : null}
       </div>
       <form
         className="composer"
@@ -757,12 +1087,34 @@ function ChatPanel({ id, otherUserId }: { id: string; otherUserId?: string }) {
         </label>
         <textarea
           id="message"
+          name="message"
+          autoComplete="off"
           value={draft}
           maxLength={2000}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="Write a message"
+          onInput={(event) => {
+            const element = event.currentTarget;
+            element.style.height = "auto";
+            element.style.height = `${Math.min(element.scrollHeight, 112)}px`;
+          }}
+          onKeyDown={(event) => {
+            if (
+              event.key === "Enter" &&
+              !event.shiftKey &&
+              !event.nativeEvent.isComposing
+            ) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
+          placeholder="Write a message…"
         />
-        <button className="button primary" type="submit">
+        <button
+          className="button primary chat-send"
+          type="submit"
+          disabled={!draft.trim()}
+        >
+          <SendHorizontal aria-hidden="true" />
           Send
         </button>
       </form>

@@ -239,6 +239,11 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
   const buyer = await browser.newContext();
   await signIn(buyer, "transaction-buyer");
   const buyerPage = await buyer.newPage();
+  const sellerPage = await seller.newPage();
+  await sellerPage.goto("/chats");
+  await expect(
+    sellerPage.getByRole("heading", { name: "No conversations" }),
+  ).toBeVisible();
   await buyerPage.goto(`/listing/${listing.id}`);
   await buyerPage.getByRole("button", { name: "Save", exact: true }).click();
   await buyerPage.getByRole("button", { name: "Contact seller" }).click();
@@ -250,9 +255,45 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
   await expect(
     buyerPage.getByText("Can we meet at the library tomorrow?"),
   ).toBeVisible();
+  const conversationPath = new URL(buyerPage.url()).pathname;
+  await expect(
+    sellerPage.getByLabel("Conversations").getByText("Live"),
+  ).toBeVisible();
+  await expect(
+    sellerPage.getByRole("link", { name: /transaction-buyer/ }),
+  ).toBeVisible();
+  await buyerPage
+    .getByLabel("Message")
+    .fill("I can bring the exact amount if it is available.");
+  await buyerPage.getByRole("button", { name: "Send" }).click();
+  await expect(sellerPage.getByLabel("2 unread messages")).toBeVisible();
+  await sellerPage.getByRole("link", { name: /transaction-buyer/ }).click();
+  await expect(sellerPage).toHaveURL(new RegExp(`${conversationPath}$`));
+  await expect(
+    sellerPage.getByText("I can bring the exact amount if it is available."),
+  ).toBeVisible();
+  await buyerPage
+    .getByLabel("Message")
+    .fill("Does 4 PM work for you?");
+  await buyerPage.getByRole("button", { name: "Send" }).click();
+  await expect(sellerPage.getByText("Does 4 PM work for you?")).toBeVisible();
+  await sellerPage.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    sellerPage.getByRole("link", { name: "Back to chats" }),
+  ).toBeVisible();
+  const sendButtonRadius = await sellerPage
+    .getByRole("button", { name: "Send" })
+    .evaluate((button) => getComputedStyle(button).borderRadius);
+  expect(sendButtonRadius).toBe("9px");
+  expect(
+    await sellerPage.evaluate(
+      () =>
+        document.documentElement.scrollWidth >
+        document.documentElement.clientWidth,
+    ),
+  ).toBe(false);
   await buyerPage.goto(`/listing/${listing.id}`);
   await buyerPage.getByRole("button", { name: "Buy", exact: true }).click();
-  const sellerPage = await seller.newPage();
   await sellerPage.goto("/transactions");
   await sellerPage.getByRole("button", { name: "Accept and reserve" }).click();
   await sellerPage.getByRole("button", { name: "Mark handed over" }).click();
