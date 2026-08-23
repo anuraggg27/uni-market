@@ -1,8 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, NavLink } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { MenuIcon } from "lucide-react";
-import { api } from "../api";
+import { Link, NavLink, useNavigate } from "react-router-dom";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import {
+  LogIn,
+  LogOut,
+  MenuIcon,
+  Store,
+  UserRound,
+} from "lucide-react";
+import { api, clearCsrf } from "../api";
 import { useAuth } from "../auth";
 import {
   Accordion,
@@ -102,6 +108,130 @@ function getCategoryHref(
     return `/browse?category=${match.id}`;
   }
   return `/browse?q=${encodeURIComponent(item.title)}`;
+}
+
+function ProfileMenu({ compact = false }: { compact?: boolean }) {
+  const { user, refresh } = useAuth();
+  const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [menuOpen]);
+
+  const logout = useMutation({
+    mutationFn: () => api("/api/auth/logout", { method: "POST" }),
+    onSuccess: () => {
+      clearCsrf();
+      setMenuOpen(false);
+      navigate("/");
+      void refresh();
+    },
+  });
+
+  const itemClass =
+    "flex min-h-10 w-full items-center gap-3 rounded-xl px-3 text-left text-[14px] font-medium text-ink transition-colors hover:bg-surface-muted focus-visible:bg-surface-muted focus-visible:outline-none";
+
+  return (
+    <div className="relative" ref={rootRef}>
+      <button
+        type="button"
+        className={`grid place-items-center rounded-full border border-line bg-surface text-ink transition-colors hover:border-sandalwood hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30 ${
+          compact ? "size-8" : "size-9"
+        }`}
+        onClick={() => setMenuOpen((current) => !current)}
+        aria-label={user ? `${user.displayName} account menu` : "Account menu"}
+        aria-haspopup="dialog"
+        aria-expanded={menuOpen}
+      >
+        <UserRound className="size-4" aria-hidden="true" />
+      </button>
+
+      {menuOpen ? (
+        <section
+          className="absolute right-0 top-[calc(100%+12px)] z-[70] w-[260px] overflow-hidden rounded-2xl border border-line bg-surface p-2 shadow-[0_18px_50px_rgba(16,18,17,0.16)]"
+          role="dialog"
+          aria-label="Account menu"
+        >
+          {user ? (
+            <div className="mb-1 border-b border-line px-3 pb-3 pt-2">
+              <strong className="block truncate text-[14px] font-semibold text-ink">
+                {user.displayName}
+              </strong>
+              <span className="mt-0.5 block truncate text-[11px] text-muted">
+                {user.email}
+              </span>
+            </div>
+          ) : null}
+
+          <div className="grid gap-1">
+            {user ? (
+              <Link
+                to="/profile"
+                className={itemClass}
+                onClick={() => setMenuOpen(false)}
+              >
+                <UserRound className="size-4 text-muted" aria-hidden="true" />
+                Profile
+              </Link>
+            ) : (
+              <Link
+                to="/login"
+                className={itemClass}
+                onClick={() => setMenuOpen(false)}
+              >
+                <LogIn className="size-4 text-muted" aria-hidden="true" />
+                Sign in
+              </Link>
+            )}
+
+            <Link
+              to="/sell"
+              className={itemClass}
+              onClick={() => setMenuOpen(false)}
+            >
+              <Store className="size-4 text-muted" aria-hidden="true" />
+              Sell an item
+            </Link>
+
+            <div className="flex min-h-11 items-center justify-between gap-3 rounded-xl px-3 text-[14px] font-medium text-ink">
+              <span>Appearance</span>
+              <ThemeToggle />
+            </div>
+
+            {user ? (
+              <button
+                type="button"
+                className={`${itemClass} text-[#b42318] dark:text-[#f87171]`}
+                onClick={() => logout.mutate()}
+                disabled={logout.isPending}
+              >
+                <LogOut className="size-4" aria-hidden="true" />
+                {logout.isPending ? "Signing out..." : "Sign out"}
+              </button>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
 }
 
 export const Navbar = () => {
@@ -268,63 +398,15 @@ export const Navbar = () => {
           {/* Right Action Buttons */}
           <div className="hidden shrink-0 items-center gap-2.5 lg:flex">
             <MarketplaceSearch enableShortcut />
-            {user ? (
-              <>
-                <NotificationTray />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  asChild
-                  className="h-9 px-3.5 text-[14px] font-normal text-ink bg-surface border border-line rounded-full hover:bg-surface-muted hover:border-line transition-all shadow-none"
-                >
-                  <NavLink to="/profile">{user.displayName}</NavLink>
-                </Button>
-              </>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                asChild
-                className="h-9 px-4 text-[14px] font-normal text-ink bg-surface border border-line rounded-full hover:bg-surface-muted hover:border-line transition-all shadow-none"
-              >
-                <Link to="/login">Sign in</Link>
-              </Button>
-            )}
-            <Button
-              size="sm"
-              asChild
-              className="h-9 px-4 text-[14px] font-medium text-on-brand !text-on-brand bg-brand hover:bg-brand-hover rounded-full transition-colors shadow-none"
-            >
-              <Link to="/sell" className="text-on-brand !text-on-brand font-medium">
-                Sell
-              </Link>
-            </Button>
-            <ThemeToggle />
+            {user ? <NotificationTray /> : null}
+            <ProfileMenu />
           </div>
 
           {/* Mobile Menu Button & Sheet */}
           <div className="flex items-center gap-2 lg:hidden">
             <MarketplaceSearch compact />
             {user ? <NotificationTray mobile /> : null}
-            {!user ? (
-              <Button
-                variant="outline"
-                size="sm"
-                asChild
-                className="h-8 px-3 text-[13px] font-normal text-ink bg-surface border border-line rounded-full"
-              >
-                <Link to="/login">Sign in</Link>
-              </Button>
-            ) : null}
-            <Button
-              size="sm"
-              asChild
-              className="h-8 px-3 text-[13px] font-medium text-on-brand !text-on-brand bg-brand hover:bg-brand-hover rounded-full"
-            >
-              <Link to="/sell" className="text-on-brand !text-on-brand">
-                Sell
-              </Link>
-            </Button>
+            <ProfileMenu compact />
             <Sheet open={open} onOpenChange={setOpen}>
               <SheetTrigger asChild>
                 <Button
@@ -434,35 +516,9 @@ export const Navbar = () => {
                       </>
                     ) : null}
                   </div>
-                  <div className="mt-4 pt-3 border-t border-line flex flex-col gap-2.5">
-                    {!user ? (
-                      <Button
-                        variant="outline"
-                        asChild
-                        className="h-10 text-[14px] font-normal text-ink bg-surface border border-line rounded-full"
-                      >
-                        <Link to="/login" onClick={() => setOpen(false)}>
-                          Sign in
-                        </Link>
-                      </Button>
-                    ) : null}
-                    <Button
-                      asChild
-                      className="h-10 text-[14px] font-medium text-on-brand !text-on-brand bg-brand hover:bg-brand-hover rounded-full"
-                    >
-                      <Link
-                        to="/sell"
-                        onClick={() => setOpen(false)}
-                        className="text-on-brand !text-on-brand font-medium"
-                      >
-                        Sell
-                      </Link>
-                    </Button>
-                  </div>
                 </div>
               </SheetContent>
             </Sheet>
-            <ThemeToggle compact />
           </div>
         </nav>
       </div>
