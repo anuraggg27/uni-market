@@ -262,6 +262,20 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
   ).toBeVisible();
   await buyerPage.goto(`/listing/${listing.id}`);
   await buyerPage.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(
+    buyerPage.getByRole("button", { name: "Unsave item" }),
+  ).toBeVisible();
+  await expect(
+    buyerPage.getByRole("status").filter({ hasText: "Saved to your favourites" }),
+  ).toBeVisible();
+  await buyerPage.getByRole("button", { name: "Unsave item" }).click();
+  await expect(
+    buyerPage.getByRole("button", { name: "Save", exact: true }),
+  ).toBeVisible();
+  await expect(
+    buyerPage.getByRole("status").filter({ hasText: "Removed from saved" }),
+  ).toBeVisible();
+  await buyerPage.getByRole("button", { name: "Save", exact: true }).click();
   await buyerPage.getByRole("button", { name: "Contact seller" }).click();
   await expect(buyerPage).toHaveURL(/chats/);
   await buyerPage

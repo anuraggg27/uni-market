@@ -641,15 +641,45 @@ export function ListingPage() {
   const [activeImage, setActiveImage] = useState(0);
   const [reportOpen, setReportOpen] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
+  const [savedOverride, setSavedOverride] = useState<boolean | null>(null);
+  const [savedToast, setSavedToast] = useState<"saved" | "removed" | null>(
+    null,
+  );
   const query = useQuery({
     queryKey: ["listing", listingId],
     queryFn: () => api<any>(`/api/listings/${listingId}`),
   });
-  const save = useMutation({
-    mutationFn: () => api(`/api/favourites/${listingId}`, { method: "POST" }),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["favourites"] }),
+  const favourites = useQuery({
+    queryKey: ["favourites"],
+    queryFn: () => api<any[]>("/api/favourites"),
+    enabled: Boolean(user),
   });
+  const savedFromServer = Boolean(
+    favourites.data?.some((favourite) => favourite.id === listingId),
+  );
+  const isSaved = savedOverride ?? savedFromServer;
+  const save = useMutation({
+    mutationFn: (nextSaved: boolean) =>
+      api(`/api/favourites/${listingId}`, {
+        method: nextSaved ? "POST" : "DELETE",
+      }),
+    onMutate: (nextSaved) => {
+      const previousSaved = isSaved;
+      setSavedOverride(nextSaved);
+      return { previousSaved };
+    },
+    onError: (_error, _nextSaved, context) =>
+      setSavedOverride(context?.previousSaved ?? null),
+    onSuccess: (_data, nextSaved) => {
+      setSavedToast(nextSaved ? "saved" : "removed");
+      void client.invalidateQueries({ queryKey: ["favourites"] });
+    },
+  });
+  useEffect(() => {
+    if (!savedToast) return;
+    const timeout = window.setTimeout(() => setSavedToast(null), 2400);
+    return () => window.clearTimeout(timeout);
+  }, [savedToast]);
   const contact = useMutation({
     mutationFn: () =>
       api<any>("/api/conversations", {
@@ -966,12 +996,23 @@ export function ListingPage() {
                 <div className="grid grid-cols-2 gap-2.5">
                   <button
                     type="button"
-                    className="inline-flex h-10 items-center justify-center gap-2 rounded-full border border-[#e5e7eb] bg-white px-3 text-[13px] font-normal text-[#4b5563] transition-colors hover:bg-[#fafafa] disabled:opacity-50"
-                    onClick={() => save.mutate()}
+                    className={`inline-flex h-10 items-center justify-center gap-2 rounded-full border px-3 text-[13px] font-medium transition-colors disabled:cursor-default ${
+                      isSaved
+                        ? "border-[#fecaca] bg-[#fff7f7] text-[#dc2626]"
+                        : "border-[#e5e7eb] bg-white font-normal text-[#4b5563] hover:bg-[#fafafa]"
+                    }`}
+                    onClick={() => save.mutate(!isSaved)}
                     disabled={save.isPending}
+                    aria-pressed={isSaved}
+                    aria-label={isSaved ? "Unsave item" : "Save"}
                   >
-                    <Heart className="size-3.5" aria-hidden="true" />
-                    Save
+                    <Heart
+                      className={`size-3.5 ${
+                        isSaved ? "fill-current text-[#dc2626]" : ""
+                      }`}
+                      aria-hidden="true"
+                    />
+                    {isSaved ? "Saved" : "Save"}
                   </button>
                   <button
                     type="button"
@@ -1133,6 +1174,23 @@ export function ListingPage() {
         </section>
       ) : null}
       </div>
+      {savedToast ? (
+        <div
+          className="saved-toast fixed bottom-20 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2.5 whitespace-nowrap rounded-full bg-[#111827] px-4 py-3 text-[13px] font-medium text-white shadow-[0_10px_30px_rgba(0,0,0,0.2)] sm:bottom-6"
+          role="status"
+          aria-live="polite"
+        >
+          <Heart
+            className={`size-4 text-[#ef4444] ${
+              savedToast === "saved" ? "fill-[#ef4444]" : ""
+            }`}
+            aria-hidden="true"
+          />
+          {savedToast === "saved"
+            ? "Saved to your favourites"
+            : "Removed from saved"}
+        </div>
+      ) : null}
     </main>
   );
 }
