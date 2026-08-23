@@ -8,6 +8,31 @@ readonly IMAGE_NAME="uni-market:production"
 readonly ROLLBACK_IMAGE="uni-market:rollback"
 readonly CONTAINER_NAME="uni-market"
 
+sync_msg91_environment() {
+  local widget_id="$1"
+  local otp_length="$2"
+  local token_auth="$3"
+  local auth_key="$4"
+  local env_temp
+
+  [[ "$widget_id" =~ ^[A-Za-z0-9_-]+$ ]]
+  [[ "$otp_length" =~ ^[4-8]$ ]]
+  [[ "$token_auth" =~ ^[A-Za-z0-9_-]+$ ]]
+  [[ "$auth_key" =~ ^[A-Za-z0-9_-]+$ ]]
+
+  env_temp="$(mktemp "${ENV_FILE}.tmp.XXXXXX")"
+  chmod 600 "$env_temp"
+  grep -Ev '^(DEV_MODE|MSG91_WIDGET_ID|MSG91_OTP_LENGTH|MSG91_TOKEN_AUTH|MSG91_AUTH_KEY|OTP_SERVICE_API_KEY|OTP_SERVICE_BASE_URL)=' "$ENV_FILE" > "$env_temp"
+  {
+    printf 'DEV_MODE=false\n'
+    printf 'MSG91_WIDGET_ID=%s\n' "$widget_id"
+    printf 'MSG91_OTP_LENGTH=%s\n' "$otp_length"
+    printf 'MSG91_TOKEN_AUTH=%s\n' "$token_auth"
+    printf 'MSG91_AUTH_KEY=%s\n' "$auth_key"
+  } >> "$env_temp"
+  mv "$env_temp" "$ENV_FILE"
+}
+
 exec 9>"/tmp/uni-market-deploy.lock"
 if ! flock -n 9; then
   echo "A Uni Market deployment is already running"
@@ -16,6 +41,14 @@ fi
 
 cd "$REPOSITORY_DIR"
 test -s "$ENV_FILE"
+
+if [[ "${SSH_ORIGINAL_COMMAND:-}" == deploy-with-msg91-env:* ]]; then
+  encoded_msg91_environment="${SSH_ORIGINAL_COMMAND#deploy-with-msg91-env:}"
+  [[ "$encoded_msg91_environment" =~ ^[A-Za-z0-9+/=]+$ ]]
+  mapfile -t msg91_environment < <(printf '%s' "$encoded_msg91_environment" | base64 --decode)
+  [[ "${#msg91_environment[@]}" -eq 4 ]]
+  sync_msg91_environment "${msg91_environment[@]}"
+fi
 
 git fetch --prune origin main
 git checkout main

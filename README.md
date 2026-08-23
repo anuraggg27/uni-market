@@ -8,7 +8,7 @@ The application is a TypeScript npm workspace with a Vite/React frontend, Expres
 
 - Node.js 22 or later and npm 10+
 - Chromium for Playwright (`npx playwright install chromium`)
-- For production: Neon PostgreSQL, a private R2 bucket, Google OAuth credentials, 2Factor credentials, SMTP, and Cloudflare Turnstile
+- For production: Neon PostgreSQL, a private R2 bucket, Google OAuth credentials, MSG91 OTP Widget credentials, SMTP, and Cloudflare Turnstile
 
 ## Local setup
 
