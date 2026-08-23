@@ -12,6 +12,7 @@ import {
 } from "./ui/accordion";
 import { Button } from "./ui/button";
 import { NotificationTray } from "./NotificationTray";
+import { ThemeToggle } from "./ThemeToggle";
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -142,6 +143,7 @@ export const Navbar = () => {
 
   return (
     <header
+      data-site-header
       className={`sticky top-0 z-40 w-full transition-all duration-300 ease-in-out ${
         isScrolled
           ? "bg-white/60 backdrop-blur-xl backdrop-saturate-150 shadow-[0_1px_0_rgba(0,0,0,0.05)]"
@@ -167,14 +169,11 @@ export const Navbar = () => {
               <NavigationMenuList className="gap-1.5">
                 {/* Browse Dropdown */}
                 <NavigationMenuItem>
-                  <NavigationMenuTrigger className="text-[15px] !font-semibold !text-[#6b7280] hover:!text-[#111827] transition-colors">
+                  <NavigationMenuTrigger className="navbar-primary-link text-[15px] !font-semibold !text-[#6b7280] transition-colors hover:!text-[#111827] dark:hover:!text-white dark:data-[state=open]:!text-white">
                     Browse
                   </NavigationMenuTrigger>
                   <NavigationMenuContent>
-                    <div
-                      style={{ backgroundColor: "#ffffff" }}
-                      className="grid w-[580px] grid-cols-2 gap-1.5 p-3.5 bg-white shadow-[0_16px_36px_rgba(0,0,0,0.06)] rounded-2xl border border-[#ebebeb]"
-                    >
+                    <div className="grid w-[580px] grid-cols-2 gap-1.5 p-3.5 bg-white shadow-[0_16px_36px_rgba(0,0,0,0.06)] rounded-2xl border border-[#ebebeb]">
                       {DROPDOWN_ITEMS.map((item, index) => {
                         const href = getCategoryHref(item, categories);
                         return (
@@ -208,7 +207,7 @@ export const Navbar = () => {
                   >
                     <NavLink
                       to="/saved"
-                      className="!font-semibold !text-[#6b7280] hover:!text-[#111827]"
+                      className="navbar-primary-link !font-semibold !text-[#6b7280] hover:!text-[#111827] dark:hover:!text-white"
                     >
                       Saved
                     </NavLink>
@@ -223,7 +222,7 @@ export const Navbar = () => {
                   >
                     <NavLink
                       to="/chats"
-                      className="!font-semibold !text-[#6b7280] hover:!text-[#111827]"
+                      className="navbar-primary-link !font-semibold !text-[#6b7280] hover:!text-[#111827] dark:hover:!text-white"
                     >
                       Chats
                     </NavLink>
@@ -238,7 +237,7 @@ export const Navbar = () => {
                   >
                     <NavLink
                       to="/my-listings"
-                      className="!font-semibold !text-[#6b7280] hover:!text-[#111827]"
+                      className="navbar-primary-link !font-semibold !text-[#6b7280] hover:!text-[#111827] dark:hover:!text-white"
                     >
                       My listings
                     </NavLink>
@@ -254,7 +253,7 @@ export const Navbar = () => {
                     >
                       <NavLink
                         to="/admin"
-                        className="!font-semibold !text-[#6b7280] hover:!text-[#111827]"
+                        className="navbar-primary-link !font-semibold !text-[#6b7280] hover:!text-[#111827] dark:hover:!text-white"
                       >
                         Admin
                       </NavLink>
@@ -298,6 +297,7 @@ export const Navbar = () => {
                 Sell
               </Link>
             </Button>
+            <ThemeToggle />
           </div>
 
           {/* Mobile Menu Button & Sheet */}
@@ -459,6 +459,7 @@ export const Navbar = () => {
                 </div>
               </SheetContent>
             </Sheet>
+            <ThemeToggle compact />
           </div>
         </nav>
       </div>

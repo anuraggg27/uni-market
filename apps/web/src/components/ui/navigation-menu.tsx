@@ -125,7 +125,6 @@ function NavigationMenuViewport({
     <div className={cn('absolute top-full left-0 isolate z-50 flex justify-center')}>
       <NavigationMenuPrimitive.Viewport
         data-slot="navigation-menu-viewport"
-        style={{ backgroundColor: '#ffffff' }}
         className={cn(
           'origin-top-center bg-white text-[#111827] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-90 relative mt-2.5 h-[var(--radix-navigation-menu-viewport-height)] w-full overflow-hidden rounded-2xl border border-[#ebebeb] shadow-[0_16px_36px_rgba(0,0,0,0.06)] md:w-[var(--radix-navigation-menu-viewport-width)]',
           className,
