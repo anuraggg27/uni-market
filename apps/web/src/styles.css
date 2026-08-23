@@ -1409,7 +1409,7 @@ html.dark .listing-report-submit:hover {
   border-radius: 6px;
   background: #f5f7f5;
   padding: 2px 5px;
-  color: #7b8490;
+  color: #5f6874;
   font-family: inherit;
   font-size: 0.68rem;
   line-height: 1.2;
@@ -2736,7 +2736,7 @@ td {
 }
 .site-footer-columns h2 {
   margin: 0 0 6px;
-  color: #7b8490;
+  color: #5f6874;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.13em;
@@ -2784,7 +2784,7 @@ td {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  color: #7b8490;
+  color: #5f6874;
   font-size: 0.75rem;
 }
 .site-footer-utility nav {
