@@ -362,6 +362,14 @@ test("E2E-06 important marketplace screens remain usable at mobile, tablet and d
     page.on("pageerror", (error) => pageErrors.push(error.message));
     for (const path of ["/", "/browse", "/leaderboard", "/login"]) {
       await page.goto(path);
+      if (path === "/") {
+        const searchFontSize = await page
+          .getByLabel("Search products")
+          .evaluate(
+            (input) => getComputedStyle(input, "::placeholder").fontSize,
+          );
+        expect(searchFontSize).toBe(viewport.width < 640 ? "14px" : "16px");
+      }
       const overflow = await page.evaluate(
         () =>
           document.documentElement.scrollWidth >
