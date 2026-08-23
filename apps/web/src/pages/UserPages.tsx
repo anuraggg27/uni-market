@@ -1052,7 +1052,9 @@ function ChatPanel({
             height="44"
           />
         ) : (
-          <span className="chat-listing-image" aria-hidden="true" />
+          <span className="chat-listing-image" aria-hidden="true">
+            {(conversation?.listingTitle ?? "L").trim().charAt(0).toUpperCase()}
+          </span>
         )}
         <div className="chat-context">
           <strong>{conversation?.otherName ?? "Conversation"}</strong>
@@ -1232,6 +1234,7 @@ function ChatPanel({
         <textarea
           id="message"
           name="message"
+          rows={1}
           autoComplete="off"
           value={draft}
           maxLength={2000}

@@ -2468,24 +2468,34 @@ html.dark [data-site-header] :where(
 .chat-layout > footer {
   display: none;
 }
+.chat-layout {
+  min-height: 100dvh;
+  overflow: hidden;
+}
+.chat-layout > #main {
+  min-height: 0;
+}
 .page.chat-page {
-  padding-top: 18px;
-  padding-bottom: 18px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
 }
 .chat-shell {
-  height: calc(100dvh - 96px);
-  min-height: 540px;
+  height: calc(100dvh - 60px);
+  min-height: 0;
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
-  border: 1px solid var(--color-line);
-  background: white;
-  border-radius: 12px;
+  grid-template-columns: clamp(300px, 24vw, 380px) minmax(0, 1fr);
+  border: 0;
+  border-top: 1px solid var(--color-line);
+  background: var(--color-surface);
+  border-radius: 0;
   overflow: hidden;
 }
 .conversation-list {
   min-height: 0;
   overflow-y: auto;
   border-right: 1px solid var(--color-line);
+  background: var(--color-surface);
   overscroll-behavior: contain;
 }
 .inbox-header {
@@ -2540,10 +2550,10 @@ html.dark [data-site-header] :where(
   transition: background-color 0.15s ease;
 }
 .conversation-link:hover {
-  background: #f8faf8;
+  background: var(--color-surface-muted);
 }
 .conversation-link.active {
-  background: #eef6f1;
+  background: color-mix(in srgb, var(--color-brand) 8%, var(--color-surface));
   box-shadow: inset 3px 0 var(--color-brand);
 }
 .conversation-image {
@@ -2555,8 +2565,8 @@ html.dark [data-site-header] :where(
   object-fit: cover;
   overflow: hidden;
   border-radius: 9px;
-  background: #edf1ee;
-  color: var(--color-brand-dark);
+  background: var(--color-surface-muted);
+  color: var(--color-brand);
   font-weight: 700;
 }
 .conversation-copy,
@@ -2587,6 +2597,10 @@ html.dark [data-site-header] :where(
 .conversation-copy small {
   color: var(--color-muted);
   font-size: 0.74rem;
+}
+.conversation-name-row time,
+[data-slot="message-footer"] time {
+  font-variant-numeric: tabular-nums;
 }
 .conversation-link > .status {
   min-width: 22px;
@@ -2640,7 +2654,10 @@ html.dark [data-site-header] :where(
   place-items: center;
   object-fit: cover;
   border-radius: 8px;
-  background: #edf1ee;
+  background: var(--color-surface-muted);
+  color: var(--color-brand);
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 .chat-context {
   display: grid;
@@ -2713,9 +2730,13 @@ html.dark [data-site-header] :where(
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 12px;
   overscroll-behavior: contain;
-  background: #f7f8f7;
+  background: color-mix(
+    in srgb,
+    var(--color-canvas) 68%,
+    var(--color-surface)
+  );
 }
 .chat-safety-note {
   align-self: center;
@@ -2724,10 +2745,10 @@ html.dark [data-site-header] :where(
   gap: 7px;
   margin: 0 auto 8px;
   padding: 7px 10px;
-  border: 1px solid #dce9e1;
+  border: 1px solid var(--color-line);
   border-radius: 8px;
-  background: #f4faf6;
-  color: #476455;
+  background: var(--color-surface);
+  color: var(--color-muted);
   font-size: 0.72rem;
   text-align: center;
 }
@@ -2740,7 +2761,9 @@ html.dark [data-site-header] :where(
   display: flex;
   flex-direction: column;
   gap: 3px;
-  margin: 7px 0;
+  margin: 0;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 52px;
 }
 [data-slot="message"] {
   display: flex;
@@ -2819,6 +2842,10 @@ html.dark [data-site-header] :where(
   font: inherit;
   font-weight: 700;
 }
+[data-slot="message-footer"] button:hover {
+  color: #7d2020;
+  text-decoration: underline;
+}
 [data-slot="bubble"] {
   display: flex;
   width: 100%;
@@ -2891,6 +2918,14 @@ html.dark
   box-shadow: 0 8px 18px rgb(15 23 42 / 0.12);
   transform: translateX(-50%);
   cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+.new-message-jump:hover {
+  border-color: var(--color-sandalwood);
+  background: var(--color-surface-muted);
 }
 .new-message-jump svg {
   width: 16px;
@@ -3413,7 +3448,7 @@ html.dark .site-footer-wordmark:hover > span:first-child {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .chat-shell {
-    grid-template-columns: 280px minmax(0, 1fr);
+    grid-template-columns: clamp(280px, 34vw, 320px) minmax(0, 1fr);
   }
 }
 @media (max-width: 640px) {
