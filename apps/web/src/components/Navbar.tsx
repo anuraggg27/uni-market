@@ -86,14 +86,14 @@ const DROPDOWN_ITEMS = [
 
 function getCategoryHref(
   item: (typeof DROPDOWN_ITEMS)[number],
-  categories: Category[]
+  categories: Category[],
 ): string {
   if (item.href) return item.href;
   const match = categories.find(
     (c) =>
       c.name.toLowerCase() === item.title.toLowerCase() ||
       c.slug === item.slug ||
-      c.name.toLowerCase().includes(item.slug.replace("-", " "))
+      c.name.toLowerCase().includes(item.slug.replace("-", " ")),
   );
   if (match) {
     return `/browse?category=${match.id}`;
@@ -130,7 +130,7 @@ export const Navbar = () => {
   }, []);
 
   const isAdmin = user?.roles.some((role) =>
-    ["MODERATOR", "SUPPORT_AGENT", "SUPER_ADMIN"].includes(role)
+    ["MODERATOR", "SUPPORT_AGENT", "SUPER_ADMIN"].includes(role),
   );
 
   const { data: categories = [] } = useQuery<Category[]>({
@@ -166,7 +166,7 @@ export const Navbar = () => {
               <NavigationMenuList className="gap-1.5">
                 {/* Browse Dropdown */}
                 <NavigationMenuItem>
-                  <NavigationMenuTrigger className="text-[15px] font-normal text-[#6b7280] hover:text-[#111827] transition-colors">
+                  <NavigationMenuTrigger className="text-[15px] font-medium text-[#6b7280] hover:text-[#111827] transition-colors">
                     Browse
                   </NavigationMenuTrigger>
                   <NavigationMenuContent>
@@ -209,8 +209,8 @@ export const Navbar = () => {
                       to="/saved"
                       className={({ isActive }) =>
                         isActive
-                          ? "text-[#111827] font-medium"
-                          : "text-[#4b5563] hover:text-[#111827] font-normal"
+                          ? "text-[#6b7280] font-medium"
+                          : "text-[#6b7280] hover:text-[#111827] font-normal"
                       }
                     >
                       Saved
@@ -356,7 +356,10 @@ export const Navbar = () => {
                   <MenuIcon className="h-4 w-4" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="top" className="max-h-screen overflow-auto bg-white/95 backdrop-blur-xl border-b border-[#ececec]">
+              <SheetContent
+                side="top"
+                className="max-h-screen overflow-auto bg-white/95 backdrop-blur-xl border-b border-[#ececec]"
+              >
                 <SheetHeader className="border-b border-[#f0f0f0] pb-3">
                   <SheetTitle>
                     <Link
@@ -467,7 +470,11 @@ export const Navbar = () => {
                       asChild
                       className="h-10 text-[14px] font-medium text-white !text-white bg-[#111827] hover:bg-black rounded-full"
                     >
-                      <Link to="/sell" onClick={() => setOpen(false)} className="text-white !text-white font-medium">
+                      <Link
+                        to="/sell"
+                        onClick={() => setOpen(false)}
+                        className="text-white !text-white font-medium"
+                      >
                         Sell
                       </Link>
                     </Button>

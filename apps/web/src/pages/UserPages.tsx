@@ -16,6 +16,7 @@ import { useAuth } from "../auth";
 import { ProductCard } from "../components/ProductCard";
 import { ReportButton } from "../components/ReportButton";
 import {
+  DeleteConfirmationDialog,
   EmptyState,
   ErrorState,
   FieldError,
@@ -346,6 +347,7 @@ const tabs = [
 ];
 export function MyListingsPage() {
   const [tab, setTab] = useState("DRAFT");
+  const [listingToDelete, setListingToDelete] = useState<{ id: string; title: string } | null>(null);
   const client = useQueryClient();
   const query = useQuery({
     queryKey: ["my-listings"],
@@ -356,6 +358,13 @@ export function MyListingsPage() {
       api(`/api/listings/${id}/${type}`, { method: "POST" }),
     onSuccess: () =>
       void client.invalidateQueries({ queryKey: ["my-listings"] }),
+  });
+  const deleteListing = useMutation({
+    mutationFn: (id: string) => api(`/api/listings/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      setListingToDelete(null);
+      void client.invalidateQueries({ queryKey: ["my-listings"] });
+    },
   });
   const items =
     query.data?.filter((item) =>
@@ -436,6 +445,13 @@ export function MyListingsPage() {
                 >
                   Edit
                 </Link>
+                <button
+                  className="button small danger"
+                  onClick={() => setListingToDelete({ id: item.id, title: item.title })}
+                  disabled={deleteListing.isPending}
+                >
+                  Delete
+                </button>
                 {item.lifecycleState === "DRAFT" ? (
                   <button
                     className="button small primary"
@@ -473,8 +489,15 @@ export function MyListingsPage() {
           ))}
         </div>
       )}
-      {action.error ? (
-        <p className="field-error">{action.error.message}</p>
+      <DeleteConfirmationDialog
+        open={Boolean(listingToDelete)}
+        onOpenChange={(open) => { if (!open) setListingToDelete(null); }}
+        title="Delete listing?"
+        description={`Are you sure you want to delete "${listingToDelete?.title ?? "this listing"}"?`}
+        pending={deleteListing.isPending}
+        onConfirm={() => { if (listingToDelete) deleteListing.mutate(listingToDelete.id); }}
+      />      {action.error || deleteListing.error ? (
+        <p className="field-error">{(action.error ?? deleteListing.error)?.message}</p>
       ) : null}
     </div>
   );
@@ -1245,9 +1268,18 @@ export function SettingsPage() {
   const [params] = useSearchParams();
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const send = useMutation({
     mutationFn: () =>
-      api("/api/phone/send", { method: "POST", ...jsonBody({ phone }) }),
+      api<{ retryAfter: number }>("/api/phone/send", {
+        method: "POST",
+        ...jsonBody({ phone }),
+      }),
+    onSuccess: ({ retryAfter }) => {
+      setCodeSent(true);
+      setResendCooldown(retryAfter);
+    },
   });
   const verify = useMutation({
     mutationFn: () =>
@@ -1265,6 +1297,14 @@ export function SettingsPage() {
       void refresh();
     },
   });
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setTimeout(
+      () => setResendCooldown((seconds) => Math.max(0, seconds - 1)),
+      1000,
+    );
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
   return (
     <div className="page narrow">
       <div className="page-header">
@@ -1297,11 +1337,17 @@ export function SettingsPage() {
             <button
               className="button secondary"
               onClick={() => send.mutate()}
-              disabled={send.isPending}
+              disabled={send.isPending || resendCooldown > 0}
             >
-              Send code
+              {send.isPending
+                ? "Sending..."
+                : codeSent
+                  ? resendCooldown > 0
+                    ? `Resend code in ${resendCooldown}s`
+                    : "Resend code"
+                  : "Send code"}
             </button>
-            {send.isSuccess ? (
+            {codeSent ? (
               <>
                 <label className="field">
                   <span>6-digit code</span>
