@@ -27,8 +27,14 @@ export class StorageService {
     const tempKey = `temporary/${ownerId}/${listingId}/${randomUUID()}`;
     const expiresAt = new Date(Date.now() + 5 * 60_000);
     if (this.s3) {
+      const ownershipHeaders = { 'x-amz-meta-owner': ownerId, 'x-amz-meta-listing': listingId };
       const command = new PutObjectCommand({ Bucket: this.config.R2_BUCKET_NAME, Key: tempKey, ContentType: mimeType, ContentLength: byteSize, Metadata: { owner: ownerId, listing: listingId } });
-      return { uploadUrl: await getSignedUrl(this.s3, command, { expiresIn: 300 }), tempKey, expiresAt: expiresAt.toISOString(), headers: { 'content-type': mimeType } };
+      return {
+        uploadUrl: await getSignedUrl(this.s3, command, { expiresIn: 300, unhoistableHeaders: new Set(Object.keys(ownershipHeaders)) }),
+        tempKey,
+        expiresAt: expiresAt.toISOString(),
+        headers: { 'content-type': mimeType, ...ownershipHeaders },
+      };
     }
     if (this.config.NODE_ENV === 'production') throw new AppError(503, 'STORAGE_UNAVAILABLE', 'Image storage is not configured');
     const signature = this.sign(`${tempKey}:${expiresAt.getTime()}:${mimeType}:${byteSize}`);

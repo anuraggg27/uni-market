@@ -4,7 +4,11 @@
       "allowed": {
         "origins": ["http://localhost:5173"],
         "methods": ["GET", "PUT", "HEAD"],
-        "headers": ["Content-Type"]
+        "headers": [
+          "Content-Type",
+          "x-amz-meta-owner",
+          "x-amz-meta-listing"
+        ]
       },
       "exposeHeaders": ["ETag"],
       "maxAgeSeconds": 3600
