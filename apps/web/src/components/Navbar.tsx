@@ -12,6 +12,7 @@ import {
 } from "./ui/accordion";
 import { Button } from "./ui/button";
 import { NotificationTray } from "./NotificationTray";
+import { MarketplaceSearch } from "./MarketplaceSearch";
 import { ThemeToggle } from "./ThemeToggle";
 import {
   NavigationMenu,
@@ -266,6 +267,7 @@ export const Navbar = () => {
 
           {/* Right Action Buttons */}
           <div className="hidden shrink-0 items-center gap-2.5 lg:flex">
+            <MarketplaceSearch enableShortcut />
             {user ? (
               <>
                 <NotificationTray />
@@ -302,6 +304,7 @@ export const Navbar = () => {
 
           {/* Mobile Menu Button & Sheet */}
           <div className="flex items-center gap-2 lg:hidden">
+            <MarketplaceSearch compact />
             {user ? <NotificationTray mobile /> : null}
             {!user ? (
               <Button

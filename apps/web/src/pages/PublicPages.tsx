@@ -244,6 +244,19 @@ function filtersFromParams(params: URLSearchParams): BrowseFilters {
   };
 }
 
+function paramsFromFilters(filters: BrowseFilters): URLSearchParams {
+  const next = new URLSearchParams();
+  if (filters.q.trim()) next.set("q", filters.q.trim());
+  if (filters.category) next.set("category", filters.category);
+  if (filters.minPrice) next.set("minPrice", filters.minPrice);
+  if (filters.maxPrice) next.set("maxPrice", filters.maxPrice);
+  if (filters.condition) next.set("condition", filters.condition);
+  if (filters.sort && filters.sort !== "newest") next.set("sort", filters.sort);
+  if (filters.location.trim()) next.set("location", filters.location.trim());
+  if (filters.negotiable) next.set("negotiable", "true");
+  return next;
+}
+
 export function BrowsePage() {
   const [params, setParams] = useSearchParams();
   const serialized = params.toString();
@@ -260,6 +273,19 @@ export function BrowsePage() {
     setFilters(filtersFromParams(new URLSearchParams(serialized)));
   }, [serialized]);
 
+  useEffect(() => {
+    const query = filters.q.trim();
+    const currentQuery = new URLSearchParams(serialized).get("q") ?? "";
+    if (query === currentQuery) return;
+    const timeout = window.setTimeout(() => {
+      const next = new URLSearchParams(serialized);
+      if (query) next.set("q", query);
+      else next.delete("q");
+      setParams(next, { replace: true });
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [filters.q, serialized, setParams]);
+
   function updateFilter<Key extends keyof BrowseFilters>(
     key: Key,
     value: BrowseFilters[Key],
@@ -269,17 +295,7 @@ export function BrowsePage() {
 
   function applyFilters(event?: React.FormEvent) {
     event?.preventDefault();
-    const next = new URLSearchParams();
-    if (filters.q.trim()) next.set("q", filters.q.trim());
-    if (filters.category) next.set("category", filters.category);
-    if (filters.minPrice) next.set("minPrice", filters.minPrice);
-    if (filters.maxPrice) next.set("maxPrice", filters.maxPrice);
-    if (filters.condition) next.set("condition", filters.condition);
-    if (filters.sort && filters.sort !== "newest")
-      next.set("sort", filters.sort);
-    if (filters.location.trim()) next.set("location", filters.location.trim());
-    if (filters.negotiable) next.set("negotiable", "true");
-    setParams(next);
+    setParams(paramsFromFilters(filters));
     setFiltersOpen(false);
   }
 
@@ -326,7 +342,7 @@ export function BrowsePage() {
                 className={`${inputClass} !pl-10`}
                 value={filters.q}
                 onChange={(event) => updateFilter("q", event.target.value)}
-                placeholder="What do you need?"
+                placeholder="Search products"
               />
             </span>
           </label>
@@ -397,7 +413,7 @@ export function BrowsePage() {
           </label>
         </div>
 
-        <div className="my-5 h-px bg-[#eef0f2]" />
+        <div className="browse-filter-divider my-5 h-px bg-[#eef0f2]" />
 
         <div className="grid grid-cols-[minmax(240px,1fr)_auto_auto_auto] items-end gap-4">
           <label className="min-w-0">
@@ -996,7 +1012,7 @@ export function ListingPage() {
                 <div className="grid grid-cols-2 gap-2.5">
                   <button
                     type="button"
-                    className={`inline-flex h-10 items-center justify-center gap-2 rounded-full border px-3 text-[13px] font-medium transition-colors disabled:cursor-default ${
+                    className={`listing-save-button inline-flex h-10 items-center justify-center gap-2 rounded-full border px-3 text-[13px] font-medium transition-colors disabled:cursor-default ${
                       isSaved
                         ? "border-[#fecaca] bg-[#fff7f7] text-[#dc2626]"
                         : "border-[#e5e7eb] bg-white font-normal text-[#4b5563] hover:bg-[#fafafa]"
