@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Bell, MenuIcon } from "lucide-react";
+import { MenuIcon } from "lucide-react";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import {
@@ -11,6 +11,7 @@ import {
   AccordionTrigger,
 } from "./ui/accordion";
 import { Button } from "./ui/button";
+import { NotificationTray } from "./NotificationTray";
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -166,7 +167,7 @@ export const Navbar = () => {
               <NavigationMenuList className="gap-1.5">
                 {/* Browse Dropdown */}
                 <NavigationMenuItem>
-                  <NavigationMenuTrigger className="text-[15px] font-medium text-[#6b7280] hover:text-[#111827] transition-colors">
+                  <NavigationMenuTrigger className="text-[15px] !font-semibold !text-[#6b7280] hover:!text-[#111827] transition-colors">
                     Browse
                   </NavigationMenuTrigger>
                   <NavigationMenuContent>
@@ -207,11 +208,7 @@ export const Navbar = () => {
                   >
                     <NavLink
                       to="/saved"
-                      className={({ isActive }) =>
-                        isActive
-                          ? "text-[#6b7280] font-medium"
-                          : "text-[#6b7280] hover:text-[#111827] font-normal"
-                      }
+                      className="!font-semibold !text-[#6b7280] hover:!text-[#111827]"
                     >
                       Saved
                     </NavLink>
@@ -226,11 +223,7 @@ export const Navbar = () => {
                   >
                     <NavLink
                       to="/chats"
-                      className={({ isActive }) =>
-                        isActive
-                          ? "text-[#111827] font-medium"
-                          : "text-[#4b5563] hover:text-[#111827] font-normal"
-                      }
+                      className="!font-semibold !text-[#6b7280] hover:!text-[#111827]"
                     >
                       Chats
                     </NavLink>
@@ -245,11 +238,7 @@ export const Navbar = () => {
                   >
                     <NavLink
                       to="/my-listings"
-                      className={({ isActive }) =>
-                        isActive
-                          ? "text-[#111827] font-medium"
-                          : "text-[#4b5563] hover:text-[#111827] font-normal"
-                      }
+                      className="!font-semibold !text-[#6b7280] hover:!text-[#111827]"
                     >
                       My listings
                     </NavLink>
@@ -265,11 +254,7 @@ export const Navbar = () => {
                     >
                       <NavLink
                         to="/admin"
-                        className={({ isActive }) =>
-                          isActive
-                            ? "text-[#176b45] font-medium"
-                            : "text-[#4b5563] hover:text-[#111827] font-normal"
-                        }
+                        className="!font-semibold !text-[#6b7280] hover:!text-[#111827]"
                       >
                         Admin
                       </NavLink>
@@ -284,16 +269,7 @@ export const Navbar = () => {
           <div className="hidden shrink-0 items-center gap-2.5 lg:flex">
             {user ? (
               <>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  asChild
-                  className="h-9 w-9 text-[#4b5563] hover:text-[#111827] hover:bg-black/[0.04] rounded-full transition-colors"
-                >
-                  <NavLink to="/notifications" aria-label="Notifications">
-                    <Bell className="h-4 w-4" />
-                  </NavLink>
-                </Button>
+                <NotificationTray />
                 <Button
                   variant="outline"
                   size="sm"
@@ -316,7 +292,7 @@ export const Navbar = () => {
             <Button
               size="sm"
               asChild
-              className="h-9 px-4 text-[14px] font-medium text-white !text-white bg-[#111827] hover:bg-black rounded-full transition-colors shadow-none"
+              className="h-9 px-4 text-[14px] font-medium text-white !text-white bg-[#176b45] hover:bg-[#0a482c] rounded-full transition-colors shadow-none"
             >
               <Link to="/sell" className="text-white !text-white font-medium">
                 Sell
@@ -326,6 +302,7 @@ export const Navbar = () => {
 
           {/* Mobile Menu Button & Sheet */}
           <div className="flex items-center gap-2 lg:hidden">
+            {user ? <NotificationTray mobile /> : null}
             {!user ? (
               <Button
                 variant="outline"

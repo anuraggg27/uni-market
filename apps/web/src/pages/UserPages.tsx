@@ -14,6 +14,9 @@ import { z } from "zod";
 import {
   ArrowDown,
   ArrowLeft,
+  Bell,
+  Check,
+  ChevronRight,
   ImagePlus,
   MoreHorizontal,
   SendHorizontal,
@@ -24,6 +27,11 @@ import { api, clearCsrf, jsonBody } from "../api";
 import { useAuth } from "../auth";
 import { shouldFollowNewMessage } from "../chat-scroll";
 import { ProductCard } from "../components/ProductCard";
+import {
+  formatNotificationTime,
+  getNotificationIcon,
+  type NotificationRecord,
+} from "../components/NotificationTray";
 import { ReportButton } from "../components/ReportButton";
 import {
   DeleteConfirmationDialog,
@@ -1422,7 +1430,7 @@ export function NotificationsPage() {
   const client = useQueryClient();
   const query = useQuery({
     queryKey: ["notifications"],
-    queryFn: () => api<any[]>("/api/notifications"),
+    queryFn: () => api<NotificationRecord[]>("/api/notifications"),
   });
   const read = useMutation({
     mutationFn: (id: string) =>
@@ -1435,62 +1443,131 @@ export function NotificationsPage() {
     onSuccess: () =>
       void client.invalidateQueries({ queryKey: ["notifications"] }),
   });
+  const notifications = query.data ?? [];
+  const unreadCount = notifications.filter(
+    (notification) => !notification.readAt,
+  ).length;
+
   return (
-    <div className="page">
-      <div className="page-header">
+    <div className="page max-w-[1040px] !pt-12 sm:!pt-14">
+      <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="eyebrow">Updates</p>
-          <h1>Notifications</h1>
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.2em] text-[#176b45]">
+            Updates
+          </p>
+          <h1 className="m-0 text-[34px] font-semibold tracking-[-0.04em] text-[#111827] sm:text-[40px]">
+            Notifications
+          </h1>
         </div>
-        <button className="button secondary" onClick={() => all.mutate()}>
-          Mark all read
+        <button
+          type="button"
+          className="inline-flex h-9 w-fit items-center gap-1.5 rounded-full border border-[#cfe2d8] bg-[#f2f8f5] px-3.5 text-[12px] font-semibold text-[#176b45] transition-colors hover:border-[#acd0bd] hover:bg-[#e9f4ee] disabled:cursor-default disabled:opacity-45"
+          onClick={() => all.mutate()}
+          disabled={!unreadCount || all.isPending}
+        >
+          <Check className="size-3.5" aria-hidden="true" />
+          Mark all as read
         </button>
       </div>
-      {query.isLoading ? (
-        <Loading />
-      ) : query.isError ? (
-        <ErrorState error={query.error} />
-      ) : !query.data?.length ? (
-        <EmptyState
-          title="You’re all caught up"
-          body="Marketplace and support updates will appear here."
-        />
-      ) : (
-        <div className="list">
-          {query.data.map((n) => (
-            <article className="list-item" key={n.id}>
-              <div />
-              <div>
-                <Link
-                  to={n.href}
-                  onClick={() => !n.readAt && read.mutate(n.id)}
+
+      <section
+        className="overflow-hidden rounded-2xl border border-[#e5e7eb] bg-white shadow-[0_10px_35px_rgba(17,24,39,0.06)]"
+        aria-label="Notification history"
+      >
+        {query.isLoading ? (
+          <div className="p-6">
+            <Loading />
+          </div>
+        ) : query.isError ? (
+          <div className="p-6">
+            <ErrorState error={query.error} />
+          </div>
+        ) : !notifications.length ? (
+          <div className="flex min-h-64 flex-col items-center justify-center px-6 py-12 text-center">
+            <span className="mb-4 grid size-11 place-items-center rounded-full bg-[#eef7f2] text-[#176b45]">
+              <Bell className="size-5" aria-hidden="true" />
+            </span>
+            <h2 className="m-0 text-[16px] font-semibold text-[#111827]">
+              You&apos;re all caught up
+            </h2>
+            <p className="mb-0 mt-1.5 text-[14px] text-[#6b7280]">
+              Marketplace and support updates will appear here.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-[#e9ecea]">
+            {notifications.map((notification) => {
+              const Icon = getNotificationIcon(notification.type);
+              const unread = !notification.readAt;
+
+              return (
+                <article
+                  className={`group relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-[18px] transition-colors focus-within:ring-2 focus-within:ring-inset focus-within:ring-[#176b45]/25 sm:gap-4 sm:px-6 sm:py-[22px] ${unread ? "bg-[#fbfdfc]" : "bg-white"} hover:bg-[#f7faf8]`}
+                  key={notification.id}
                 >
-                  <h3>
-                    {n.title}
-                    {!n.readAt ? (
-                      <span className="sr-only"> Unread</span>
+                  <Link
+                    to={notification.href}
+                    className="absolute inset-0 z-0 rounded-[inherit] outline-none"
+                    onClick={() => unread && read.mutate(notification.id)}
+                    aria-label={`Open notification: ${notification.title}`}
+                  />
+
+                  <span className="pointer-events-none relative z-[1] grid size-9 place-items-center rounded-full bg-[#edf7f1] text-[#176b45] sm:size-10">
+                    <Icon
+                      className="size-[17px] sm:size-[18px]"
+                      aria-hidden="true"
+                    />
+                    {unread ? (
+                      <span
+                        className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full border-2 border-white bg-[#176b45]"
+                        aria-hidden="true"
+                      />
                     ) : null}
-                  </h3>
-                  <p>{n.body}</p>
-                  <span className="meta">
-                    {new Date(n.createdAt).toLocaleString()}
                   </span>
-                </Link>
-              </div>
-              {!n.readAt ? (
-                <button
-                  className="button small secondary"
-                  onClick={() => read.mutate(n.id)}
-                >
-                  Mark read
-                </button>
-              ) : (
-                <StatusBadge value="READ" />
-              )}
-            </article>
-          ))}
-        </div>
-      )}
+
+                  <div className="pointer-events-none relative z-[1] min-w-0">
+                    <h2 className="m-0 truncate text-[15px] font-semibold leading-5 text-[#111827] sm:text-[16px]">
+                      {notification.title}
+                      {unread ? <span className="sr-only"> Unread</span> : null}
+                    </h2>
+                    <p className="mb-0 mt-0.5 line-clamp-2 text-[13px] leading-5 text-[#6b7280] sm:text-[14px]">
+                      {notification.body}
+                    </p>
+                    <time
+                      className="mt-1.5 block text-[12px] text-[#9ca3af]"
+                      dateTime={notification.createdAt}
+                    >
+                      {formatNotificationTime(notification.createdAt)}
+                    </time>
+                  </div>
+
+                  <div className="relative z-[2] flex items-center gap-2 sm:gap-3">
+                    {unread ? (
+                      <button
+                        type="button"
+                        className="rounded-full bg-[#e8f4ed] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#176b45] transition-colors hover:bg-[#d9ecdf] disabled:opacity-50 sm:px-2.5"
+                        onClick={() => read.mutate(notification.id)}
+                        disabled={read.isPending}
+                        aria-label={`Mark ${notification.title} as read`}
+                      >
+                        New
+                      </button>
+                    ) : (
+                      <span className="rounded-full bg-[#f3f4f6] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#7b8490] sm:px-2.5">
+                        Read
+                      </span>
+                    )}
+                    <ChevronRight
+                      className="size-4 text-[#a1a8b0] transition-transform group-hover:translate-x-0.5 group-hover:text-[#176b45]"
+                      aria-hidden="true"
+                    />
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
