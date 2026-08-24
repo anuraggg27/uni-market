@@ -640,6 +640,7 @@ export function MyListingsPage() {
         <div className="my-listings-grid">
           {items.map((item) => {
             const displayStatus = getListingDisplayStatus(item);
+            const canSubmit = item.lifecycleState === "DRAFT";
             const continueEditing = ["DRAFT", "REJECTED"].includes(
               displayStatus,
             );
@@ -690,7 +691,18 @@ export function MyListingsPage() {
                 </div>
 
                 <div className="my-listing-actions">
-                  {continueEditing ? (
+                  {canSubmit ? (
+                    <button
+                      type="button"
+                      className="button small primary"
+                      onClick={() =>
+                        action.mutate({ id: item.id, type: "submit" })
+                      }
+                      disabled={action.isPending}
+                    >
+                      Submit for review
+                    </button>
+                  ) : continueEditing ? (
                     <Link
                       className="button small primary"
                       to={`/listing/${item.id}/edit`}
@@ -711,25 +723,13 @@ export function MyListingsPage() {
                       <MoreHorizontal aria-hidden="true" />
                     </summary>
                     <div className="my-listing-actions-menu" role="menu">
-                      {!continueEditing ? (
+                      {!continueEditing || canSubmit ? (
                         <Link
                           role="menuitem"
                           to={`/listing/${item.id}/edit`}
                         >
                           Edit
                         </Link>
-                      ) : null}
-                      {item.lifecycleState === "DRAFT" ? (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() =>
-                            action.mutate({ id: item.id, type: "submit" })
-                          }
-                          disabled={action.isPending}
-                        >
-                          Submit for review
-                        </button>
                       ) : null}
                       {item.lifecycleState === "ACTIVE" ? (
                         <button
