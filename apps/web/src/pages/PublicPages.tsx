@@ -38,7 +38,7 @@ import {
   StatusBadge,
 } from "../components/UI";
 
-import { HeroParticles } from "../components/HeroParticles";
+import { HeroCampusBackground } from "../components/HeroCampusBackground";
 
 const HOME_SEARCH_PLACEHOLDER_WORDS = [
   "books",
@@ -111,7 +111,7 @@ export function HomePage() {
     <>
       {/* ─── Hero Section (Minimal / Antigravity inspired) ─── */}
       <section className="home-hero relative flex min-h-[76vh] md:min-h-[82vh] flex-col items-center justify-center overflow-hidden px-4 py-16 text-center sm:px-6 md:py-24 bg-surface">
-        <HeroParticles />
+        <HeroCampusBackground />
         <div className="relative z-10 mx-auto flex max-w-5xl flex-col items-center">
           {/* Main Heading */}
           <h1 className="home-hero-title mb-6 max-w-5xl text-ink">

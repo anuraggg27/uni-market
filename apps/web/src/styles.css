@@ -5469,3 +5469,72 @@ option,
     line-height: 1;
   }
 }
+
+.hero-campus-background {
+  --hero-campus-image: url("/campus-hero-light.png");
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background-color: #fbfaf7;
+  background-image: var(--hero-campus-image);
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
+html.dark .hero-campus-background {
+  --hero-campus-image: url("/campus-hero-dark.png");
+  background-color: #101211;
+}
+
+@media (max-width: 1023px) {
+  .hero-campus-background {
+    background-image: none;
+  }
+
+  .hero-campus-background::before,
+  .hero-campus-background::after {
+    position: absolute;
+    inset-block: 0;
+    width: 54%;
+    content: "";
+    background-image: var(--hero-campus-image);
+    background-position-y: bottom;
+    background-repeat: no-repeat;
+    background-size: auto 100%;
+  }
+
+  .hero-campus-background::before {
+    left: 0;
+    background-position-x: left;
+    -webkit-mask-image: linear-gradient(to right, #000 70%, transparent 100%);
+    mask-image: linear-gradient(to right, #000 70%, transparent 100%);
+  }
+
+  .hero-campus-background::after {
+    right: 0;
+    background-position-x: right;
+    -webkit-mask-image: linear-gradient(to left, #000 70%, transparent 100%);
+    mask-image: linear-gradient(to left, #000 70%, transparent 100%);
+  }
+}
+
+@media (max-width: 639px) {
+  .hero-campus-background::before,
+  .hero-campus-background::after {
+    width: 58%;
+    opacity: 0.55;
+  }
+
+  .hero-campus-background::before {
+    -webkit-mask-image: linear-gradient(to right, #000 25%, transparent 88%);
+    mask-image: linear-gradient(to right, #000 25%, transparent 88%);
+  }
+
+  .hero-campus-background::after {
+    -webkit-mask-image: linear-gradient(to left, #000 25%, transparent 88%);
+    mask-image: linear-gradient(to left, #000 25%, transparent 88%);
+  }
+}
