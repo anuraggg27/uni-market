@@ -79,3 +79,70 @@ describe('phone verification acceptance',()=>{
     expect(provider).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('MSG91 provider failure handling',()=>{
+  it('rejects provider tokens in development mode without contacting MSG91',async()=>{
+    const auth=await login(ctx.app,'msg91-development-mode');
+    const provider=vi.spyOn(globalThis,'fetch');
+    const service=new OtpService(ctx.db,{...ctx.config,DEV_MODE:true,MSG91_AUTH_KEY:'unused-auth-key'});
+
+    await expect(service.verifyProviderToken(auth.user.id,'+919876543210','provider-token','test-ip-hash')).rejects.toMatchObject({
+      status:400,
+      code:'OTP_DEVELOPMENT_MODE'
+    });
+    expect(provider).not.toHaveBeenCalled();
+  });
+
+  it('reports unavailable configuration before spending a provider request',async()=>{
+    const auth=await login(ctx.app,'msg91-missing-config');
+    const provider=vi.spyOn(globalThis,'fetch');
+    const service=new OtpService(ctx.db,{...ctx.config,DEV_MODE:false,MSG91_AUTH_KEY:undefined});
+
+    await expect(service.verifyProviderToken(auth.user.id,'+919876543210','provider-token','test-ip-hash')).rejects.toMatchObject({
+      status:503,
+      code:'OTP_UNAVAILABLE'
+    });
+    expect(provider).not.toHaveBeenCalled();
+  });
+
+  it('maps provider network failures to a retryable service error',async()=>{
+    const auth=await login(ctx.app,'msg91-network-failure');
+    vi.spyOn(globalThis,'fetch').mockRejectedValueOnce(new Error('provider connection reset'));
+    const service=new OtpService(ctx.db,{...ctx.config,DEV_MODE:false,MSG91_AUTH_KEY:'server-auth-key'});
+
+    await expect(service.verifyProviderToken(auth.user.id,'+919876543210','provider-token','test-ip-hash')).rejects.toMatchObject({
+      status:503,
+      code:'OTP_UNAVAILABLE',
+      message:'Phone verification is temporarily unavailable'
+    });
+  });
+
+  it.each([429,500,503])('maps MSG91 status %i to a retryable service error',async(status)=>{
+    const auth=await login(ctx.app,`msg91-provider-${status}`);
+    vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(new Response(JSON.stringify({type:'error',message:'provider unavailable'}),{
+      status,
+      headers:{'content-type':'application/json'}
+    }));
+    const service=new OtpService(ctx.db,{...ctx.config,DEV_MODE:false,MSG91_AUTH_KEY:'server-auth-key'});
+
+    await expect(service.verifyProviderToken(auth.user.id,'+919876543210','provider-token','test-ip-hash')).rejects.toMatchObject({
+      status:503,
+      code:'OTP_UNAVAILABLE'
+    });
+  });
+
+  it('does not accept a non-JSON provider response as proof of phone ownership',async()=>{
+    const auth=await login(ctx.app,'msg91-invalid-response');
+    vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(new Response('<html>bad gateway</html>',{
+      status:400,
+      headers:{'content-type':'text/html'}
+    }));
+    const service=new OtpService(ctx.db,{...ctx.config,DEV_MODE:false,MSG91_AUTH_KEY:'server-auth-key'});
+
+    await expect(service.verifyProviderToken(auth.user.id,'+919876543210','provider-token','test-ip-hash')).rejects.toMatchObject({
+      status:400,
+      code:'OTP_INVALID',
+      message:'The phone verification could not be accepted'
+    });
+  });
+});
