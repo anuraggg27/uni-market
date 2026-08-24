@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
+  CircleHelp,
   LogIn,
   LogOut,
   MenuIcon,
+  Settings,
   Store,
   UserRound,
 } from "lucide-react";
@@ -210,6 +212,27 @@ function ProfileMenu({ compact = false }: { compact?: boolean }) {
               <Store className="size-4 text-muted" aria-hidden="true" />
               Sell an item
             </Link>
+
+            {user ? (
+              <>
+                <Link
+                  to="/settings"
+                  className={itemClass}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  <Settings className="size-4 text-muted" aria-hidden="true" />
+                  Settings
+                </Link>
+                <Link
+                  to="/support"
+                  className={itemClass}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  <CircleHelp className="size-4 text-muted" aria-hidden="true" />
+                  Support
+                </Link>
+              </>
+            ) : null}
 
             <div className="flex min-h-11 items-center justify-between gap-3 rounded-xl px-3 text-[14px] font-medium text-ink">
               <span>Appearance</span>

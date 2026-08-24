@@ -973,6 +973,59 @@ html.dark .site-footer-utility {
 .between {
   justify-content: space-between;
 }
+.transaction-card {
+  display: grid;
+  gap: 20px;
+  padding: clamp(20px, 2.4vw, 28px);
+}
+.transaction-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+.transaction-card-copy {
+  min-width: 0;
+}
+.transaction-card-copy h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+.transaction-card-copy p {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+  line-height: 1.4;
+}
+.transaction-card-header .status {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.transaction-card-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.transaction-review-form {
+  align-items: end;
+}
+@media (max-width: 600px) {
+  .transaction-card {
+    gap: 18px;
+    padding: 18px;
+  }
+  .transaction-card-header {
+    gap: 12px;
+  }
+  .transaction-card-actions .button {
+    width: 100%;
+  }
+  .transaction-review-form {
+    grid-template-columns: 1fr;
+  }
+}
 .form {
   display: grid;
   gap: 22px;
@@ -1917,9 +1970,9 @@ html.dark .marketplace-search-trigger {
   color: #aeb8b2;
 }
 html.dark .marketplace-search-trigger:hover {
-  border-color: #4a5b51;
-  background: #1a251e;
-  color: #f1f5f2;
+  border-color: var(--color-sandalwood);
+  background: var(--color-surface-muted);
+  color: var(--color-ink);
 }
 html.dark .marketplace-search-trigger kbd,
 html.dark .marketplace-search-footer kbd {
@@ -3307,10 +3360,10 @@ html.dark .site-footer-utility {
   border-color: #28322c;
 }
 html.dark .site-footer-wordmark:hover {
-  color: #d9e5de;
+  color: var(--color-plum);
 }
 html.dark .site-footer-wordmark:hover > span:first-child {
-  color: #72dca6;
+  color: var(--color-sandalwood);
 }
 @media (max-width: 900px) {
   .site-footer-top {
@@ -4318,6 +4371,29 @@ html.dark .listing-form-actions .button.secondary:hover {
   background: color-mix(
     in srgb,
     var(--color-sandalwood) 16%,
+    var(--color-surface)
+  );
+}
+
+html.dark .button.danger {
+  border-color: color-mix(
+    in srgb,
+    var(--color-accent) 45%,
+    var(--color-line)
+  );
+  background: color-mix(
+    in srgb,
+    var(--color-plum) 42%,
+    var(--color-surface)
+  );
+  color: var(--color-accent-strong);
+}
+
+html.dark .button.danger:hover {
+  border-color: var(--color-accent);
+  background: color-mix(
+    in srgb,
+    var(--color-plum) 60%,
     var(--color-surface)
   );
 }

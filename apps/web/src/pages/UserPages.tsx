@@ -1326,9 +1326,9 @@ export function TransactionsPage() {
       ) : (
         <div className="stack section">
           {query.data.map((tx) => (
-            <article className="panel" key={tx.id}>
-              <div className="row between">
-                <div>
+            <article className="panel transaction-card" key={tx.id}>
+              <div className="transaction-card-header">
+                <div className="transaction-card-copy">
                   <h2>{tx.listingTitle}</h2>
                   <p>
                     {tx.role === "BUYER" ? "You are buying" : "You are selling"}
@@ -1336,7 +1336,7 @@ export function TransactionsPage() {
                 </div>
                 <StatusBadge value={tx.status} />
               </div>
-              <div className="row">
+              <div className="transaction-card-actions">
                 {tx.role === "SELLER" && tx.status === "REQUESTED" ? (
                   <button
                     className="button primary"
@@ -1380,7 +1380,7 @@ export function TransactionsPage() {
               </div>
               {tx.status === "COMPLETED" ? (
                 <form
-                  className="form-grid"
+                  className="form-grid transaction-review-form"
                   onSubmit={(e) => {
                     e.preventDefault();
                     const f = new FormData(e.currentTarget);
