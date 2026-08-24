@@ -193,7 +193,7 @@ export function HomePage() {
 
       {/* ─── Marketplace Content ─── */}
       <div className="page pt-2 pb-24">
-        <ProductSection title="Recently approved" query={recent} />
+        <ProductSection title="Recently added" query={recent} />
         <ProductSection title="Popular right now" query={popular} />
         {user ? (
           <ProductSection
