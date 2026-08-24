@@ -2048,7 +2048,9 @@ export function SettingsPage() {
         </button>
       </section>
       {params.get("verify") === "phone" && !user?.phoneVerifiedAt ? (
-        <SafetyReminder />
+        <div className="settings-safety-reminder">
+          <SafetyReminder />
+        </div>
       ) : null}
     </div>
   );

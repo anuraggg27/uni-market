@@ -4375,6 +4375,15 @@ html.dark .listing-form-actions .button.secondary:hover {
   );
 }
 
+html.dark .button.secondary:hover {
+  border-color: var(--color-sandalwood);
+  background: color-mix(
+    in srgb,
+    var(--color-sandalwood) 16%,
+    var(--color-surface)
+  );
+}
+
 html.dark .button.danger {
   border-color: color-mix(
     in srgb,
@@ -4396,6 +4405,16 @@ html.dark .button.danger:hover {
     var(--color-plum) 60%,
     var(--color-surface)
   );
+}
+
+.settings-safety-reminder {
+  margin-top: 24px;
+}
+
+@media (max-width: 600px) {
+  .settings-safety-reminder {
+    margin-top: 18px;
+  }
 }
 
 html.dark .skeleton {
