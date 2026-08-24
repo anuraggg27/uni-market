@@ -310,7 +310,7 @@ export const Navbar = () => {
           <div className="flex shrink-0 items-center">
             <Link
               to="/"
-              className="flex items-center gap-1.5 text-[20px] font-semibold tracking-[-0.035em] text-ink transition-opacity hover:opacity-85"
+              className="flex items-center gap-1.5 text-[20px] font-bold tracking-[-0.035em] text-ink transition-opacity hover:opacity-85"
             >
               <span className="text-accent">Uni</span>
               <span>Market</span>
@@ -323,7 +323,7 @@ export const Navbar = () => {
               <NavigationMenuList className="gap-1.5">
                 {/* Browse Dropdown */}
                 <NavigationMenuItem>
-                  <NavigationMenuTrigger className="navbar-primary-link text-[15px] !font-semibold !text-muted transition-colors hover:!text-ink dark:hover:!text-ink dark:data-[state=open]:!text-ink">
+                  <NavigationMenuTrigger className="navbar-primary-link text-[15px] !font-medium !text-muted transition-colors hover:!text-ink dark:hover:!text-ink dark:data-[state=open]:!text-ink">
                     Browse
                   </NavigationMenuTrigger>
                   <NavigationMenuContent>
@@ -361,7 +361,7 @@ export const Navbar = () => {
                   >
                     <NavLink
                       to="/saved"
-                      className="navbar-primary-link !font-semibold !text-muted hover:!text-ink dark:hover:!text-ink"
+                      className="navbar-primary-link !font-medium !text-muted hover:!text-ink dark:hover:!text-ink"
                     >
                       Saved
                     </NavLink>
@@ -376,7 +376,7 @@ export const Navbar = () => {
                   >
                     <NavLink
                       to="/chats"
-                      className="navbar-primary-link !font-semibold !text-muted hover:!text-ink dark:hover:!text-ink"
+                      className="navbar-primary-link !font-medium !text-muted hover:!text-ink dark:hover:!text-ink"
                     >
                       Chats
                     </NavLink>
@@ -391,7 +391,7 @@ export const Navbar = () => {
                   >
                     <NavLink
                       to="/my-listings"
-                      className="navbar-primary-link !font-semibold !text-muted hover:!text-ink dark:hover:!text-ink"
+                      className="navbar-primary-link !font-medium !text-muted hover:!text-ink dark:hover:!text-ink"
                     >
                       My listings
                     </NavLink>
@@ -407,7 +407,7 @@ export const Navbar = () => {
                     >
                       <NavLink
                         to="/admin"
-                        className="navbar-primary-link !font-semibold !text-muted hover:!text-ink dark:hover:!text-ink"
+                        className="navbar-primary-link !font-medium !text-muted hover:!text-ink dark:hover:!text-ink"
                       >
                         Admin
                       </NavLink>
@@ -450,7 +450,7 @@ export const Navbar = () => {
                     <Link
                       to="/"
                       onClick={() => setOpen(false)}
-                      className="flex items-center gap-1.5 text-[20px] font-semibold tracking-[-0.03em] text-ink"
+                      className="flex items-center gap-1.5 text-[20px] font-bold tracking-[-0.03em] text-ink"
                     >
                       <span className="text-accent">Uni</span>
                       <span>Market</span>

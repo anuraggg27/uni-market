@@ -659,9 +659,6 @@ export function MyListingsPage() {
                       <ImagePlus />
                     </span>
                   )}
-                  <span className="my-listing-status">
-                    <StatusBadge value={displayStatus} />
-                  </span>
                 </Link>
 
                 <div className="my-listing-content">
@@ -690,89 +687,94 @@ export function MyListingsPage() {
                   </p>
                 </div>
 
-                <div className="my-listing-actions">
-                  {canSubmit ? (
-                    <button
-                      type="button"
-                      className="button small primary"
-                      onClick={() =>
-                        action.mutate({ id: item.id, type: "submit" })
-                      }
-                      disabled={action.isPending}
-                    >
-                      Submit for review
-                    </button>
-                  ) : continueEditing ? (
-                    <Link
-                      className="button small primary"
-                      to={`/listing/${item.id}/edit`}
-                    >
-                      Continue editing
-                    </Link>
-                  ) : (
-                    <Link
-                      className="button small secondary"
-                      to={`/listing/${item.id}`}
-                    >
-                      View
-                    </Link>
-                  )}
-
-                  <details className="my-listing-more">
-                    <summary aria-label={`More actions for ${item.title}`}>
-                      <MoreHorizontal aria-hidden="true" />
-                    </summary>
-                    <div className="my-listing-actions-menu" role="menu">
-                      {!continueEditing || canSubmit ? (
-                        <Link
-                          role="menuitem"
-                          to={`/listing/${item.id}/edit`}
-                        >
-                          Edit
-                        </Link>
-                      ) : null}
-                      {item.lifecycleState === "ACTIVE" ? (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() =>
-                            action.mutate({ id: item.id, type: "withdraw" })
-                          }
-                          disabled={action.isPending}
-                        >
-                          Withdraw
-                        </button>
-                      ) : null}
-                      {["SOLD", "EXPIRED", "WITHDRAWN"].includes(
-                        item.lifecycleState,
-                      ) ? (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          onClick={() =>
-                            action.mutate({ id: item.id, type: "duplicate" })
-                          }
-                          disabled={action.isPending}
-                        >
-                          Duplicate
-                        </button>
-                      ) : null}
+                <div className="my-listing-side">
+                  <span className="my-listing-status">
+                    <StatusBadge value={displayStatus} />
+                  </span>
+                  <div className="my-listing-actions">
+                    {canSubmit ? (
                       <button
                         type="button"
-                        role="menuitem"
-                        className="danger"
+                        className="button small primary"
                         onClick={() =>
-                          setListingToDelete({
-                            id: item.id,
-                            title: item.title,
-                          })
+                          action.mutate({ id: item.id, type: "submit" })
                         }
-                        disabled={deleteListing.isPending}
+                        disabled={action.isPending}
                       >
-                        Delete
+                        Submit for review
                       </button>
-                    </div>
-                  </details>
+                    ) : continueEditing ? (
+                      <Link
+                        className="button small primary"
+                        to={`/listing/${item.id}/edit`}
+                      >
+                        Continue editing
+                      </Link>
+                    ) : (
+                      <Link
+                        className="button small secondary"
+                        to={`/listing/${item.id}`}
+                      >
+                        View
+                      </Link>
+                    )}
+
+                    <details className="my-listing-more">
+                      <summary aria-label={`More actions for ${item.title}`}>
+                        <MoreHorizontal aria-hidden="true" />
+                      </summary>
+                      <div className="my-listing-actions-menu" role="menu">
+                        {!continueEditing || canSubmit ? (
+                          <Link
+                            role="menuitem"
+                            to={`/listing/${item.id}/edit`}
+                          >
+                            Edit
+                          </Link>
+                        ) : null}
+                        {item.lifecycleState === "ACTIVE" ? (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() =>
+                              action.mutate({ id: item.id, type: "withdraw" })
+                            }
+                            disabled={action.isPending}
+                          >
+                            Withdraw
+                          </button>
+                        ) : null}
+                        {["SOLD", "EXPIRED", "WITHDRAWN"].includes(
+                          item.lifecycleState,
+                        ) ? (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() =>
+                              action.mutate({ id: item.id, type: "duplicate" })
+                            }
+                            disabled={action.isPending}
+                          >
+                            Duplicate
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="danger"
+                          onClick={() =>
+                            setListingToDelete({
+                              id: item.id,
+                              title: item.title,
+                            })
+                          }
+                          disabled={deleteListing.isPending}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </details>
+                  </div>
                 </div>
               </article>
             );

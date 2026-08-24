@@ -40,6 +40,16 @@ import {
 
 import { HeroParticles } from "../components/HeroParticles";
 
+const HOME_SEARCH_PLACEHOLDER_WORDS = [
+  "books",
+  "calculator",
+  "cycle",
+  "monitor",
+  "keyboard",
+] as const;
+const HOME_SEARCH_PLACEHOLDER_HOLD_MS = 2400;
+const HOME_SEARCH_PLACEHOLDER_TRANSITION_MS = 1100;
+
 function useListings(search: string) {
   return useQuery({
     queryKey: ["listings", search],
@@ -56,6 +66,10 @@ function useCategories() {
 export function HomePage() {
   const navigate = useNavigate();
   const [term, setTerm] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const [placeholderTransitioning, setPlaceholderTransitioning] =
+    useState(false);
   const recent = useListings("?limit=8&sort=newest");
   const popular = useListings("?limit=8&sort=popular");
   const { user } = useAuth();
@@ -69,21 +83,45 @@ export function HomePage() {
     : "?limit=4";
   const nearby = useListings(nearbySearch);
 
+  useEffect(() => {
+    if (searchFocused || term) return;
+
+    let settleTimer: number | undefined;
+    const advanceTimer = window.setTimeout(() => {
+      setPlaceholderTransitioning(true);
+      settleTimer = window.setTimeout(() => {
+        setPlaceholderIndex(
+          (current) => (current + 1) % HOME_SEARCH_PLACEHOLDER_WORDS.length,
+        );
+        setPlaceholderTransitioning(false);
+      }, HOME_SEARCH_PLACEHOLDER_TRANSITION_MS);
+    }, HOME_SEARCH_PLACEHOLDER_HOLD_MS);
+
+    return () => {
+      window.clearTimeout(advanceTimer);
+      if (settleTimer !== undefined) window.clearTimeout(settleTimer);
+    };
+  }, [placeholderIndex, searchFocused, term]);
+
+  const nextPlaceholderIndex =
+    (placeholderIndex + 1) % HOME_SEARCH_PLACEHOLDER_WORDS.length;
+  const showAnimatedPlaceholder = !searchFocused && term.length === 0;
+
   return (
     <>
       {/* ─── Hero Section (Minimal / Antigravity inspired) ─── */}
-      <section className="relative flex min-h-[76vh] md:min-h-[82vh] flex-col items-center justify-center overflow-hidden px-4 py-16 text-center sm:px-6 md:py-24 bg-surface">
+      <section className="home-hero relative flex min-h-[76vh] md:min-h-[82vh] flex-col items-center justify-center overflow-hidden px-4 py-16 text-center sm:px-6 md:py-24 bg-surface">
         <HeroParticles />
         <div className="relative z-10 mx-auto flex max-w-5xl flex-col items-center">
           {/* Main Heading */}
-          <h1 className="mb-6 max-w-5xl text-5xl sm:text-7xl md:text-[84px] font-extralight tracking-[-0.04em] text-ink leading-[1.04]">
-            <span className="font-extralight text-accent">
+          <h1 className="home-hero-title mb-6 max-w-5xl text-ink">
+            <span className="text-accent">
               Find what you need
             </span>{" "}
-            <span className="font-normal text-ink">around campus</span>
+            <span className="text-ink">around campus</span>
           </h1>
           {/* Supporting text */}
-          <p className="mb-10 max-w-2xl text-lg sm:text-[20px] font-light leading-relaxed text-muted">
+          <p className="home-hero-copy mb-10 max-w-2xl text-lg sm:text-[20px] text-muted">
             The student marketplace for peer-to-peer textbook, tech, cycle, and
             room essentials exchanges.
           </p>
@@ -108,18 +146,42 @@ export function HomePage() {
               <label className="sr-only" htmlFor="home-search">
                 Search products
               </label>
-              <input
-                id="home-search"
-                value={term}
-                onChange={(event) => setTerm(event.target.value)}
-                placeholder="Search books, cycles, calculators, monitors…"
-                className="search-pill-input h-full w-full bg-transparent text-[16px] text-ink placeholder:text-muted font-normal outline-none focus:outline-none border-none ring-0 focus:ring-0 shadow-none"
-              />
+              <div className="home-search-field">
+                <input
+                  id="home-search"
+                  value={term}
+                  onChange={(event) => setTerm(event.target.value)}
+                  onFocus={() => {
+                    setSearchFocused(true);
+                    setPlaceholderTransitioning(false);
+                  }}
+                  onBlur={() => setSearchFocused(false)}
+                  className="search-pill-input h-full w-full bg-transparent text-[16px] text-ink font-normal outline-none focus:outline-none border-none ring-0 focus:ring-0 shadow-none"
+                />
+                {showAnimatedPlaceholder ? (
+                  <span
+                    className="home-search-placeholder"
+                    aria-hidden="true"
+                  >
+                    <span>Search</span>
+                    <span
+                      className={`home-search-placeholder-keyword ${placeholderTransitioning ? "is-transitioning" : ""}`}
+                    >
+                      <span className="home-search-placeholder-current">
+                        {HOME_SEARCH_PLACEHOLDER_WORDS[placeholderIndex]}
+                      </span>
+                      <span className="home-search-placeholder-next">
+                        {HOME_SEARCH_PLACEHOLDER_WORDS[nextPlaceholderIndex]}
+                      </span>
+                    </span>
+                  </span>
+                ) : null}
+              </div>
               <button
                 type="submit"
-                className="flex h-10 sm:h-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-brand px-6 text-[15px] font-medium text-on-brand !text-on-brand shadow-none transition-all hover:bg-brand-hover active:scale-[0.98]"
+                className="flex h-10 sm:h-11 shrink-0 items-center justify-center gap-1.5 rounded-full bg-brand px-6 text-[15px] font-semibold text-on-brand !text-on-brand shadow-none transition-all hover:bg-brand-hover active:scale-[0.98]"
               >
-                <span className="text-on-brand !text-on-brand font-medium">
+                <span className="text-on-brand !text-on-brand font-semibold">
                   Search
                 </span>
               </button>
@@ -141,12 +203,12 @@ export function HomePage() {
         {user && saved.data?.length ? (
           <section className="section">
             <div className="mb-6 flex items-baseline justify-between border-b border-line pb-3">
-              <h2 className="text-2xl font-light tracking-[-0.025em] text-ink">
+              <h2 className="text-2xl font-semibold tracking-[-0.025em] text-ink">
                 Saved for later
               </h2>
               <Link
                 to="/saved"
-                className="group flex items-center gap-1 text-[14px] font-normal text-muted hover:text-ink transition-colors"
+                className="group flex items-center gap-1 text-[14px] font-medium text-muted hover:text-ink transition-colors"
               >
                 <span>See saved</span>
                 <span className="transition-transform duration-150 group-hover:translate-x-0.5">
@@ -179,12 +241,12 @@ function ProductSection({
   return (
     <section className="section">
       <div className="mb-6 flex items-baseline justify-between border-b border-line pb-3">
-        <h2 className="text-2xl font-light tracking-[-0.025em] text-ink">
+        <h2 className="text-2xl font-semibold tracking-[-0.025em] text-ink">
           {title}
         </h2>
         <Link
           to="/browse"
-          className="group flex items-center gap-1 text-[14px] font-normal text-muted hover:text-ink transition-colors"
+          className="group flex items-center gap-1 text-[14px] font-medium text-muted hover:text-ink transition-colors"
         >
           <span>Browse all</span>
           <span className="transition-transform duration-150 group-hover:translate-x-0.5">
@@ -307,7 +369,7 @@ export function BrowsePage() {
       <div className="mb-7 flex flex-col gap-4 sm:mb-9 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="eyebrow !mb-2">Marketplace</p>
-          <h1 className="font-normal text-ink">Browse products</h1>
+          <h1 className="font-bold text-ink">Browse products</h1>
           <p className="mt-2 text-[15px] font-normal text-muted">
             Find great items listed by students around you.
           </p>
@@ -888,10 +950,10 @@ export function ListingPage() {
             </div>
           ) : null}
 
-          <h1 className="mb-0 mt-6 text-[28px] font-medium leading-[1.14] tracking-[-0.035em] sm:text-[34px] xl:text-[36px] text-ink">
+          <h1 className="mb-0 mt-6 text-[28px] font-semibold leading-[1.14] tracking-[-0.035em] sm:text-[34px] xl:text-[36px] text-ink">
             {item.title}
           </h1>
-          <p className="mb-0 mt-5 text-[26px] font-semibold leading-none tracking-[-0.025em] sm:text-[28px] text-ink">
+          <p className="mb-0 mt-5 text-[26px] font-bold leading-none tracking-[-0.025em] sm:text-[28px] text-ink">
             {item.priceLabel || "Price unavailable"}
           </p>
 
