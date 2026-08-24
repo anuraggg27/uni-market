@@ -2041,7 +2041,7 @@ export function SupportDetailPage() {
 }
 
 export function SettingsPage() {
-  const { user, refresh } = useAuth();
+  const { user, refresh, clearSession } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [phone, setPhone] = useState("");
@@ -2123,8 +2123,8 @@ export function SettingsPage() {
     mutationFn: () => api("/api/auth/logout", { method: "POST" }),
     onSuccess: () => {
       clearCsrf();
+      clearSession();
       navigate("/");
-      void refresh();
     },
   });
   useEffect(() => {

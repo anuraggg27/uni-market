@@ -113,7 +113,7 @@ function getCategoryHref(
 }
 
 function ProfileMenu({ compact = false }: { compact?: boolean }) {
-  const { user, refresh } = useAuth();
+  const { user, clearSession } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -142,9 +142,9 @@ function ProfileMenu({ compact = false }: { compact?: boolean }) {
     mutationFn: () => api("/api/auth/logout", { method: "POST" }),
     onSuccess: () => {
       clearCsrf();
+      clearSession();
       setMenuOpen(false);
       navigate("/");
-      void refresh();
     },
   });
 
