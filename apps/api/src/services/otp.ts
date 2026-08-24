@@ -14,6 +14,11 @@ type Msg91VerificationResponse = {
   message?: unknown;
 };
 
+function isUniqueViolation(error: unknown): boolean {
+  const candidate = error as { code?: unknown; cause?: { code?: unknown } };
+  return candidate?.code === '23505' || candidate?.cause?.code === '23505';
+}
+
 export class OtpService {
   constructor(private db: Database, private config: AppConfig) {}
 
@@ -73,10 +78,14 @@ export class OtpService {
       await this.db.update(phoneVerifications).set({ invalidatedAt: now }).where(eq(phoneVerifications.id, verification.id));
       throw error;
     }
-    await this.db.transaction(async (tx) => {
-      await tx.update(users).set({ phoneE164, phoneVerifiedAt: now, updatedAt: now }).where(eq(users.id, userId));
-      await tx.update(phoneVerifications).set({ usedAt: now, invalidatedAt: now }).where(eq(phoneVerifications.id, verification.id));
-    });
+    try {
+      await this.db.transaction(async (tx) => {
+        await tx.update(users).set({ phoneE164, phoneVerifiedAt: now, updatedAt: now }).where(eq(users.id, userId));
+        await tx.update(phoneVerifications).set({ usedAt: now, invalidatedAt: now }).where(eq(phoneVerifications.id, verification.id));
+      });
+    } catch (error) {
+      await this.throwPhoneConflictOrOriginal(userId, phoneE164, error);
+    }
   }
 
   async verifyProviderToken(userId: string, phoneE164: string, accessToken: string, ipHash: string): Promise<void> {
@@ -127,18 +136,29 @@ export class OtpService {
     const now = new Date();
     await this.assertPhoneAvailable(userId, phoneE164);
 
-    await this.db.transaction(async (tx) => {
-      await tx.update(users).set({ phoneE164, phoneVerifiedAt: now, updatedAt: now }).where(eq(users.id, userId));
-      await tx.insert(phoneVerifications).values({
-        userId,
-        phoneE164,
-        otpHash: tokenHash,
-        providerSessionId: 'msg91',
-        ipHash,
-        expiresAt: now,
-        usedAt: now,
-        invalidatedAt: now
+    try {
+      await this.db.transaction(async (tx) => {
+        await tx.update(users).set({ phoneE164, phoneVerifiedAt: now, updatedAt: now }).where(eq(users.id, userId));
+        await tx.insert(phoneVerifications).values({
+          userId,
+          phoneE164,
+          otpHash: tokenHash,
+          providerSessionId: 'msg91',
+          ipHash,
+          expiresAt: now,
+          usedAt: now,
+          invalidatedAt: now
+        });
       });
-    });
+    } catch (error) {
+      await this.throwPhoneConflictOrOriginal(userId, phoneE164, error);
+    }
+  }
+
+  private async throwPhoneConflictOrOriginal(userId: string, phoneE164: string, error: unknown): Promise<never> {
+    if (isUniqueViolation(error)) {
+      await this.assertPhoneAvailable(userId, phoneE164);
+    }
+    throw error;
   }
 }

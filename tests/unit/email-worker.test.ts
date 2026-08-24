@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../../apps/api/src/config";
+import * as schema from "../../apps/api/src/db/schema";
+import { setup } from "../integration/helper";
 
 const { createTransport, sendMail } = vi.hoisted(() => ({
   createTransport: vi.fn(),
@@ -20,7 +22,8 @@ type EmailJob = {
 
 function fakeDatabase(jobs: EmailJob[]) {
   const updates: Array<Record<string, unknown>> = [];
-  const limit = vi.fn().mockResolvedValue(jobs);
+  const forUpdate = vi.fn().mockResolvedValue(jobs);
+  const limit = vi.fn(() => ({ for: forUpdate }));
   const orderBy = vi.fn(() => ({ limit }));
   const where = vi.fn(() => ({ orderBy }));
   const innerJoin = vi.fn(() => ({ where }));
@@ -32,7 +35,9 @@ function fakeDatabase(jobs: EmailJob[]) {
       return { where: vi.fn().mockResolvedValue(undefined) };
     }),
   }));
-  return { db: { select, update } as any, updates };
+  const db = { select, update } as any;
+  db.transaction = vi.fn((operation) => operation(db));
+  return { db, updates, forUpdate };
 }
 
 const smtpConfig = () =>
@@ -68,7 +73,7 @@ describe("EmailWorker", () => {
   });
 
   it("delivers queued mail and marks it sent after one attempt", async () => {
-    const { db, updates } = fakeDatabase([
+    const { db, updates, forUpdate } = fakeDatabase([
       {
         job: { id: "job-1", template: "listing_approved", attempts: 0 },
         recipient: "student@example.edu",
@@ -93,8 +98,16 @@ describe("EmailWorker", () => {
         text: expect.stringContaining("Student,\n\nYour listing passed manual review"),
       }),
     );
-    expect(updates).toHaveLength(1);
-    expect(updates[0]).toMatchObject({ sentAt: expect.any(Date), attempts: 1 });
+    expect(forUpdate).toHaveBeenCalledWith("update", {
+      of: expect.anything(),
+      skipLocked: true,
+    });
+    expect(updates).toHaveLength(2);
+    expect(updates[0]).toMatchObject({
+      availableAt: expect.any(Date),
+      attempts: 1,
+    });
+    expect(updates[1]).toMatchObject({ sentAt: expect.any(Date) });
   });
 
   it("backs off transient failures and permanently fails the fifth attempt", async () => {
@@ -117,20 +130,50 @@ describe("EmailWorker", () => {
 
     await new EmailWorker(db, smtpConfig()).runOnce();
 
-    expect(updates[0]).toMatchObject({
-      attempts: 2,
+    const failures = updates.filter((update) => "lastError" in update);
+    expect(failures[0]).toMatchObject({
       lastError: "temporary SMTP failure",
       availableAt: expect.any(Date),
     });
-    expect((updates[0]?.availableAt as Date).getTime()).toBeGreaterThanOrEqual(
+    expect((failures[0]?.availableAt as Date).getTime()).toBeGreaterThanOrEqual(
       before + 4 * 60_000,
     );
-    expect(updates[0]).not.toHaveProperty("failedAt");
-    expect(updates[1]).toMatchObject({
-      attempts: 5,
+    expect(failures[0]).not.toHaveProperty("failedAt");
+    expect(failures[1]).toMatchObject({
       lastError: "permanent SMTP failure",
       failedAt: expect.any(Date),
     });
-    expect(updates[1]).not.toHaveProperty("availableAt");
+    expect(failures[1]).not.toHaveProperty("availableAt");
+  });
+
+  it("claims an outbox job once across overlapping workers", async () => {
+    const ctx = await setup();
+    try {
+      const recipient = (
+        await ctx.db
+          .insert(schema.users)
+          .values({ email: "worker-race@example.edu", displayName: "Worker Race" })
+          .returning()
+      )[0]!;
+      await ctx.db.insert(schema.emailOutbox).values({
+        recipientUserId: recipient.id,
+        template: "support-response",
+        payload: {},
+        dedupeKey: "worker-race",
+      });
+      sendMail.mockResolvedValue({ messageId: "message-race" });
+
+      await Promise.all([
+        new EmailWorker(ctx.db, smtpConfig()).runOnce(),
+        new EmailWorker(ctx.db, smtpConfig()).runOnce(),
+      ]);
+
+      expect(sendMail).toHaveBeenCalledTimes(1);
+      const job = (await ctx.db.select().from(schema.emailOutbox))[0]!;
+      expect(job.attempts).toBe(1);
+      expect(job.sentAt).toBeInstanceOf(Date);
+    } finally {
+      await ctx.client.close();
+    }
   });
 });

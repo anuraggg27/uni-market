@@ -7,6 +7,7 @@ import { logger } from '../lib/logger.js';
 
 export class EmailWorker {
   private timer?: NodeJS.Timeout;
+  private static readonly claimLeaseMs = 5 * 60_000;
   constructor(private db: Database, private config: AppConfig) {}
 
   start(): void {
@@ -18,17 +19,28 @@ export class EmailWorker {
   async runOnce(): Promise<void> {
     if (!this.config.SMTP_HOST) return;
     const transport = nodemailer.createTransport({ host: this.config.SMTP_HOST, port: this.config.SMTP_PORT, secure: this.config.SMTP_SECURE, auth: this.config.SMTP_USER ? { user: this.config.SMTP_USER, pass: this.config.SMTP_PASSWORD } : undefined });
-    const jobs = await this.db.select({ job: emailOutbox, recipient: users.email, displayName: users.displayName }).from(emailOutbox).innerJoin(users, eq(users.id, emailOutbox.recipientUserId)).where(and(isNull(emailOutbox.sentAt), isNull(emailOutbox.failedAt), lte(emailOutbox.availableAt, new Date()))).orderBy(asc(emailOutbox.createdAt)).limit(10);
+    const jobs = await this.claimJobs();
     for (const { job, recipient, displayName } of jobs) {
       try {
         await transport.sendMail({ from: `"${this.config.SMTP_FROM_NAME}" <${this.config.SMTP_FROM_EMAIL}>`, to: recipient, subject: subject(job.template), text: `${displayName},\n\n${body(job.template)}\n\nOpen Uni Market to view the details.\n\nStay safe: inspect the product before paying and never share an OTP.` });
-        await this.db.update(emailOutbox).set({ sentAt: new Date(), attempts: job.attempts + 1 }).where(eq(emailOutbox.id, job.id));
+        await this.db.update(emailOutbox).set({ sentAt: new Date() }).where(eq(emailOutbox.id, job.id));
       } catch (error) {
-        const attempts = job.attempts + 1;
-        await this.db.update(emailOutbox).set({ attempts, lastError: error instanceof Error ? error.message.slice(0, 500) : 'SMTP error', ...(attempts >= 5 ? { failedAt: new Date() } : { availableAt: new Date(Date.now() + 2 ** attempts * 60_000) }) }).where(eq(emailOutbox.id, job.id));
+        await this.db.update(emailOutbox).set({ lastError: error instanceof Error ? error.message.slice(0, 500) : 'SMTP error', ...(job.attempts >= 5 ? { failedAt: new Date() } : { availableAt: new Date(Date.now() + 2 ** job.attempts * 60_000) }) }).where(eq(emailOutbox.id, job.id));
         logger.error({ jobId: job.id, err: error }, 'email outbox delivery failed');
       }
     }
+  }
+
+  private claimJobs() {
+    return this.db.transaction(async (tx) => {
+      const now = new Date();
+      const availableAt = new Date(now.getTime() + EmailWorker.claimLeaseMs);
+      const jobs = await tx.select({ job: emailOutbox, recipient: users.email, displayName: users.displayName }).from(emailOutbox).innerJoin(users, eq(users.id, emailOutbox.recipientUserId)).where(and(isNull(emailOutbox.sentAt), isNull(emailOutbox.failedAt), lte(emailOutbox.availableAt, now))).orderBy(asc(emailOutbox.createdAt)).limit(10).for('update', { of: emailOutbox, skipLocked: true });
+      for (const { job } of jobs) {
+        await tx.update(emailOutbox).set({ availableAt, attempts: job.attempts + 1 }).where(eq(emailOutbox.id, job.id));
+      }
+      return jobs.map(({ job, ...recipient }) => ({ ...recipient, job: { ...job, availableAt, attempts: job.attempts + 1 } }));
+    });
   }
 }
 

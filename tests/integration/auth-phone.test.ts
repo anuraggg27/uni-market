@@ -145,4 +145,24 @@ describe('MSG91 provider failure handling',()=>{
       message:'The phone verification could not be accepted'
     });
   });
+
+  it('maps a concurrent verified-phone uniqueness race to PHONE_ALREADY_IN_USE',async()=>{
+    const owner=await login(ctx.app,'msg91-race-winner');
+    const contender=await login(ctx.app,'msg91-race-contender');
+    vi.spyOn(globalThis,'fetch').mockResolvedValueOnce(new Response(JSON.stringify({type:'success',message:'919876543210'}),{
+      status:200,
+      headers:{'content-type':'application/json'}
+    }));
+    vi.spyOn(ctx.db,'transaction').mockImplementationOnce(async()=>{
+      await ctx.db.update(schema.users).set({phoneE164:'+919876543210',phoneVerifiedAt:new Date()}).where(eq(schema.users.id,owner.user.id));
+      throw Object.assign(new Error('duplicate verified phone'),{code:'23505'});
+    });
+    const service=new OtpService(ctx.db,{...ctx.config,DEV_MODE:false,MSG91_AUTH_KEY:'server-auth-key'});
+
+    await expect(service.verifyProviderToken(contender.user.id,'+919876543210','provider-token-for-race-test','test-ip-hash')).rejects.toMatchObject({
+      status:409,
+      code:'PHONE_ALREADY_IN_USE',
+      message:'This phone number is already being used by another account'
+    });
+  });
 });
