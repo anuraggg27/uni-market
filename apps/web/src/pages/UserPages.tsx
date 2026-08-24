@@ -433,19 +433,76 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
   );
 }
 
-const tabs = [
+const primaryListingTabs = ["ALL", "ACTIVE", "PENDING", "SOLD"] as const;
+const secondaryListingTabs = [
   "DRAFT",
-  "PENDING",
-  "ACTIVE",
   "RESERVED",
-  "SOLD",
   "REJECTED",
   "EXPIRED",
   "WITHDRAWN",
-];
+] as const;
+type ListingTab =
+  | (typeof primaryListingTabs)[number]
+  | (typeof secondaryListingTabs)[number];
+
+function getListingDisplayStatus(item: any): string {
+  if (item.moderationState === "REJECTED") return "REJECTED";
+  if (
+    item.lifecycleState === "DRAFT" &&
+    item.moderationState === "PENDING"
+  ) {
+    return "PENDING";
+  }
+  return item.lifecycleState;
+}
+
+function matchesListingTab(item: any, tab: ListingTab): boolean {
+  if (tab === "ALL") return true;
+  if (tab === "PENDING") {
+    return (
+      item.moderationState === "PENDING" &&
+      item.lifecycleState === "DRAFT"
+    );
+  }
+  if (tab === "REJECTED") return item.moderationState === "REJECTED";
+  return item.lifecycleState === tab;
+}
+
+function listingEmptyCopy(tab: ListingTab) {
+  if (tab === "ALL") {
+    return {
+      title: "No listings yet",
+      body: "Create your first listing and start selling on campus.",
+    };
+  }
+  if (tab === "ACTIVE") {
+    return {
+      title: "No active listings",
+      body: "Your approved listings will appear here.",
+    };
+  }
+  if (tab === "PENDING") {
+    return {
+      title: "No pending listings",
+      body: "Listings waiting for review will appear here.",
+    };
+  }
+  if (tab === "SOLD") {
+    return {
+      title: "No sold listings",
+      body: "Completed sales will appear here.",
+    };
+  }
+  return {
+    title: `No ${tab.toLowerCase().replaceAll("_", " ")} listings`,
+    body: "Listings with this status will appear here.",
+  };
+}
+
 export function MyListingsPage() {
-  const [tab, setTab] = useState("DRAFT");
+  const [tab, setTab] = useState<ListingTab>("ALL");
   const [listingToDelete, setListingToDelete] = useState<{ id: string; title: string } | null>(null);
+  const pageRef = useRef<HTMLDivElement | null>(null);
   const client = useQueryClient();
   const query = useQuery({
     queryKey: ["my-listings"],
@@ -464,138 +521,280 @@ export function MyListingsPage() {
       void client.invalidateQueries({ queryKey: ["my-listings"] });
     },
   });
-  const items =
-    query.data?.filter((item) =>
-      tab === "PENDING"
-        ? item.moderationState === "PENDING" && item.lifecycleState === "DRAFT"
-        : tab === "REJECTED"
-          ? item.moderationState === "REJECTED"
-          : item.lifecycleState === tab,
-    ) ?? [];
+  const items = query.data?.filter((item) => matchesListingTab(item, tab)) ?? [];
+  const emptyCopy = listingEmptyCopy(tab);
+  const secondaryFilterActive = secondaryListingTabs.includes(
+    tab as (typeof secondaryListingTabs)[number],
+  );
+
+  useEffect(() => {
+    const openMenuSelector =
+      "details.my-listings-filter-more[open], details.my-listing-more[open]";
+
+    const closeMenusExcept = (target?: Node) => {
+      pageRef.current
+        ?.querySelectorAll<HTMLDetailsElement>(openMenuSelector)
+        .forEach((menu) => {
+          if (!target || !menu.contains(target)) {
+            menu.removeAttribute("open");
+          }
+        });
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      closeMenusExcept(event.target as Node);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeMenusExcept();
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
   return (
-    <div className="page">
-      <div className="page-header">
+    <div className="page my-listings-page" ref={pageRef}>
+      <div className="my-listings-header">
         <div>
           <p className="eyebrow">Selling</p>
           <h1>My listings</h1>
+          <p className="my-listings-intro">
+            Manage your listings and track their status.
+          </p>
         </div>
-        <Link className="button primary" to="/sell">
+        <Link className="button primary my-listings-create" to="/sell">
           Create listing
         </Link>
       </div>
-      <div className="tabs" role="tablist" aria-label="Listing status">
-        {tabs.map((value) => (
-          <button
-            role="tab"
-            aria-selected={tab === value}
-            className={tab === value ? "active" : ""}
-            key={value}
-            onClick={() => setTab(value)}
-          >
-            {value.replaceAll("_", " ")}
-          </button>
-        ))}
+
+      <div className="my-listings-filterbar">
+        <div
+          className="my-listings-primary-filters"
+          role="tablist"
+          aria-label="Listing status"
+        >
+          {primaryListingTabs.map((value) => (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === value}
+              className={tab === value ? "active" : ""}
+              key={value}
+              onClick={() => setTab(value)}
+            >
+              {value[0] + value.slice(1).toLowerCase()}
+            </button>
+          ))}
+        </div>
+        <details
+          className={`my-listings-filter-more ${secondaryFilterActive ? "active" : ""}`}
+        >
+          <summary>
+            <span>More</span>
+            <MoreHorizontal aria-hidden="true" />
+          </summary>
+          <div className="my-listings-filter-menu" role="menu">
+            {secondaryListingTabs.map((value) => (
+              <button
+                type="button"
+                role="menuitemradio"
+                aria-checked={tab === value}
+                className={tab === value ? "active" : ""}
+                key={value}
+                onClick={(event) => {
+                  setTab(value);
+                  event.currentTarget
+                    .closest("details")
+                    ?.removeAttribute("open");
+                }}
+              >
+                {value[0] + value.slice(1).toLowerCase()}
+              </button>
+            ))}
+          </div>
+        </details>
       </div>
+
       {query.isLoading ? (
-        <Loading />
+        <div className="my-listings-loading">
+          <Loading />
+        </div>
       ) : query.isError ? (
         <ErrorState error={query.error} />
       ) : !items.length ? (
-        <EmptyState
-          title={`No ${tab.toLowerCase().replaceAll("_", " ")} listings`}
-          body="Your listings will be organized here by their current status."
-          action={
-            tab === "DRAFT" ? (
-              <Link className="button primary" to="/sell">
-                Create a listing
-              </Link>
-            ) : undefined
-          }
-        />
+        <div className="my-listings-empty">
+          <span className="my-listings-empty-icon" aria-hidden="true">
+            <ImagePlus />
+          </span>
+          <h2>{emptyCopy.title}</h2>
+          <p>{emptyCopy.body}</p>
+          <Link className="button primary" to="/sell">
+            Create listing
+          </Link>
+        </div>
       ) : (
-        <div className="list">
-          {items.map((item) => (
-            <article className="list-item" key={item.id}>
-              {item.coverImageUrl ? (
-                <img src={item.coverImageUrl} alt="" />
-              ) : (
-                <div />
-              )}
-              <div>
-                <h3>
-                  <Link to={`/listing/${item.id}`}>{item.title}</Link>
-                </h3>
-                <div className="row">
-                  <StatusBadge value={item.moderationState} />
-                  <StatusBadge value={item.lifecycleState} />
-                </div>
-                {item.rejectionReason ? (
-                  <p>Reason: {item.rejectionReason}</p>
-                ) : null}
-                <p>
-                  {item.viewCount} views · {item.favouriteCount} saves
-                </p>
-              </div>
-              <div className="row">
+        <div className="my-listings-grid">
+          {items.map((item) => {
+            const displayStatus = getListingDisplayStatus(item);
+            const continueEditing = ["DRAFT", "REJECTED"].includes(
+              displayStatus,
+            );
+
+            return (
+              <article className="my-listing-card" key={item.id}>
                 <Link
-                  className="button small secondary"
-                  to={`/listing/${item.id}/edit`}
+                  className="my-listing-image"
+                  to={`/listing/${item.id}`}
+                  aria-label={`View ${item.title}`}
                 >
-                  Edit
+                  {item.coverImageUrl ? (
+                    <img src={item.coverImageUrl} alt="" />
+                  ) : (
+                    <span aria-hidden="true">
+                      <ImagePlus />
+                    </span>
+                  )}
+                  <span className="my-listing-status">
+                    <StatusBadge value={displayStatus} />
+                  </span>
                 </Link>
-                <button
-                  className="button small danger"
-                  onClick={() => setListingToDelete({ id: item.id, title: item.title })}
-                  disabled={deleteListing.isPending}
-                >
-                  Delete
-                </button>
-                {item.lifecycleState === "DRAFT" ? (
-                  <button
-                    className="button small primary"
-                    onClick={() =>
-                      action.mutate({ id: item.id, type: "submit" })
-                    }
-                  >
-                    Submit for review
-                  </button>
-                ) : null}
-                {item.lifecycleState === "ACTIVE" ? (
-                  <button
-                    className="button small danger"
-                    onClick={() =>
-                      action.mutate({ id: item.id, type: "withdraw" })
-                    }
-                  >
-                    Withdraw
-                  </button>
-                ) : null}
-                {["SOLD", "EXPIRED", "WITHDRAWN"].includes(
-                  item.lifecycleState,
-                ) ? (
-                  <button
-                    className="button small secondary"
-                    onClick={() =>
-                      action.mutate({ id: item.id, type: "duplicate" })
-                    }
-                  >
-                    Duplicate
-                  </button>
-                ) : null}
-              </div>
-            </article>
-          ))}
+
+                <div className="my-listing-content">
+                  <div className="my-listing-title-row">
+                    <div>
+                      <h2>
+                        <Link to={`/listing/${item.id}`}>{item.title}</Link>
+                      </h2>
+                      <strong className="my-listing-price">
+                        {item.priceLabel}
+                      </strong>
+                    </div>
+                  </div>
+                  {item.location ? (
+                    <p className="my-listing-context">{item.location}</p>
+                  ) : null}
+                  {item.rejectionReason ? (
+                    <p className="my-listing-rejection">
+                      {item.rejectionReason}
+                    </p>
+                  ) : null}
+                  <p className="my-listing-meta">
+                    {item.viewCount} views
+                    {" \u00b7 "}
+                    {item.favouriteCount} saves
+                  </p>
+                </div>
+
+                <div className="my-listing-actions">
+                  {continueEditing ? (
+                    <Link
+                      className="button small primary"
+                      to={`/listing/${item.id}/edit`}
+                    >
+                      Continue editing
+                    </Link>
+                  ) : (
+                    <Link
+                      className="button small secondary"
+                      to={`/listing/${item.id}`}
+                    >
+                      View
+                    </Link>
+                  )}
+
+                  <details className="my-listing-more">
+                    <summary aria-label={`More actions for ${item.title}`}>
+                      <MoreHorizontal aria-hidden="true" />
+                    </summary>
+                    <div className="my-listing-actions-menu" role="menu">
+                      {!continueEditing ? (
+                        <Link
+                          role="menuitem"
+                          to={`/listing/${item.id}/edit`}
+                        >
+                          Edit
+                        </Link>
+                      ) : null}
+                      {item.lifecycleState === "DRAFT" ? (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() =>
+                            action.mutate({ id: item.id, type: "submit" })
+                          }
+                          disabled={action.isPending}
+                        >
+                          Submit for review
+                        </button>
+                      ) : null}
+                      {item.lifecycleState === "ACTIVE" ? (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() =>
+                            action.mutate({ id: item.id, type: "withdraw" })
+                          }
+                          disabled={action.isPending}
+                        >
+                          Withdraw
+                        </button>
+                      ) : null}
+                      {["SOLD", "EXPIRED", "WITHDRAWN"].includes(
+                        item.lifecycleState,
+                      ) ? (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onClick={() =>
+                            action.mutate({ id: item.id, type: "duplicate" })
+                          }
+                          disabled={action.isPending}
+                        >
+                          Duplicate
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="danger"
+                        onClick={() =>
+                          setListingToDelete({
+                            id: item.id,
+                            title: item.title,
+                          })
+                        }
+                        disabled={deleteListing.isPending}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </details>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
       <DeleteConfirmationDialog
         open={Boolean(listingToDelete)}
-        onOpenChange={(open) => { if (!open) setListingToDelete(null); }}
+        onOpenChange={(open) => {
+          if (!open) setListingToDelete(null);
+        }}
         title="Delete listing?"
         description={`Are you sure you want to delete "${listingToDelete?.title ?? "this listing"}"?`}
         pending={deleteListing.isPending}
-        onConfirm={() => { if (listingToDelete) deleteListing.mutate(listingToDelete.id); }}
-      />      {action.error || deleteListing.error ? (
-        <p className="field-error">{(action.error ?? deleteListing.error)?.message}</p>
+        onConfirm={() => {
+          if (listingToDelete) deleteListing.mutate(listingToDelete.id);
+        }}
+      />
+      {action.error || deleteListing.error ? (
+        <p className="field-error my-listings-error">
+          {(action.error ?? deleteListing.error)?.message}
+        </p>
       ) : null}
     </div>
   );

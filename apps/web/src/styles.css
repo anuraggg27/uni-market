@@ -899,6 +899,596 @@ html.dark .site-footer-utility {
   border-color: var(--color-line);
 }
 
+/* My Listings */
+.my-listings-page {
+  max-width: 1100px;
+  padding-top: clamp(30px, 4vw, 52px);
+}
+
+.my-listings-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+  margin-bottom: 30px;
+}
+
+.my-listings-header > div {
+  min-width: 0;
+}
+
+.my-listings-intro {
+  margin: 10px 0 0;
+  color: var(--color-muted);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.my-listings-create {
+  flex-shrink: 0;
+}
+
+.my-listings-filterbar {
+  position: relative;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.my-listings-primary-filters {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  overflow-x: auto;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: var(--color-surface);
+  scrollbar-width: none;
+}
+
+.my-listings-primary-filters::-webkit-scrollbar {
+  display: none;
+}
+
+.my-listings-primary-filters button,
+.my-listings-filter-more > summary {
+  min-height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.my-listings-primary-filters button {
+  min-width: 70px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.my-listings-primary-filters button:hover,
+.my-listings-primary-filters button:focus-visible,
+.my-listings-primary-filters button.active {
+  background: var(--color-surface-muted);
+  color: var(--color-ink);
+}
+
+.my-listings-primary-filters button.active {
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--color-sandalwood) 40%, transparent);
+}
+
+.my-listings-filter-more,
+.my-listing-more {
+  position: relative;
+}
+
+.my-listings-filter-more > summary,
+.my-listing-more > summary {
+  list-style: none;
+}
+
+.my-listings-filter-more > summary::-webkit-details-marker,
+.my-listing-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.my-listings-filter-more > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+}
+
+.my-listings-filter-more > summary svg {
+  width: 16px;
+  height: 16px;
+}
+
+.my-listings-filter-more > summary:hover,
+.my-listings-filter-more > summary:focus-visible,
+.my-listings-filter-more.active > summary,
+.my-listings-filter-more[open] > summary {
+  border-color: var(--color-sandalwood);
+  background: var(--color-surface-muted);
+  color: var(--color-ink);
+}
+
+.my-listings-filter-menu,
+.my-listing-actions-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 174px;
+  display: grid;
+  gap: 3px;
+  padding: 6px;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: 0 16px 38px rgb(16 18 17 / 0.14);
+}
+
+.my-listings-filter-menu button,
+.my-listing-actions-menu a,
+.my-listing-actions-menu button {
+  width: 100%;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-ink);
+  font-size: 0.82rem;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.my-listings-filter-menu button:hover,
+.my-listings-filter-menu button:focus-visible,
+.my-listings-filter-menu button.active,
+.my-listing-actions-menu a:hover,
+.my-listing-actions-menu a:focus-visible,
+.my-listing-actions-menu button:hover,
+.my-listing-actions-menu button:focus-visible {
+  outline: none;
+  background: var(--color-surface-muted);
+}
+
+.my-listings-filter-menu button.active {
+  color: var(--color-accent);
+}
+
+.my-listings-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.my-listing-card {
+  position: relative;
+  z-index: 0;
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 22px;
+  padding: 18px;
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  background: var(--color-surface);
+  box-shadow: 0 4px 14px rgb(16 18 17 / 0.025);
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.my-listing-card:has(.my-listing-more[open]) {
+  z-index: 10;
+}
+
+@media (hover: hover) {
+  .my-listing-card:hover {
+    border-color: color-mix(
+      in srgb,
+      var(--color-sandalwood) 68%,
+      var(--color-line)
+    );
+    box-shadow: 0 12px 28px rgb(16 18 17 / 0.07);
+    transform: translateY(-1px);
+  }
+}
+
+.my-listing-image {
+  position: relative;
+  width: 132px;
+  aspect-ratio: 4 / 3;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: var(--color-soft);
+}
+
+.my-listing-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 180ms ease;
+}
+
+@media (hover: hover) {
+  .my-listing-card:hover .my-listing-image img {
+    transform: scale(1.025);
+  }
+}
+
+.my-listing-image > span {
+  color: var(--color-muted);
+}
+
+.my-listing-image svg {
+  width: 26px;
+  height: 26px;
+  stroke-width: 1.5;
+}
+
+.my-listing-content {
+  min-width: 0;
+}
+
+.my-listing-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.my-listing-title-row > div {
+  min-width: 0;
+}
+
+.my-listing-title-row h2 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-ink);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.my-listing-title-row h2 a {
+  transition: color 150ms ease;
+}
+
+.my-listing-title-row h2 a:hover {
+  color: var(--color-accent);
+}
+
+.my-listing-price {
+  display: block;
+  margin-top: 5px;
+  color: var(--color-ink);
+  font-size: 0.94rem;
+  font-weight: 600;
+}
+
+.my-listing-context,
+.my-listing-meta,
+.my-listing-rejection {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.my-listing-context {
+  margin-top: 7px;
+  overflow: hidden;
+  color: var(--color-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.my-listing-meta {
+  margin-top: 3px;
+  color: var(--color-muted);
+}
+
+.my-listing-rejection {
+  margin-top: 7px;
+  color: var(--color-accent-strong);
+}
+
+.my-listing-status {
+  position: absolute;
+  z-index: 1;
+  top: 8px;
+  left: 8px;
+}
+
+.my-listing-status .status {
+  min-height: 21px;
+  padding: 2px 7px;
+  background: var(--color-surface-muted);
+  color: var(--color-muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.055em;
+}
+
+.my-listings-page .my-listing-status .status-active {
+  background: color-mix(
+    in srgb,
+    var(--color-success) 14%,
+    var(--color-surface)
+  );
+  color: var(--color-success);
+}
+
+.my-listings-page .my-listing-status .status-pending,
+.my-listings-page .my-listing-status .status-reserved {
+  background: color-mix(
+    in srgb,
+    var(--color-sandalwood) 18%,
+    var(--color-surface)
+  );
+  color: var(--color-ink);
+}
+
+.my-listings-page .my-listing-status .status-sold,
+.my-listings-page .my-listing-status .status-rejected {
+  background: color-mix(
+    in srgb,
+    var(--color-accent) 14%,
+    var(--color-surface)
+  );
+  color: var(--color-accent-strong);
+}
+
+.my-listing-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.my-listing-actions > .button {
+  min-height: 38px;
+  padding-inline: 15px;
+}
+
+.my-listing-more > summary {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-muted);
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.my-listing-more > summary:hover,
+.my-listing-more > summary:focus-visible,
+.my-listing-more[open] > summary {
+  border-color: var(--color-sandalwood);
+  background: var(--color-surface-muted);
+  color: var(--color-ink);
+}
+
+.my-listing-more > summary svg {
+  width: 18px;
+  height: 18px;
+}
+
+.my-listing-actions-menu {
+  top: calc(100% + 7px);
+  min-width: 190px;
+}
+
+.my-listing-actions-menu button.danger {
+  color: var(--color-accent-strong);
+}
+
+.my-listing-actions-menu button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.my-listings-empty {
+  min-height: 270px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  padding: 42px 24px;
+  border: 1px dashed var(--color-line);
+  border-radius: 16px;
+  background: color-mix(
+    in srgb,
+    var(--color-surface) 76%,
+    transparent
+  );
+  text-align: center;
+}
+
+.my-listings-empty-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 14px;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: var(--color-surface-muted);
+  color: var(--color-muted);
+}
+
+.my-listings-empty-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.my-listings-empty h2 {
+  margin: 0;
+  color: var(--color-ink);
+  font-size: 1.08rem;
+  font-weight: 600;
+}
+
+.my-listings-empty p {
+  max-width: 380px;
+  margin: 7px 0 18px;
+  color: var(--color-muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.my-listings-loading {
+  padding-top: 8px;
+}
+
+.my-listings-error {
+  margin-top: 16px;
+}
+
+html.dark .my-listing-card,
+html.dark .my-listings-primary-filters,
+html.dark .my-listings-filter-more > summary,
+html.dark .my-listing-more > summary,
+html.dark .my-listings-filter-menu,
+html.dark .my-listing-actions-menu {
+  box-shadow: none;
+}
+
+@media (hover: hover) {
+  html.dark .my-listing-card:hover {
+    box-shadow: 0 12px 28px rgb(0 0 0 / 0.16);
+  }
+}
+
+@media (max-width: 720px) {
+  .my-listings-page {
+    padding-top: 28px;
+  }
+
+  .my-listings-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 18px;
+    margin-bottom: 24px;
+  }
+
+  .my-listings-create {
+    width: 100%;
+  }
+
+  .my-listings-filterbar {
+    align-items: stretch;
+  }
+
+  .my-listings-primary-filters {
+    flex: 1;
+  }
+
+  .my-listings-primary-filters button {
+    min-width: 66px;
+    padding-inline: 12px;
+  }
+
+  .my-listings-filter-more > summary {
+    height: 44px;
+  }
+
+  .my-listing-card {
+    grid-template-columns: 100px minmax(0, 1fr);
+    gap: 16px;
+    padding: 16px;
+  }
+
+  .my-listing-image {
+    width: 100px;
+    aspect-ratio: 1;
+  }
+
+  .my-listing-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .my-listing-actions > .button {
+    flex: 1;
+  }
+
+  .my-listing-title-row {
+    gap: 10px;
+  }
+}
+
+@media (max-width: 440px) {
+  .my-listings-filterbar {
+    gap: 8px;
+  }
+
+  .my-listings-primary-filters button {
+    min-width: 62px;
+    padding-inline: 10px;
+  }
+
+  .my-listings-filter-more > summary span {
+    display: none;
+  }
+
+  .my-listings-filter-more > summary {
+    width: 44px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .my-listing-card {
+    grid-template-columns: 84px minmax(0, 1fr);
+    gap: 13px;
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .my-listing-image {
+    width: 84px;
+  }
+
+  .my-listing-title-row {
+    display: grid;
+    gap: 7px;
+  }
+
+}
+
 .product-image {
   display: block;
   width: 100%;
