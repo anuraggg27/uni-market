@@ -186,7 +186,7 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
   if (existing.isLoading)
     return (
       <div className="page">
-        <Loading />
+        <Loading variant="form" label="Loading listing form" />
       </div>
     );
   if (existing.isError)
@@ -621,7 +621,7 @@ export function MyListingsPage() {
 
       {query.isLoading ? (
         <div className="my-listings-loading">
-          <Loading />
+          <Loading variant="my-listings" label="Loading your listings" />
         </div>
       ) : query.isError ? (
         <ErrorState error={query.error} />
@@ -816,7 +816,7 @@ export function SavedPage() {
         </div>
       </div>
       {query.isLoading ? (
-        <Loading />
+        <Loading variant="cards" label="Loading saved products" />
       ) : query.isError ? (
         <ErrorState error={query.error} />
       ) : !query.data?.length ? (
@@ -995,7 +995,7 @@ export function ChatsPage() {
             </span>
           </header>
           {conversations.isLoading ? (
-            <Loading />
+            <Loading variant="chat-list" label="Loading conversations" />
           ) : conversations.isError ? (
             <ErrorState error={conversations.error} />
           ) : !conversations.data?.length ? (
@@ -1331,7 +1331,7 @@ function ChatPanel({
             </span>
           </div>
           {query.isLoading ? (
-            <Loading label="Loading messages" />
+            <Loading variant="messages" label="Loading messages" />
           ) : query.isError ? (
             <ErrorState error={query.error} retry={() => void query.refetch()} />
           ) : !all.length ? (
@@ -1516,7 +1516,7 @@ export function TransactionsPage() {
       </div>
       <SafetyReminder />
       {query.isLoading ? (
-        <Loading />
+        <Loading label="Loading transactions" />
       ) : query.isError ? (
         <ErrorState error={query.error} />
       ) : !query.data?.length ? (
@@ -1761,7 +1761,7 @@ export function NotificationsPage() {
       >
         {query.isLoading ? (
           <div className="p-6">
-            <Loading />
+            <Loading label="Loading notifications" />
           </div>
         ) : query.isError ? (
           <div className="p-6">
@@ -1880,7 +1880,7 @@ export function SupportPage() {
         <section>
           <h2>Your requests</h2>
           {query.isLoading ? (
-            <Loading />
+            <Loading label="Loading support requests" />
           ) : query.isError ? (
             <ErrorState error={query.error} />
           ) : !query.data?.length ? (
@@ -1970,7 +1970,7 @@ export function SupportDetailPage() {
   if (query.isLoading)
     return (
       <div className="page">
-        <Loading />
+        <Loading label="Loading support request" />
       </div>
     );
   if (query.isError)

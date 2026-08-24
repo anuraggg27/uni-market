@@ -1,7 +1,9 @@
+import { Suspense } from 'react';
 import { Home, ListPlus, MessageCircle, Search, UserRound } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Navbar } from './Navbar';
 import { RouteScrollRestoration } from './RouteScrollRestoration';
+import { RouteLoading } from './LoadingSkeletons';
 
 const mobileLinks = [
   { to: '/', label: 'Home', icon: Home },
@@ -26,7 +28,9 @@ export function Layout() {
       </a>
       <Navbar />
       <main id="main">
-        <Outlet />
+        <Suspense fallback={<RouteLoading />}>
+          <Outlet />
+        </Suspense>
       </main>
       <nav className="mobile-nav" aria-label="Mobile primary">
         {mobileLinks.map(({ to, label, icon: Icon }) => (

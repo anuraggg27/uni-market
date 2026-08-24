@@ -256,7 +256,7 @@ function ProductSection({
         </Link>
       </div>
       {query.isLoading ? (
-        <Loading />
+        <Loading variant="cards" label={`Loading ${title}`} />
       ) : query.isError ? (
         <ErrorState error={query.error} retry={() => void query.refetch()} />
       ) : !query.data?.length ? (
@@ -668,7 +668,7 @@ export function BrowsePage() {
       </form>
 
       {listings.isLoading ? (
-        <Loading />
+        <Loading variant="browse" label="Loading products" />
       ) : listings.isError ? (
         <ErrorState
           error={listings.error}
@@ -777,9 +777,7 @@ export function ListingPage() {
   });
   if (query.isLoading)
     return (
-      <div className="page">
-        <Loading />
-      </div>
+      <Loading variant="detail" label="Loading listing" />
     );
   if (query.isError)
     return (
@@ -1277,7 +1275,7 @@ export function SellerPage() {
   if (query.isLoading)
     return (
       <div className="page">
-        <Loading />
+        <Loading label="Loading seller" />
       </div>
     );
   if (query.isError)
@@ -1406,7 +1404,7 @@ export function LeaderboardPage() {
         least two sales to appear.
       </p>
       {query.isLoading ? (
-        <Loading />
+        <Loading variant="table" label="Loading leaderboard" />
       ) : query.isError ? (
         <ErrorState error={query.error} />
       ) : !query.data?.length ? (

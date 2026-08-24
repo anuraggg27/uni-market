@@ -3,15 +3,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { AlertCircle, Inbox, LoaderCircle, ShieldCheck } from "lucide-react";
 import { safetyReminder } from "@campus-market/shared";
 import { ApiError } from "../api";
-
-export function Loading({ label = "Loading" }: { label?: string }) {
-  return (
-    <div className="stack" role="status" aria-live="polite">
-      <div className="skeleton h-44" />
-      <span className="sr-only">{label}</span>
-    </div>
-  );
-}
+export { Loading } from "./LoadingSkeletons";
 export function ErrorState({
   error,
   retry,

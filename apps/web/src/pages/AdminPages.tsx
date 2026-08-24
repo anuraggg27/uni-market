@@ -57,12 +57,14 @@ function QueryView({
   query,
   children,
   emptyTitle = "Nothing here",
+  loadingVariant = "table",
 }: {
   query: any;
   children: (data: any) => React.ReactNode;
   emptyTitle?: string;
+  loadingVariant?: "table" | "list" | "metrics";
 }) {
-  if (query.isLoading) return <Loading />;
+  if (query.isLoading) return <Loading variant={loadingVariant} />;
   if (query.isError)
     return (
       <ErrorState error={query.error} retry={() => void query.refetch()} />
@@ -89,7 +91,7 @@ export function AdminDashboard() {
         All values come from the current database. R2 usage appears only when
         the provider exposes it.
       </p>
-      <QueryView query={query}>
+      <QueryView query={query} loadingVariant="metrics">
         {(data) => (
           <div className="metric-grid">
             {Object.entries(data).map(([key, value]) => (
@@ -297,7 +299,8 @@ export function AdminListingReview() {
       navigate("/admin/listings/pending");
     },
   });
-  if (admin.isLoading || detail.isLoading) return <Loading />;
+  if (admin.isLoading || detail.isLoading)
+    return <Loading variant="detail" label="Loading listing review" />;
   if (admin.isError || detail.isError)
     return <ErrorState error={admin.error ?? detail.error} />;
   const row = admin.data;

@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ComponentType } from "react";
+import { lazy, type ComponentType } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, RequireAuth } from "./auth";
 import { Layout } from "./components/Layout";
@@ -54,18 +54,7 @@ const PendingListings = lazyNamed(adminPages, "PendingListings");
 export function App() {
   return (
     <AuthProvider>
-      <Suspense
-        fallback={
-          <div className="page">
-            <div
-              className="skeleton h-40"
-              role="status"
-              aria-label="Loading page"
-            />
-          </div>
-        }
-      >
-        <Routes>
+      <Routes>
           <Route element={<Layout />}>
             <Route index element={<HomePage />} />
             <Route path="browse" element={<BrowsePage />} />
@@ -279,8 +268,7 @@ export function App() {
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
-        </Routes>
-      </Suspense>
+      </Routes>
     </AuthProvider>
   );
 }
