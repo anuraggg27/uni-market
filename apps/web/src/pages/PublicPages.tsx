@@ -150,6 +150,7 @@ export function HomePage() {
                 <input
                   id="home-search"
                   value={term}
+                  placeholder=" "
                   onChange={(event) => setTerm(event.target.value)}
                   onFocus={() => {
                     setSearchFocused(true);
