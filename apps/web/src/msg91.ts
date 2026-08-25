@@ -35,6 +35,8 @@ declare global {
 const SCRIPT_URL = "https://verify.msg91.com/otp-provider.js";
 let scriptPromise: Promise<void> | null = null;
 let initializationPromise: Promise<void> | null = null;
+let initializationKey: string | null = null;
+let initializationHost: HTMLElement | null = null;
 
 function loadScript(): Promise<void> {
   if (window.initSendOTP) return Promise.resolve();
@@ -48,7 +50,7 @@ function loadScript(): Promise<void> {
       existing.addEventListener("load", () => resolve(), { once: true });
       existing.addEventListener(
         "error",
-        () => reject(new Error("Phone verification could not be loaded")),
+        () => reject(new Error("Verification could not be loaded")),
         { once: true },
       );
       return;
@@ -60,7 +62,7 @@ function loadScript(): Promise<void> {
     script.defer = true;
     script.onload = () => resolve();
     script.onerror = () =>
-      reject(new Error("Phone verification could not be loaded"));
+      reject(new Error("Verification could not be loaded"));
     document.head.append(script);
   });
 
@@ -76,7 +78,7 @@ function waitForMethods(): Promise<void> {
         return;
       }
       if (Date.now() >= deadline) {
-        reject(new Error("Phone verification took too long to initialize"));
+        reject(new Error("Verification took too long to initialize"));
         return;
       }
       window.setTimeout(check, 50);
@@ -90,13 +92,31 @@ export function initializeMsg91(input: {
   tokenAuth: string;
   captchaRenderId: string;
 }): Promise<void> {
-  if (initializationPromise) return initializationPromise;
+  const nextKey = `${input.widgetId}:${input.tokenAuth}:${input.captchaRenderId}`;
+  const requestedHost = document.getElementById(input.captchaRenderId);
+  if (
+    initializationPromise &&
+    initializationKey === nextKey &&
+    requestedHost === initializationHost
+  ) {
+    return initializationPromise;
+  }
+
+  const previousInitialization = initializationPromise;
+  initializationKey = nextKey;
+  initializationHost = requestedHost;
 
   initializationPromise = (async () => {
+    await previousInitialization?.catch(() => undefined);
     await loadScript();
     if (!window.initSendOTP) {
-      throw new Error("Phone verification could not be initialized");
+      throw new Error("Verification could not be initialized");
     }
+    const captchaHost = requestedHost ?? document.getElementById(input.captchaRenderId);
+    if (!captchaHost) {
+      throw new Error("Verification form could not be found");
+    }
+    captchaHost.replaceChildren();
     window.initSendOTP({
       ...input,
       exposeMethods: true,
@@ -107,7 +127,11 @@ export function initializeMsg91(input: {
     });
     await waitForMethods();
   })().catch((error) => {
-    initializationPromise = null;
+    if (initializationKey === nextKey) {
+      initializationPromise = null;
+      initializationKey = null;
+      initializationHost = null;
+    }
     throw error;
   });
 
@@ -123,7 +147,7 @@ function providerError(value: unknown): Error {
   ) {
     return new Error(value.message);
   }
-  return new Error("Phone verification could not be completed");
+  return new Error("Verification could not be completed");
 }
 
 function callbackResult(
@@ -136,17 +160,20 @@ function callbackResult(
 
 export function sendMsg91Otp(identifier: string): Promise<unknown> {
   if (!window.sendOtp)
-    return Promise.reject(new Error("Phone verification is not ready"));
+    return Promise.reject(new Error("Verification is not ready"));
   return callbackResult((resolve, reject) =>
     window.sendOtp!(identifier, resolve, reject),
   );
 }
 
-export function retryMsg91Otp(requestId?: string): Promise<unknown> {
+export function retryMsg91Otp(
+  requestId?: string,
+  channel: string | null = null,
+): Promise<unknown> {
   if (!window.retryOtp)
-    return Promise.reject(new Error("Phone verification is not ready"));
+    return Promise.reject(new Error("Verification is not ready"));
   return callbackResult((resolve, reject) =>
-    window.retryOtp!(null, resolve, reject, requestId),
+    window.retryOtp!(channel, resolve, reject, requestId),
   );
 }
 
@@ -155,7 +182,7 @@ export function verifyMsg91Otp(
   requestId?: string,
 ): Promise<unknown> {
   if (!window.verifyOtp)
-    return Promise.reject(new Error("Phone verification is not ready"));
+    return Promise.reject(new Error("Verification is not ready"));
   return callbackResult((resolve, reject) =>
     window.verifyOtp!(otp, resolve, reject, requestId),
   );

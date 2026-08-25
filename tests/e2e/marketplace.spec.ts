@@ -21,14 +21,18 @@ async function signIn(
     .csrfToken;
   const headers = { "x-csrf-token": csrf };
   if (profile)
-    await request.patch(`${API}/api/auth/me`, {
+    await request.post(`${API}/api/onboarding/complete`, {
       headers,
       data: {
         displayName: credential,
         institution: "Open University",
         campus: "Main campus",
         graduationYear: 2028,
-        onboardingComplete: true,
+        adultAttested: true,
+        acceptTerms: true,
+        acknowledgePrivacy: true,
+        acceptCommunityRules: true,
+        policyVersion: "2026-08-25",
       },
     });
   if (phone) {
@@ -43,6 +47,15 @@ async function signIn(
     await request.post(`${API}/api/phone/verify`, {
       headers,
       data: { phone: valid, code: "999999" },
+    });
+    const studentEmail = `${credential.replace(/[^a-z0-9]/gi, "").toLowerCase()}@students.example.edu`;
+    await request.post(`${API}/api/student-email/send`, {
+      headers,
+      data: { email: studentEmail },
+    });
+    await request.post(`${API}/api/student-email/verify`, {
+      headers,
+      data: { email: studentEmail, code: "999999" },
     });
   }
   return { request, headers };
@@ -79,6 +92,10 @@ async function createListing(
       brand: "StudyCo",
       defects: "",
       meetupPoint: "Library entrance",
+      ownershipAttested: true,
+      usedPhysicalGoodsAttested: true,
+      accurateDescriptionAttested: true,
+      sellerPolicyAccepted: true,
     },
   });
   const listing = (await created.json()).data;
@@ -93,7 +110,7 @@ async function createListing(
         `${API}/api/uploads/listings/${listing.id}/presign`,
         {
           headers: auth.headers,
-          data: { mimeType: "image/jpeg", byteSize: image.length },
+          data: { mimeType: "image/jpeg", byteSize: image.length, syntheticStatus: "NOT_SYNTHETIC" },
         },
       )
     ).json()
@@ -141,6 +158,10 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   const page = await seller.newPage();
   await page.goto("/onboarding");
   await page.getByLabel("Display name").fill("Journey Seller");
+  await page.getByLabel(/I declare that I am at least 18/).check();
+  await page.getByLabel(/I accept the Terms of use/).check();
+  await page.getByLabel(/I have read the Privacy notice/).check();
+  await page.getByLabel(/I accept the Community rules/).check();
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page).toHaveURL(/settings/);
   await page.getByLabel("Indian mobile number").fill("9876500001");
@@ -148,10 +169,15 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   await page.getByLabel("6-digit code").fill("999999");
   await page.getByRole("button", { name: "Verify phone" }).click();
   await expect(page.getByText("Your phone is verified")).toBeVisible();
+  await page.getByLabel("Student email").fill("journey@students.example.edu");
+  await page.getByRole("button", { name: "Send email code" }).click();
+  await page.getByLabel("6-digit email code").fill("999999");
+  await page.getByRole("button", { name: "Verify student email" }).click();
+  await expect(page.getByText(/@students\.example\.edu is verified/)).toBeVisible();
   await page.goto("/sell");
   await page.getByLabel("Title").fill("Engineering mechanics book");
   await page
-    .getByLabel("Description")
+    .getByRole("textbox", { name: "Description", exact: true })
     .fill(
       "A clean engineering mechanics textbook with no missing pages or annotations.",
     );
@@ -174,6 +200,10 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   await expect(
     page.getByAltText("Selected product image: book.jpg"),
   ).toBeVisible();
+  await page.getByLabel(/I own this item/).check();
+  await page.getByLabel(/This is a used physical good/).check();
+  await page.getByLabel(/description, condition, defects/).check();
+  await page.getByLabel(/I accept the Seller policy/).check();
   await expect(
     page.getByAltText("Selected product image: book-detail.jpg"),
   ).toBeVisible();
@@ -225,10 +255,14 @@ test("E2E-02 rejected listing is corrected, resubmitted and approved", async ({
   ).toBeVisible();
   await page.goto(`/listing/${listing.id}/edit`);
   await page
-    .getByLabel("Description")
+    .getByRole("textbox", { name: "Description", exact: true })
     .fill(
       "A working calculator with a recently replaced battery and clear display.",
     );
+  await page.getByLabel(/I own this item/).check();
+  await page.getByLabel(/This is a used physical good/).check();
+  await page.getByLabel(/description, condition, defects/).check();
+  await page.getByLabel(/I accept the Seller policy/).check();
   await page.getByRole("button", { name: "Save changes" }).click();
   await page.goto("/my-listings");
   await page.getByRole("button", { name: "Submit for review" }).click();
@@ -431,7 +465,14 @@ test("E2E-06 important marketplace screens remain usable at mobile, tablet and d
     const page = await context.newPage();
     const pageErrors: string[] = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
-    for (const path of ["/", "/browse", "/leaderboard", "/login"]) {
+    for (const path of [
+      "/",
+      "/browse",
+      "/leaderboard",
+      "/login",
+      "/terms",
+      "/seller-policy",
+    ]) {
       await page.goto(path);
       if (path === "/") {
         const searchFontSize = await page

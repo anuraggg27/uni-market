@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { ArrowRight, Clock3, ImageOff, MapPin } from "lucide-react";
+import { ArrowRight, Clock3, ImageOff, MapPin, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface MarketplaceListing {
   id: string;
   title?: string | null;
   coverImageUrl?: string | null;
+  coverSyntheticStatus?: string | null;
   lifecycleState?: string | null;
   condition?: string | null;
   location?: string | null;
@@ -65,6 +66,7 @@ export function ProductCard({
             <ImagePlaceholder />
           )}
           <span className="market-card-image-tint" aria-hidden="true" />
+          {listing.coverSyntheticStatus === "SYNTHETIC_OR_MATERIALLY_ALTERED" ? <span className="market-card-synthetic"><Sparkles aria-hidden="true" /> AI / altered image</span> : null}
 
           {listing.lifecycleState &&
           listing.lifecycleState !== "ACTIVE" ? (

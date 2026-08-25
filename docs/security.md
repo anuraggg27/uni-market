@@ -6,17 +6,21 @@ Google tokens are verified for signature, issuer, audience, expiry and `email_ve
 
 Roles come only from `user_roles`. Public profile updates use an allowlisted schema and cannot assign roles. Suspended users are rejected by protected middleware and Socket.IO. Support staff see only assigned/unassigned support tickets and cannot browse or moderate private conversations.
 
+Ordinary verified Google accounts may sign in and browse. Listing, messaging, transactions, favourites, reviews and member support additionally require a separately verified Indian phone, an approved academic-email OTP no older than 12 months, an explicit 18+ declaration and acceptance of the current policy version. Staff administration is role-gated and requires a Google-authenticated staff session no older than eight hours.
+
 ## Input, output and privacy
 
 Zod validates request bodies, params and query strings. Drizzle parameterizes data values. React renders user text as text. Helmet applies CSP and security headers; JSON bodies are limited to 128 KiB and Socket.IO payloads to 20 KiB. Logs include request IDs but redact authorization, cookies, credentials, tokens, OTP data, secrets, message bodies and full phone numbers.
 
-## OTP
+## OTP and academic domains
 
 Codes expire in five minutes, are HMAC-hashed, single-use and invalidated on resend/success. Attempts, cooldowns and per-user/phone/IP limits are server-side. Phone numbers are normalized to E.164 and verified numbers are unique. Responses avoid phone enumeration. `DEV_MODE=true` never calls 2Factor and only accepts `999999`; production refuses that configuration.
 
+Student-email codes expire after ten minutes. Email addresses are encrypted at rest and a keyed hash enforces one verified account per address without exposing the value. Only active exact domains, or explicitly approved subdomains, in the staff-reviewed academic-domain registry are accepted. Verification expires after 12 months or immediately when the domain is disabled.
+
 ## Uploads and R2
 
-Only the draft owner can request/finalize/delete an image. Keys are random and owner-scoped; original names are ignored. Finalization checks recorded ownership, size, magic bytes, allowlisted format and dimensions, re-encodes through Sharp, strips EXIF and deletes temporary objects. Pending assets are private and available only through short signed reads. SVG, GIF, PDF, HTML, spoofed and oversized payloads are rejected.
+Only the draft owner can request/finalize/delete an image. Keys are random and owner-scoped; original names are ignored. Finalization checks recorded ownership, size, magic bytes, allowlisted format and dimensions, re-encodes through Sharp, strips EXIF and deletes temporary objects. Each image requires a seller declaration; synthetic or materially altered images receive a public label and embedded platform provenance identifier. Pending assets are private and available only through short signed reads. SVG, GIF, PDF, HTML, spoofed and oversized payloads are rejected.
 
 Use `infra/r2-cors.json` with the exact deployed origin. A scheduled cleanup should remove `temporary/` objects older than one hour; R2 lifecycle rules may provide a second safety net.
 
@@ -24,7 +28,13 @@ Use `infra/r2-cors.json` with the exact deployed origin. A scheduled cleanup sho
 
 Owner/member/participant checks protect listings, images, favourites, conversations, transactions, reviews, notifications and support. Conversations and reviews have database uniqueness constraints. Reservation uses a conditional transaction so only an active listing can be reserved once. Sold count changes only during idempotent buyer completion. Manual listing state cannot create a sale.
 
-Staff moderation records actor, effective role, target, old/new state, internal/user reason, request ID, time and hashed IP. Reported-conversation access is restricted to a captured time window and audited.
+Staff moderation records actor, effective role, target, old/new state, internal/user reason, request ID, time and hashed IP. Reported-conversation access is restricted to a captured time window and audited. Prohibited-term controls normalize common evasion patterns and either block submission or flag the listing for a human reviewer. Scam-message controls analyze only outgoing text, require informed confirmation and store risk codes rather than a duplicate message body.
+
+## Privacy, grievance and retention
+
+Student email, public-grievance contact details and direct-email outbox payloads are encrypted. Public grievances use a one-time tracking secret; staff responses exclude tracking hashes and encrypted contact fields. Priority safety categories receive shorter action targets and appear as alarms in the role-scoped staff queue.
+
+Account closure immediately revokes sessions and hides listings. The daily retention worker supports audited dry-run and enforcement modes, respects active legal holds, anonymises eligible closed accounts after 180 days, clears abandoned uploads and removed images on schedule, and periodically queues policy reminders. Production should begin in dry-run and move to enforcement only after reviewing counts and backups.
 
 ## Rate limiting and Turnstile
 
@@ -54,4 +64,3 @@ Tune with observed legitimate traffic and key authenticated limits on a trusted 
 - Rotate R2/SMTP/OTP credentials on suspected exposure.
 - Monitor authentication/OTP failures, outbox failures, moderation actions and 429 rates.
 - Run `npm audit --omit=dev`; triage any production vulnerability before release.
-

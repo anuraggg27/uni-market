@@ -1,13 +1,14 @@
 import { Router } from 'express';
 import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
-import { idSchema, listingInputSchema } from '@campus-market/shared';
+import { currentPolicyVersion, idSchema, listingInputSchema } from '@campus-market/shared';
 import type { AppConfig } from '../config.js';
 import type { Database } from '../db/client.js';
-import { categories, listingImages, listings, notifications, reviews, users } from '../db/schema.js';
+import { categories, listingImages, listings, notifications, prohibitedTerms, reviews, users } from '../db/schema.js';
 import { requireAuth, requireVerified } from '../middleware/auth.js';
 import { AppError, asyncRoute } from '../lib/errors.js';
 import type { StorageService } from '../services/storage.js';
+import { matchProhibitedTerms } from '../services/content-risk.js';
 
 const publicListing = and(eq(listings.moderationState, 'APPROVED'), inArray(listings.lifecycleState, ['ACTIVE', 'RESERVED', 'SOLD']), isNull(listings.deletedAt));
 
@@ -30,14 +31,14 @@ export function listingsRouter(db: Database, config: AppConfig, storage: Storage
     const conditions = [publicListing];
     if (query.q) conditions.push(or(ilike(listings.title, `%${query.q}%`), ilike(listings.description, `%${query.q}%`))!);
     if (query.category) conditions.push(eq(listings.categoryId, query.category));
-    if (query.condition) conditions.push(eq(listings.condition, z.enum(['NEW', 'LIKE_NEW', 'GOOD', 'FAIR', 'POOR']).parse(query.condition)));
+    if (query.condition) conditions.push(eq(listings.condition, z.enum(['LIKE_NEW', 'GOOD', 'FAIR', 'POOR']).parse(query.condition)));
     if (query.location) conditions.push(ilike(listings.location, `%${query.location}%`));
     if (query.negotiable === 'true') conditions.push(eq(listings.negotiable, true));
     if (query.minPrice !== undefined) conditions.push(or(gte(listings.exactPrice, query.minPrice), gte(listings.maximumPrice, query.minPrice), eq(listings.priceType, 'FREE'))!);
     if (query.maxPrice !== undefined) conditions.push(or(lte(listings.exactPrice, query.maxPrice), lte(listings.minimumPrice, query.maxPrice), eq(listings.priceType, 'FREE'))!);
     const order = query.sort === 'price_asc' ? asc(sql`coalesce(${listings.exactPrice}, ${listings.minimumPrice}, 0)`) : query.sort === 'price_desc' ? desc(sql`coalesce(${listings.exactPrice}, ${listings.maximumPrice}, 0)`) : query.sort === 'popular' ? desc(sql`${listings.viewCount} + ${listings.favouriteCount} * 3`) : desc(listings.approvedAt);
-    const rows = await db.select({ listing: listings, categoryName: categories.name, imageKey: listingImages.objectKey }).from(listings).innerJoin(categories, eq(categories.id, listings.categoryId)).leftJoin(listingImages, and(eq(listingImages.listingId, listings.id), eq(listingImages.position, 0), isNull(listingImages.deletedAt))).where(and(...conditions)).orderBy(order, desc(listings.id)).limit(query.limit).offset((query.page - 1) * query.limit);
-    const data = await Promise.all(rows.map(async ({ listing, categoryName, imageKey }) => ({ ...listing, categoryName, priceLabel: priceLabel(listing), coverImageUrl: imageKey ? await storage.signedReadUrl(imageKey) : null })));
+    const rows = await db.select({ listing: listings, categoryName: categories.name, imageKey: listingImages.objectKey, coverSyntheticStatus: listingImages.syntheticStatus }).from(listings).innerJoin(categories, eq(categories.id, listings.categoryId)).leftJoin(listingImages, and(eq(listingImages.listingId, listings.id), eq(listingImages.position, 0), isNull(listingImages.deletedAt))).where(and(...conditions)).orderBy(order, desc(listings.id)).limit(query.limit).offset((query.page - 1) * query.limit);
+    const data = await Promise.all(rows.map(async ({ listing, categoryName, imageKey, coverSyntheticStatus }) => ({ ...listing, categoryName, priceLabel: priceLabel(listing), coverSyntheticStatus, coverImageUrl: imageKey ? await storage.signedReadUrl(imageKey) : null })));
     res.setHeader('cache-control', 'public, max-age=30, stale-while-revalidate=60');
     res.json({ data, meta: { page: query.page, limit: query.limit, hasMore: rows.length === query.limit } });
   }));
@@ -46,7 +47,7 @@ export function listingsRouter(db: Database, config: AppConfig, storage: Storage
     const input = listingInputSchema.parse(req.body);
     const category = (await db.select({ id: categories.id }).from(categories).where(and(eq(categories.id, input.categoryId), eq(categories.active, true))).limit(1))[0];
     if (!category) throw new AppError(400, 'INVALID_CATEGORY', 'Choose an available category');
-    const created = (await db.insert(listings).values({ sellerId: req.auth!.userId, categoryId: input.categoryId, title: input.title, description: input.description, condition: input.condition, conditionExplanation: input.conditionExplanation || null, priceType: input.priceType, exactPrice: input.priceType === 'FIXED' ? input.exactPrice : null, minimumPrice: input.priceType === 'RANGE' ? input.minimumPrice : null, maximumPrice: input.priceType === 'RANGE' ? input.maximumPrice : null, negotiable: input.priceType === 'FREE' ? false : input.negotiable, location: input.location, brand: input.brand || null, defects: input.defects || null, meetupPoint: input.meetupPoint || null, moderationState: 'PENDING', lifecycleState: 'DRAFT' }).returning())[0]!;
+    const created = (await db.insert(listings).values({ sellerId: req.auth!.userId, categoryId: input.categoryId, title: input.title, description: input.description, condition: input.condition, conditionExplanation: input.conditionExplanation || null, priceType: input.priceType, exactPrice: input.priceType === 'FIXED' ? input.exactPrice : null, minimumPrice: input.priceType === 'RANGE' ? input.minimumPrice : null, maximumPrice: input.priceType === 'RANGE' ? input.maximumPrice : null, negotiable: input.priceType === 'FREE' ? false : input.negotiable, location: input.location, brand: input.brand || null, defects: input.defects || null, meetupPoint: input.meetupPoint || null, sellerAttestedAt: new Date(), sellerPolicyVersion: currentPolicyVersion, moderationState: 'PENDING', lifecycleState: 'DRAFT' }).returning())[0]!;
     res.status(201).json({ data: created });
   }));
 
@@ -66,7 +67,7 @@ export function listingsRouter(db: Database, config: AppConfig, storage: Storage
       db.select({ average: sql<number>`coalesce(avg(${reviews.rating}), 0)`, count: sql<number>`count(*)` }).from(reviews).where(and(eq(reviews.revieweeId, listing.listing.sellerId), isNull(reviews.hiddenAt), isNull(reviews.deletedAt)))
     ]);
     if (!privileged) await db.update(listings).set({ viewCount: sql`${listings.viewCount} + 1` }).where(eq(listings.id, id));
-    res.json({ data: { ...listing.listing, priceLabel: priceLabel(listing.listing), seller: { ...listing.seller, email: undefined, phone: undefined, rating: Number(rating[0]?.average ?? 0), reviewCount: Number(rating[0]?.count ?? 0) }, images: await Promise.all(images.filter((image) => image.objectKey).map(async (image) => ({ id: image.id, position: image.position, width: image.width, height: image.height, url: await storage.signedReadUrl(image.objectKey!) }))), ownerPreview: privileged && listing.listing.moderationState !== 'APPROVED' } });
+    res.json({ data: { ...listing.listing, priceLabel: priceLabel(listing.listing), seller: { ...listing.seller, email: undefined, phone: undefined, rating: Number(rating[0]?.average ?? 0), reviewCount: Number(rating[0]?.count ?? 0) }, images: await Promise.all(images.filter((image) => image.objectKey).map(async (image) => ({ id: image.id, position: image.position, width: image.width, height: image.height, syntheticStatus: image.syntheticStatus, provenanceId: image.provenanceId, url: await storage.signedReadUrl(image.objectKey!) }))), ownerPreview: privileged && listing.listing.moderationState !== 'APPROVED' } });
   }));
 
   router.patch('/listings/:id', requireVerified, asyncRoute(async (req, res) => {
@@ -75,7 +76,7 @@ export function listingsRouter(db: Database, config: AppConfig, storage: Storage
     if (!current || current.sellerId !== req.auth!.userId) throw new AppError(403, 'LISTING_FORBIDDEN', 'You cannot edit this listing');
     if (['SOLD', 'RESERVED'].includes(current.lifecycleState)) throw new AppError(409, 'LISTING_LOCKED', 'This listing cannot be edited in its current state');
     const wasPublic = current.moderationState === 'APPROVED';
-    const updated = (await db.update(listings).set({ categoryId: input.categoryId, title: input.title, description: input.description, condition: input.condition, conditionExplanation: input.conditionExplanation || null, priceType: input.priceType, exactPrice: input.priceType === 'FIXED' ? input.exactPrice : null, minimumPrice: input.priceType === 'RANGE' ? input.minimumPrice : null, maximumPrice: input.priceType === 'RANGE' ? input.maximumPrice : null, negotiable: input.priceType === 'FREE' ? false : input.negotiable, location: input.location, brand: input.brand || null, defects: input.defects || null, meetupPoint: input.meetupPoint || null, ...(wasPublic ? { moderationState: 'PENDING' as const, lifecycleState: 'DRAFT' as const, approvedAt: null } : {}), updatedAt: new Date() }).where(eq(listings.id, id)).returning())[0]!;
+    const updated = (await db.update(listings).set({ categoryId: input.categoryId, title: input.title, description: input.description, condition: input.condition, conditionExplanation: input.conditionExplanation || null, priceType: input.priceType, exactPrice: input.priceType === 'FIXED' ? input.exactPrice : null, minimumPrice: input.priceType === 'RANGE' ? input.minimumPrice : null, maximumPrice: input.priceType === 'RANGE' ? input.maximumPrice : null, negotiable: input.priceType === 'FREE' ? false : input.negotiable, location: input.location, brand: input.brand || null, defects: input.defects || null, meetupPoint: input.meetupPoint || null, sellerAttestedAt: new Date(), sellerPolicyVersion: currentPolicyVersion, ...(wasPublic ? { moderationState: 'PENDING' as const, lifecycleState: 'DRAFT' as const, approvedAt: null } : {}), updatedAt: new Date() }).where(eq(listings.id, id)).returning())[0]!;
     res.json({ data: updated });
   }));
 
@@ -84,10 +85,16 @@ export function listingsRouter(db: Database, config: AppConfig, storage: Storage
     const listing = (await db.select().from(listings).where(and(eq(listings.id, id), eq(listings.sellerId, req.auth!.userId), isNull(listings.deletedAt))).limit(1))[0];
     if (!listing) throw new AppError(404, 'LISTING_NOT_FOUND', 'Listing not found');
     if (!['DRAFT', 'WITHDRAWN'].includes(listing.lifecycleState) || !['PENDING', 'REJECTED'].includes(listing.moderationState)) throw new AppError(409, 'INVALID_LISTING_STATE', 'This listing cannot be submitted');
-    const images = await db.select({ id: listingImages.id }).from(listingImages).where(and(eq(listingImages.listingId, id), sql`${listingImages.finalizedAt} is not null`, isNull(listingImages.deletedAt)));
+    if (!listing.sellerAttestedAt || listing.sellerPolicyVersion !== currentPolicyVersion) throw new AppError(400, 'SELLER_ATTESTATION_REQUIRED', 'Review and accept the current seller declarations');
+    const images = await db.select({ id: listingImages.id, syntheticStatus: listingImages.syntheticStatus }).from(listingImages).where(and(eq(listingImages.listingId, id), sql`${listingImages.finalizedAt} is not null`, isNull(listingImages.deletedAt)));
     if (!images.length) throw new AppError(400, 'IMAGE_REQUIRED', 'Add at least one product image before submitting');
+    if (images.some((image) => image.syntheticStatus === 'UNKNOWN')) throw new AppError(400, 'SYNTHETIC_DECLARATION_REQUIRED', 'Declare whether each image is AI-generated or materially altered');
+    const activeTerms = await db.select({ term: prohibitedTerms.term, severity: prohibitedTerms.severity }).from(prohibitedTerms).where(eq(prohibitedTerms.active, true));
+    const matches = matchProhibitedTerms(`${listing.title} ${listing.description} ${listing.defects ?? ''} ${listing.brand ?? ''}`, activeTerms);
+    if (matches.some(({ severity }) => severity === 'BLOCK')) throw new AppError(400, 'PROHIBITED_LISTING', 'This listing appears to contain an item that is not permitted on Uni Market');
+    const riskCodes = matches.map(({ term, severity }) => `${severity}:${term}`);
     const updated = await db.transaction(async (tx) => {
-      const row = (await tx.update(listings).set({ moderationState: 'PENDING', lifecycleState: 'DRAFT', rejectionReason: null, requestedChanges: null, updatedAt: new Date() }).where(eq(listings.id, id)).returning())[0]!;
+      const row = (await tx.update(listings).set({ moderationState: 'PENDING', lifecycleState: 'DRAFT', moderationRiskCodes: riskCodes, rejectionReason: null, requestedChanges: null, updatedAt: new Date() }).where(eq(listings.id, id)).returning())[0]!;
       await tx.insert(notifications).values({ userId: req.auth!.userId, type: 'LISTING_SUBMITTED', title: 'Listing submitted', body: 'Your listing is waiting for manual review', href: `/listing/${id}` });
       return row;
     });

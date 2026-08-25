@@ -23,11 +23,13 @@ const links = [
   { to: "/admin", label: "Dashboard" },
   { to: "/admin/listings/pending", label: "Pending listings" },
   { to: "/admin/reports", label: "Reports" },
+  { to: "/admin/grievances", label: "Grievances & safety" },
   { to: "/admin/users", label: "Users" },
   { to: "/admin/reviews", label: "Reviews" },
   { to: "/admin/support", label: "Support" },
   { to: "/admin/audit-logs", label: "Audit logs" },
   { to: "/admin/categories", label: "Categories" },
+  { to: "/admin/compliance", label: "Compliance registers" },
 ];
 export function AdminShell() {
   return (
@@ -328,6 +330,7 @@ export function AdminListingReview() {
       </div>
       <section className="panel">
         <h3>Listing details</h3>
+        {item.moderationRiskCodes?.length ? <p role="alert"><strong>Automated moderation signals:</strong> {item.moderationRiskCodes.join(", ")}. Review the actual listing and policy before deciding.</p> : null}
         <p>{item.description}</p>
         <dl>
           <dt>Category</dt>
@@ -343,6 +346,7 @@ export function AdminListingReview() {
           <dt>Defects</dt>
           <dd>{item.defects || "None disclosed"}</dd>
         </dl>
+        {item.images.some((image: any) => image.syntheticStatus === "SYNTHETIC_OR_MATERIALLY_ALTERED") ? <p><strong>Synthetic-image disclosure:</strong> one or more seller images are declared AI-generated or materially altered.</p> : null}
       </section>
       <section className="panel">
         <h3>Seller summary</h3>
@@ -963,10 +967,10 @@ export function AdminCategories() {
       void client.invalidateQueries({ queryKey: ["admin-categories"] }),
   });
   const createTerm = useMutation({
-    mutationFn: (term: string) =>
+    mutationFn: ({ term, severity }: { term: string; severity: string }) =>
       api("/api/admin/prohibited-terms", {
         method: "POST",
-        ...jsonBody({ term }),
+        ...jsonBody({ term, severity }),
       }),
     onSuccess: () =>
       void client.invalidateQueries({ queryKey: ["admin-prohibited-terms"] }),
@@ -1035,8 +1039,8 @@ export function AdminCategories() {
         <div>
           <h2>Prohibited terms</h2>
           <p className="lede">
-            Terms flag listings for human review. They never approve or
-            automatically remove content.
+            FLAG terms highlight a submission for human review. BLOCK terms
+            reject a prohibited submission; neither setting automatically approves content.
           </p>
         </div>
         <QueryView query={terms} emptyTitle="No prohibited terms configured">
@@ -1047,6 +1051,7 @@ export function AdminCategories() {
                   <div />
                   <div>
                     <h3>{term.term}</h3>
+                    <StatusBadge value={term.severity} />
                     <StatusBadge value={term.active ? "ACTIVE" : "DISABLED"} />
                   </div>
                   <button
@@ -1069,7 +1074,8 @@ export function AdminCategories() {
             const input = e.currentTarget.elements.namedItem(
               "term",
             ) as HTMLInputElement;
-            createTerm.mutate(input.value);
+            const severity = (e.currentTarget.elements.namedItem("severity") as HTMLSelectElement).value;
+            createTerm.mutate({ term: input.value, severity });
             input.value = "";
           }}
         >
@@ -1078,6 +1084,7 @@ export function AdminCategories() {
             <span>Term or phrase</span>
             <input name="term" required minLength={2} maxLength={120} />
           </label>
+          <label className="field"><span>Enforcement</span><select name="severity"><option value="FLAG">Flag for human review</option><option value="BLOCK">Block submission</option></select></label>
           <SubmitButton pending={createTerm.isPending}>Add term</SubmitButton>
           {createTerm.error ? (
             <p className="field-error">{createTerm.error.message}</p>
@@ -1086,4 +1093,41 @@ export function AdminCategories() {
       </section>
     </div>
   );
+}
+
+export function AdminGrievances() {
+  const client = useQueryClient();
+  const query = useQuery({ queryKey: ["admin-grievances"], queryFn: () => api<any[]>("/api/admin/grievances"), refetchInterval: 30_000 });
+  const acknowledge = useMutation({ mutationFn: (id: string) => api(`/api/admin/grievances/${id}/acknowledge`, { method: "POST" }), onSuccess: () => void client.invalidateQueries({ queryKey: ["admin-grievances"] }) });
+  const resolve = useMutation({ mutationFn: ({ id, body }: { id: string; body: unknown }) => api(`/api/admin/grievances/${id}/resolve`, { method: "POST", ...jsonBody(body) }), onSuccess: () => void client.invalidateQueries({ queryKey: ["admin-grievances"] }) });
+  return <div><h2>Grievance and emergency-safety queue</h2><p className="lede">Ordered by statutory action target. Overdue cases show an alarm and urgent victim, child-safety, threat, and official-order reports remain separated by category and staff role.</p><QueryView query={query} emptyTitle="No open grievances">{(rows) => <div className="list">{rows.map((row: any) => <article className="panel form" key={row.id}>
+    <div className="split"><div><StatusBadge value={row.overdue ? "OVERDUE" : row.priority} /><h3>{row.publicReference}</h3></div><span>{row.category}</span></div>
+    <p><strong>{row.reason.replaceAll("_", " ")}</strong> · target {new Date(row.actionDueAt).toLocaleString()}</p><p>{row.targetUrl}</p><p>{row.details}</p>
+    {!row.acknowledgedAt ? <button className="button secondary" onClick={() => acknowledge.mutate(row.id)} disabled={acknowledge.isPending}>Acknowledge and assign to me</button> : <p>Acknowledged {new Date(row.acknowledgedAt).toLocaleString()}</p>}
+    <form className="form" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); resolve.mutate({ id: row.id, body: { outcome: form.get("outcome"), publicResponse: form.get("publicResponse"), internalReason: form.get("internalReason") } }); }}><label className="field"><span>Outcome</span><select name="outcome"><option value="RESOLVED">Resolved</option><option value="DISMISSED">Dismissed</option></select></label><label className="field"><span>Public response</span><textarea name="publicResponse" required minLength={3} /></label><label className="field"><span>Internal decision reason</span><textarea name="internalReason" required minLength={3} /></label><SubmitButton pending={resolve.isPending}>Resolve case</SubmitButton></form>
+  </article>)}</div>}</QueryView>{acknowledge.error ? <p className="field-error">{acknowledge.error.message}</p> : null}{resolve.error ? <p className="field-error">{resolve.error.message}</p> : null}</div>;
+}
+
+export function AdminCompliance() {
+  const { user } = useAuth();
+  const client = useQueryClient();
+  const superAdmin = Boolean(user?.roles.includes("SUPER_ADMIN"));
+  const canManageDomains = superAdmin || Boolean(user?.roles.includes("SUPPORT_AGENT"));
+  const readiness = useQuery({ queryKey: ["compliance-readiness"], queryFn: () => api<any>("/api/admin/compliance/readiness"), enabled: superAdmin });
+  const domains = useQuery({ queryKey: ["academic-domains"], queryFn: () => api<any[]>("/api/admin/academic-domains"), enabled: canManageDomains });
+  const providers = useQuery({ queryKey: ["service-providers"], queryFn: () => api<any[]>("/api/admin/service-providers"), enabled: superAdmin });
+  const holds = useQuery({ queryKey: ["legal-holds"], queryFn: () => api<any[]>("/api/admin/legal-holds"), enabled: superAdmin });
+  const access = useQuery({ queryKey: ["access-reviews"], queryFn: () => api<any>("/api/admin/access-reviews"), enabled: superAdmin });
+  const createDomain = useMutation({ mutationFn: (body: unknown) => api("/api/admin/academic-domains", { method: "POST", ...jsonBody(body) }), onSuccess: () => void client.invalidateQueries({ queryKey: ["academic-domains"] }) });
+  const reviewProvider = useMutation({ mutationFn: ({ id, body }: { id: string; body: unknown }) => api(`/api/admin/service-providers/${id}`, { method: "PATCH", ...jsonBody(body) }), onSuccess: () => { void client.invalidateQueries({ queryKey: ["service-providers"] }); void client.invalidateQueries({ queryKey: ["compliance-readiness"] }); } });
+  const createHold = useMutation({ mutationFn: (body: unknown) => api("/api/admin/legal-holds", { method: "POST", ...jsonBody(body) }), onSuccess: () => void client.invalidateQueries({ queryKey: ["legal-holds"] }) });
+  const reviewAccess = useMutation({ mutationFn: ({ id, body }: { id: string; body: unknown }) => api(`/api/admin/access-reviews/${id}`, { method: "POST", ...jsonBody(body) }), onSuccess: () => void client.invalidateQueries({ queryKey: ["access-reviews"] }) });
+  if (!canManageDomains) return <ErrorState error={new Error("This section is available to support and super administrators.")} />;
+  return <div className="stack"><div><h2>Compliance registers</h2><p className="lede">Changes are reasoned, attributed, time-stamped, and written to the immutable staff audit log.</p></div>
+    {superAdmin && readiness.data ? <section className="panel"><h3>Release readiness</h3><StatusBadge value={readiness.data.ready ? "READY" : "NOT_READY"} /><p>{readiness.data.academicDomains} active academic domains; incomplete providers: {readiness.data.incompleteProviders.join(", ") || "none"}.</p></section> : null}
+    <section><h3>Reviewed academic domains</h3>{domains.data?.map((domain: any) => <article className="list-item" key={domain.id}><div><strong>{domain.institutionName}</strong><p>{domain.domain} · source: <a href={domain.sourceUrl}>{domain.sourceUrl}</a></p></div><StatusBadge value={domain.active ? "ACTIVE" : "DISABLED"} /></article>)}<form className="panel form" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); createDomain.mutate({ domain: form.get("domain"), institutionName: form.get("institutionName"), sourceUrl: form.get("sourceUrl"), allowSubdomains: form.get("allowSubdomains") === "on" }); }}><h4>Add after official-source review</h4><label className="field"><span>Exact domain</span><input name="domain" required /></label><label className="field"><span>Institution</span><input name="institutionName" required /></label><label className="field"><span>Official source URL</span><input name="sourceUrl" type="url" required /></label><label className="checkbox-row"><input name="allowSubdomains" type="checkbox" /><span>Allow subdomains</span></label><SubmitButton pending={createDomain.isPending}>Add reviewed domain</SubmitButton>{createDomain.error ? <p className="field-error">{createDomain.error.message}</p> : null}</form></section>
+    {superAdmin ? <><section><h3>Service-provider reviews</h3>{providers.data?.map((provider: any) => <form className="panel form" key={provider.id} onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); reviewProvider.mutate({ id: provider.id, body: { region: form.get("region"), privacyUrl: form.get("privacyUrl"), contractStatus: form.get("contractStatus"), subprocessorReviewed: form.get("subprocessorReviewed") === "on", deletionReviewed: form.get("deletionReviewed") === "on", breachTermsReviewed: form.get("breachTermsReviewed") === "on", evidenceReference: form.get("evidenceReference"), reason: form.get("reason") } }); }}><h4>{provider.displayName}</h4><label className="field"><span>Processing region</span><input name="region" defaultValue={provider.region ?? ""} required /></label><label className="field"><span>Privacy URL</span><input name="privacyUrl" type="url" defaultValue={provider.privacyUrl ?? ""} required /></label><label className="field"><span>Contract status</span><select name="contractStatus" defaultValue={provider.contractStatus}><option>PENDING</option><option>APPROVED</option><option>REJECTED</option></select></label><label className="checkbox-row"><input name="subprocessorReviewed" type="checkbox" defaultChecked={provider.subprocessorReviewed} /><span>Subprocessors and transfers reviewed</span></label><label className="checkbox-row"><input name="deletionReviewed" type="checkbox" defaultChecked={provider.deletionReviewed} /><span>Deletion and retention reviewed</span></label><label className="checkbox-row"><input name="breachTermsReviewed" type="checkbox" defaultChecked={provider.breachTermsReviewed} /><span>Breach terms reviewed</span></label><label className="field"><span>Evidence reference</span><input name="evidenceReference" defaultValue={provider.evidenceReference ?? ""} required /></label><label className="field"><span>Review reason</span><input name="reason" required /></label><SubmitButton pending={reviewProvider.isPending}>Record review</SubmitButton></form>)}</section>
+    <section><h3>Legal holds</h3><p>Active holds override automated deletion until formally released.</p>{holds.data?.map((hold: any) => <article className="list-item" key={hold.id}><div><strong>{hold.targetType} {hold.targetId}</strong><p>{hold.reason}</p></div><StatusBadge value={hold.releasedAt ? "RELEASED" : "ACTIVE"} /></article>)}<form className="panel form" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); createHold.mutate({ targetType: form.get("targetType"), targetId: form.get("targetId"), reason: form.get("reason"), reviewAt: form.get("reviewAt") }); }}><h4>Create legal hold</h4><label className="field"><span>Target type</span><select name="targetType"><option>USER</option><option>LISTING</option><option>REPORT</option><option>TRANSACTION</option><option>CONVERSATION</option></select></label><label className="field"><span>Target UUID</span><input name="targetId" required /></label><label className="field"><span>Reason</span><textarea name="reason" minLength={10} required /></label><label className="field"><span>Review date</span><input name="reviewAt" type="datetime-local" required /></label><SubmitButton pending={createHold.isPending}>Create hold</SubmitButton></form></section>
+    <section><h3>Staff access review</h3>{access.data?.staff?.map((member: any) => <form className="list-item" key={`${member.userId}-${member.role}`} onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); reviewAccess.mutate({ id: member.userId, body: { outcome: form.get("outcome"), reason: form.get("reason") } }); }}><div><strong>{member.displayName}</strong><p>{member.email} · {member.role}</p></div><select name="outcome"><option>RETAIN</option><option>CHANGE_REQUIRED</option><option>REMOVE</option></select><input name="reason" aria-label="Access review reason" required /><button className="button small secondary">Record review</button></form>)}</section></> : null}
+  </div>;
 }

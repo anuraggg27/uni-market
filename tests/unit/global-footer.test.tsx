@@ -46,6 +46,13 @@ describe("global footer", () => {
       "/profile",
       "/support",
       "/settings",
+      "/terms",
+      "/privacy",
+      "/community-rules",
+      "/prohibited-items",
+      "/seller-policy",
+      "/grievance",
+      "/marketplace-disclosure",
     ];
     const hrefs = within(footer)
       .getAllByRole("link")
@@ -53,7 +60,8 @@ describe("global footer", () => {
     for (const destination of supportedDestinations) {
       expect(hrefs).toContain(destination);
     }
-    expect(within(footer).queryByText("Privacy")).not.toBeInTheDocument();
-    expect(within(footer).queryByText("Terms")).not.toBeInTheDocument();
+    expect(within(footer).getByText(/not affiliated with, endorsed by/)).toBeVisible();
+    expect(within(footer).getByRole("link", { name: "Terms" })).toBeVisible();
+    expect(within(footer).getAllByRole("link", { name: "Privacy" })).toHaveLength(2);
   });
 });

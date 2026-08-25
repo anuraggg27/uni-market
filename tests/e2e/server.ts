@@ -26,6 +26,11 @@ for (const [sortOrder, [name, slug]] of [
   ["Cycles", "cycles"],
 ].entries())
   await db.insert(schema.categories).values({ name, slug, sortOrder });
+await db.insert(schema.academicDomains).values({
+  domain: "students.example.edu",
+  institutionName: "E2E University",
+  sourceUrl: "https://students.example.edu",
+});
 const verifier: GoogleVerifier = {
   async verify(credential) {
     const id = credential

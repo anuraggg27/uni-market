@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { idSchema, messageSchema } from "@campus-market/shared";
 import type { Database } from "../db/client.js";
+import type { AppConfig } from "../config.js";
 import {
   blocks,
   conversations,
@@ -11,12 +12,14 @@ import {
   listingImages,
   listings,
   messages,
+  messageRiskEvents,
   notifications,
   users,
 } from "../db/schema.js";
 import { requireAuth, requireVerified } from "../middleware/auth.js";
 import { AppError, asyncRoute } from "../lib/errors.js";
 import type { StorageService } from "../services/storage.js";
+import { createScamConfirmation, scamRiskCodes, verifyScamConfirmation } from "../services/scam-risk.js";
 
 async function assertConversationMember(
   db: Database,
@@ -70,6 +73,7 @@ async function usersBlocked(
 export function communicationRouter(
   db: Database,
   storage: StorageService,
+  config: AppConfig,
   onMessage?: (conversationId: string, message: unknown) => void,
 ): Router {
   const router = Router();
@@ -380,6 +384,10 @@ export function communicationRouter(
         res.json({ data: existing });
         return;
       }
+      const riskCodes = scamRiskCodes(input.body);
+      if (riskCodes.length && !verifyScamConfirmation(input.safetyConfirmationToken, req.auth!.userId, input.clientId, input.body, riskCodes, config.SESSION_SECRET)) {
+        throw new AppError(409, 'SCAM_WARNING_REQUIRED', 'Review the safety warning before sending this message', { riskCodes, confirmationToken: createScamConfirmation(req.auth!.userId, input.clientId, input.body, riskCodes, config.SESSION_SECRET) });
+      }
       const created = await db.transaction(async (tx) => {
         const message = (
           await tx
@@ -392,6 +400,7 @@ export function communicationRouter(
             })
             .returning()
         )[0]!;
+        if (riskCodes.length) await tx.insert(messageRiskEvents).values({ messageId: message.id, userId: req.auth!.userId, riskCodes, acknowledgedAt: new Date() });
         await tx
           .update(conversations)
           .set({ lastMessageAt: message.createdAt })

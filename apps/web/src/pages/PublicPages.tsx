@@ -446,7 +446,7 @@ export function BrowsePage() {
               }
             >
               <option value="">Any condition</option>
-              {["NEW", "LIKE_NEW", "GOOD", "FAIR", "POOR"].map((value) => (
+              {["LIKE_NEW", "GOOD", "FAIR", "POOR"].map((value) => (
                 <option key={value} value={value}>
                   {value.replaceAll("_", " ")}
                 </option>
@@ -599,7 +599,7 @@ export function BrowsePage() {
                   }
                 >
                   <option value="">Any</option>
-                  {["NEW", "LIKE_NEW", "GOOD", "FAIR", "POOR"].map((value) => (
+                  {["LIKE_NEW", "GOOD", "FAIR", "POOR"].map((value) => (
                     <option key={value} value={value}>
                       {value.replaceAll("_", " ")}
                     </option>
@@ -666,6 +666,11 @@ export function BrowsePage() {
           </div>
         ) : null}
       </form>
+      <aside className="browse-ranking-note">
+        <SlidersHorizontal aria-hidden="true" />
+        <p><strong>How results are ordered</strong><span>Newest uses approval time, price uses the listed amount, and popular uses views and favourites. No paid placement or university preference.</span></p>
+        <Link to="/marketplace-disclosure">Learn more</Link>
+      </aside>
 
       {listings.isLoading ? (
         <Loading variant="browse" label="Loading products" />
@@ -789,6 +794,7 @@ export function ListingPage() {
   const owner = user?.id === item.sellerId;
   const images = Array.isArray(item.images) ? item.images : [];
   const activeImageUrl = images[activeImage]?.url as string | undefined;
+  const activeImageSynthetic = images[activeImage]?.syntheticStatus === "SYNTHETIC_OR_MATERIALLY_ALTERED";
   const listedAt = new Date(item.approvedAt ?? item.createdAt);
   const listedLabel = Number.isNaN(listedAt.getTime())
     ? null
@@ -895,6 +901,7 @@ export function ListingPage() {
                 <span className="text-sm">Image unavailable</span>
               </div>
             )}
+            {activeImageSynthetic ? <span className="product-synthetic-label"><Sparkles aria-hidden="true" /> AI-generated or materially altered image</span> : null}
           </div>
 
           {images.length > 1 ? (
@@ -980,6 +987,11 @@ export function ListingPage() {
               Open to reasonable offers
             </p>
           ) : null}
+          <aside className="marketplace-role-note">
+            <ShieldCheck aria-hidden="true" />
+            <p><strong>Sold directly by {sellerName}</strong><span>Uni Market does not handle payment, escrow, shipping, guarantees, or returns. Inspect the item and agree terms with the seller.</span></p>
+            <Link to="/marketplace-disclosure">Details</Link>
+          </aside>
 
           <section
             className="mt-8 border-y border-line py-6"
@@ -1507,12 +1519,7 @@ export function LoginPage() {
     <div className="page narrow">
       <div className="panel stack-lg">
         <div>
-          <p className="eyebrow">Welcome</p>
           <h1>Sign in to Uni Market</h1>
-          <p className="lede">
-            Continue with any verified Google account. No university email is
-            required.
-          </p>
         </div>
         {clientId ? (
           <div id="google-button" />
@@ -1533,7 +1540,6 @@ export function LoginPage() {
             {error}
           </p>
         ) : null}
-        <SafetyReminder compact />
         <Link to="/browse">Continue browsing as a guest</Link>
       </div>
     </div>

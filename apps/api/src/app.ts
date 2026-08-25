@@ -22,6 +22,10 @@ import { uploadsRouter } from "./routes/uploads.js";
 import { communicationRouter } from "./routes/communication.js";
 import { reputationRouter, transactionsRouter } from "./routes/transactions.js";
 import { adminRouter, userOperationsRouter } from "./routes/operations.js";
+import { eligibilityRouter } from "./routes/eligibility.js";
+import { grievanceAdminRouter, grievanceRouter } from "./routes/grievances.js";
+import { complianceAdminRouter } from "./routes/compliance-admin.js";
+import { privacyRouter } from "./routes/privacy.js";
 
 function r2ConnectSources(config: AppConfig): string[] {
   const endpoint =
@@ -163,6 +167,9 @@ export function createApp(deps: {
     }),
   );
   app.use("/api/auth", authRouter(db, config, googleVerifier));
+  app.use("/api", eligibilityRouter(db, config));
+  app.use("/api", grievanceRouter(db, config));
+  app.use("/api", privacyRouter(db, config));
   app.use(
     "/api/phone/send",
     adaptiveTurnstile(config, { threshold: 3, windowMs: 60 * 60_000 }),
@@ -199,12 +206,14 @@ export function createApp(deps: {
         req.method !== "POST" ||
         !/^\/conversations\/[^/]+\/messages$/.test(req.path),
     }),
-    communicationRouter(db, storage, deps.onMessage),
+    communicationRouter(db, storage, config, deps.onMessage),
   );
   app.use("/api", transactionsRouter(db));
   app.use("/api", reputationRouter(db));
-  app.use("/api", userOperationsRouter(db));
-  app.use("/api/admin", adminRouter(db));
+  app.use("/api", userOperationsRouter(db, config));
+  app.use("/api/admin", grievanceAdminRouter(db, config));
+  app.use("/api/admin", complianceAdminRouter(db));
+  app.use("/api/admin", adminRouter(db, config));
   if (config.NODE_ENV === "production") {
     const webRoot = fileURLToPath(new URL("../../web/dist", import.meta.url));
     app.use(express.static(webRoot, { index: false, maxAge: "1h" }));

@@ -2,7 +2,7 @@
   "rules": [
     {
       "allowed": {
-        "origins": ["https://uni-market.shubhang.dev"],
+        "origins": ["https://uni.rocks"],
         "methods": ["GET", "PUT", "HEAD"],
         "headers": [
           "Content-Type",

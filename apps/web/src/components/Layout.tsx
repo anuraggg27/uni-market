@@ -68,19 +68,35 @@ export function Layout() {
                 <h2>Account &amp; help</h2>
                 <Link to="/profile">Profile</Link>
                 <Link to="/support">Support</Link>
+                <Link to="/grievance">Report a safety or legal issue</Link>
                 <Link to="/settings">Settings</Link>
+              </div>
+              <div>
+                <h2>Legal</h2>
+                <Link to="/terms">Terms</Link>
+                <Link to="/privacy">Privacy</Link>
+                <Link to="/community-rules">Community rules</Link>
+                <Link to="/prohibited-items">Prohibited items</Link>
+                <Link to="/seller-policy">Seller policy</Link>
               </div>
             </nav>
           </div>
 
           <div className="site-footer-utility">
-            <span>� {new Date().getFullYear()} Uni Market</span>
+            <span>© {new Date().getFullYear()} Uni Market</span>
             <nav aria-label="Footer utility">
-              <Link to="/support">Support</Link>
-              <Link to="/leaderboard">Top sellers</Link>
-              <Link to="/settings">Settings</Link>
+              <Link to="/grievance">Grievance officer</Link>
+              <Link to="/marketplace-disclosure">Marketplace disclosure</Link>
+              <Link to="/privacy">Privacy</Link>
             </nav>
           </div>
+
+          <p className="site-footer-disclaimer">
+            Uni Market is an independent marketplace. It is not affiliated with,
+            endorsed by, sponsored by, or operated by any university, college, or
+            educational institution. Institution names and email domains are used
+            only to verify eligibility.
+          </p>
 
           <Link className="site-footer-wordmark" to="/" aria-label="Uni Market home">
             <span>Uni</span><span>Market</span>

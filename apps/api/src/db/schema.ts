@@ -26,14 +26,28 @@ export const users = pgTable('users', {
   graduationYear: integer('graduation_year'),
   phoneE164: text('phone_e164'),
   phoneVerifiedAt: timestamp('phone_verified_at', { withTimezone: true }),
+  studentEmailCiphertext: text('student_email_ciphertext'),
+  studentEmailHash: text('student_email_hash'),
+  studentEmailDomain: text('student_email_domain'),
+  studentEmailVerifiedAt: timestamp('student_email_verified_at', { withTimezone: true }),
+  studentEmailExpiresAt: timestamp('student_email_expires_at', { withTimezone: true }),
+  adultAttestedAt: timestamp('adult_attested_at', { withTimezone: true }),
   onboardingComplete: boolean('onboarding_complete').default(false).notNull(),
   suspendedAt: timestamp('suspended_at', { withTimezone: true }),
   fraudInvestigation: boolean('fraud_investigation').default(false).notNull(),
   completedSales: integer('completed_sales').default(0).notNull(),
   lastActiveAt: timestamp('last_active_at', { withTimezone: true }).defaultNow().notNull(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  closedAt: timestamp('closed_at', { withTimezone: true }),
+  purgeAfter: timestamp('purge_after', { withTimezone: true }),
+  policyReminderSentAt: timestamp('policy_reminder_sent_at', { withTimezone: true }),
   ...timestamps
-}, (table) => [uniqueIndex('users_email_lower_idx').on(sql`lower(${table.email})`), uniqueIndex('users_verified_phone_idx').on(table.phoneE164).where(sql`${table.phoneVerifiedAt} is not null`)]);
+}, (table) => [
+  uniqueIndex('users_email_lower_idx').on(sql`lower(${table.email})`),
+  uniqueIndex('users_verified_phone_idx').on(table.phoneE164).where(sql`${table.phoneVerifiedAt} is not null`),
+  uniqueIndex('users_verified_student_email_idx').on(table.studentEmailHash).where(sql`${table.studentEmailVerifiedAt} is not null`),
+  index('users_purge_idx').on(table.purgeAfter)
+]);
 
 export const oauthAccounts = pgTable('oauth_accounts', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -54,6 +68,7 @@ export const sessions = pgTable('sessions', {
   ipHash: text('ip_hash'),
   userAgent: text('user_agent'),
   revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  staffVerifiedAt: timestamp('staff_verified_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
 }, (table) => [index('sessions_user_idx').on(table.userId), index('sessions_expiry_idx').on(table.expiresAt)]);
 
@@ -88,6 +103,50 @@ export const categories = pgTable('categories', {
   ...timestamps
 });
 
+export const academicDomains = pgTable('academic_domains', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  domain: text('domain').notNull().unique(),
+  institutionName: text('institution_name').notNull(),
+  sourceUrl: text('source_url').notNull(),
+  allowSubdomains: boolean('allow_subdomains').default(false).notNull(),
+  active: boolean('active').default(true).notNull(),
+  reviewedBy: uuid('reviewed_by').references(() => users.id),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }).defaultNow().notNull(),
+  ...timestamps
+}, (table) => [index('academic_domains_active_idx').on(table.active, table.domain)]);
+
+export const studentEmailVerifications = pgTable('student_email_verifications', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  academicDomainId: uuid('academic_domain_id').references(() => academicDomains.id).notNull(),
+  emailCiphertext: text('email_ciphertext').notNull(),
+  emailHash: text('email_hash').notNull(),
+  otpHash: text('otp_hash').notNull(),
+  attempts: integer('attempts').default(0).notNull(),
+  ipHash: text('ip_hash').notNull(),
+  sentAt: timestamp('sent_at', { withTimezone: true }).defaultNow().notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  usedAt: timestamp('used_at', { withTimezone: true }),
+  invalidatedAt: timestamp('invalidated_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+}, (table) => [
+  index('student_email_verifications_user_idx').on(table.userId, table.createdAt),
+  index('student_email_verifications_hash_idx').on(table.emailHash, table.sentAt)
+]);
+
+export const policyAcceptances = pgTable('policy_acceptances', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  policy: text('policy').notNull(),
+  version: text('version').notNull(),
+  locale: text('locale').default('en-IN').notNull(),
+  source: text('source').notNull(),
+  acceptedAt: timestamp('accepted_at', { withTimezone: true }).defaultNow().notNull()
+}, (table) => [
+  uniqueIndex('policy_acceptance_once_idx').on(table.userId, table.policy, table.version),
+  index('policy_acceptance_user_idx').on(table.userId, table.acceptedAt)
+]);
+
 export const listings = pgTable('listings', {
   id: uuid('id').defaultRandom().primaryKey(),
   sellerId: uuid('seller_id').references(() => users.id).notNull(),
@@ -105,6 +164,9 @@ export const listings = pgTable('listings', {
   brand: text('brand'),
   defects: text('defects'),
   meetupPoint: text('meetup_point'),
+  sellerAttestedAt: timestamp('seller_attested_at', { withTimezone: true }),
+  sellerPolicyVersion: text('seller_policy_version'),
+  moderationRiskCodes: text('moderation_risk_codes').array().default(sql`'{}'::text[]`).notNull(),
   moderationState: moderationEnum('moderation_state').default('PENDING').notNull(),
   lifecycleState: lifecycleEnum('lifecycle_state').default('DRAFT').notNull(),
   rejectionReason: text('rejection_reason'),
@@ -135,6 +197,11 @@ export const listingImages = pgTable('listing_images', {
   byteSize: integer('byte_size').notNull(),
   width: integer('width'),
   height: integer('height'),
+  syntheticStatus: text('synthetic_status').default('UNKNOWN').notNull(),
+  syntheticDeclaredAt: timestamp('synthetic_declared_at', { withTimezone: true }),
+  provenanceId: uuid('provenance_id').defaultRandom().notNull(),
+  sourceSha256: text('source_sha256'),
+  sourceProvenanceDetected: boolean('source_provenance_detected').default(false).notNull(),
   position: integer('position').notNull(),
   finalizedAt: timestamp('finalized_at', { withTimezone: true }),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
@@ -210,18 +277,43 @@ export const blocks = pgTable('blocks', {
 
 export const reports = pgTable('reports', {
   id: uuid('id').defaultRandom().primaryKey(),
-  reporterId: uuid('reporter_id').references(() => users.id).notNull(),
+  reporterId: uuid('reporter_id').references(() => users.id),
+  reporterEmailCiphertext: text('reporter_email_ciphertext'),
+  publicReference: text('public_reference').notNull().unique(),
+  trackingHash: text('tracking_hash').notNull(),
+  category: text('category').notNull(),
+  priority: text('priority').default('STANDARD').notNull(),
+  affectedPerson: boolean('affected_person').default(false).notNull(),
   targetType: text('target_type').notNull(),
-  targetId: uuid('target_id').notNull(),
+  targetId: uuid('target_id'),
+  targetUrl: text('target_url'),
   reason: text('reason').notNull(),
   details: text('details'),
   conversationContextStart: timestamp('conversation_context_start', { withTimezone: true }),
   conversationContextEnd: timestamp('conversation_context_end', { withTimezone: true }),
   status: reportStatusEnum('status').default('OPEN').notNull(),
   assignedTo: uuid('assigned_to').references(() => users.id),
+  acknowledgeDueAt: timestamp('acknowledge_due_at', { withTimezone: true }).notNull(),
+  actionDueAt: timestamp('action_due_at', { withTimezone: true }).notNull(),
+  acknowledgedAt: timestamp('acknowledged_at', { withTimezone: true }),
+  publicResponse: text('public_response'),
+  appealedAt: timestamp('appealed_at', { withTimezone: true }),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
   ...timestamps
-}, (table) => [index('reports_queue_idx').on(table.status, table.createdAt), uniqueIndex('reports_dedupe_idx').on(table.reporterId, table.targetType, table.targetId, table.reason).where(sql`${table.status} in ('OPEN','INVESTIGATING')`)]);
+}, (table) => [
+  index('reports_queue_idx').on(table.status, table.actionDueAt),
+  uniqueIndex('reports_dedupe_idx').on(table.reporterId, table.targetType, table.targetId, table.reason).where(sql`${table.reporterId} is not null and ${table.targetId} is not null and ${table.status} in ('OPEN','INVESTIGATING')`)
+]);
+
+export const reportEvents = pgTable('report_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  reportId: uuid('report_id').references(() => reports.id, { onDelete: 'cascade' }).notNull(),
+  actorUserId: uuid('actor_user_id').references(() => users.id),
+  eventType: text('event_type').notNull(),
+  publicMessage: text('public_message'),
+  internalMessage: text('internal_message'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+}, (table) => [index('report_events_case_idx').on(table.reportId, table.createdAt)]);
 
 export const notifications = pgTable('notifications', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -277,9 +369,11 @@ export const adminAuditLogs = pgTable('admin_audit_logs', {
 
 export const emailOutbox = pgTable('email_outbox', {
   id: uuid('id').defaultRandom().primaryKey(),
-  recipientUserId: uuid('recipient_user_id').references(() => users.id).notNull(),
+  recipientUserId: uuid('recipient_user_id').references(() => users.id),
+  recipientEmailCiphertext: text('recipient_email_ciphertext'),
   template: text('template').notNull(),
   payload: jsonb('payload').notNull(),
+  encryptedPayload: text('encrypted_payload'),
   dedupeKey: text('dedupe_key').notNull().unique(),
   attempts: integer('attempts').default(0).notNull(),
   availableAt: timestamp('available_at', { withTimezone: true }).defaultNow().notNull(),
@@ -304,3 +398,62 @@ export const moderationNotes = pgTable('moderation_notes', {
   note: text('note').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
 });
+
+export const messageRiskEvents = pgTable('message_risk_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  messageId: uuid('message_id').references(() => messages.id, { onDelete: 'cascade' }).notNull(),
+  userId: uuid('user_id').references(() => users.id).notNull(),
+  riskCodes: text('risk_codes').array().notNull(),
+  acknowledgedAt: timestamp('acknowledged_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+}, (table) => [index('message_risk_user_idx').on(table.userId, table.createdAt)]);
+
+export const legalHolds = pgTable('legal_holds', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  targetType: text('target_type').notNull(),
+  targetId: uuid('target_id').notNull(),
+  reason: text('reason').notNull(),
+  createdBy: uuid('created_by').references(() => users.id).notNull(),
+  releasedBy: uuid('released_by').references(() => users.id),
+  releasedAt: timestamp('released_at', { withTimezone: true }),
+  reviewAt: timestamp('review_at', { withTimezone: true }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
+}, (table) => [index('legal_holds_target_idx').on(table.targetType, table.targetId, table.releasedAt)]);
+
+export const retentionRuns = pgTable('retention_runs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  mode: text('mode').notNull(),
+  status: text('status').notNull(),
+  counts: jsonb('counts').notNull(),
+  error: text('error'),
+  startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
+  completedAt: timestamp('completed_at', { withTimezone: true })
+});
+
+export const serviceProviderReviews = pgTable('service_provider_reviews', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  providerKey: text('provider_key').notNull().unique(),
+  displayName: text('display_name').notNull(),
+  purpose: text('purpose').notNull(),
+  dataCategories: text('data_categories').array().notNull(),
+  region: text('region').notNull(),
+  privacyUrl: text('privacy_url').notNull(),
+  contractStatus: text('contract_status').default('PENDING').notNull(),
+  subprocessorReviewed: boolean('subprocessor_reviewed').default(false).notNull(),
+  deletionReviewed: boolean('deletion_reviewed').default(false).notNull(),
+  breachTermsReviewed: boolean('breach_terms_reviewed').default(false).notNull(),
+  evidenceReference: text('evidence_reference'),
+  reviewedBy: uuid('reviewed_by').references(() => users.id),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  ...timestamps
+});
+
+export const staffAccessReviews = pgTable('staff_access_reviews', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  subjectUserId: uuid('subject_user_id').references(() => users.id).notNull(),
+  roles: text('roles').array().notNull(),
+  outcome: text('outcome').notNull(),
+  reason: text('reason').notNull(),
+  reviewedBy: uuid('reviewed_by').references(() => users.id).notNull(),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }).defaultNow().notNull()
+}, (table) => [index('staff_access_review_subject_idx').on(table.subjectUserId, table.reviewedAt)]);

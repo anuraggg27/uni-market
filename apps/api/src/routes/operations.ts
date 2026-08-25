@@ -16,6 +16,7 @@ import {
 import { idSchema, reportReasons } from "@campus-market/shared";
 import { z } from "zod";
 import type { Database } from "../db/client.js";
+import type { AppConfig } from "../config.js";
 import {
   adminAuditLogs,
   categories,
@@ -28,7 +29,9 @@ import {
   phoneVerifications,
   prohibitedTerms,
   reports,
+  reportEvents,
   reviews,
+  sessions,
   supportMessages,
   supportTickets,
   transactions,
@@ -39,8 +42,10 @@ import {
   requireAuth,
   requireRole,
   requireVerified,
+  requireStaffStepUp,
 } from "../middleware/auth.js";
-import { sha256 } from "../lib/crypto.js";
+import { encryptText, sha256 } from "../lib/crypto.js";
+import { grievanceClock, grievanceTracking } from "../lib/grievance.js";
 import { AppError, asyncRoute } from "../lib/errors.js";
 
 const reportSchema = z.object({
@@ -73,7 +78,7 @@ const ticketSchema = z.object({
   referenceId: idSchema.nullable().optional(),
 });
 
-export function userOperationsRouter(db: Database): Router {
+export function userOperationsRouter(db: Database, config: AppConfig): Router {
   const router = Router();
   router.post(
     "/reports",
@@ -189,11 +194,21 @@ export function userOperationsRouter(db: Database): Router {
           );
       }
       try {
+        const tracking = grievanceTracking(config.SESSION_SECRET);
+        const clock = grievanceClock(input.reason);
+        const reporter = (await db.select({ email: users.email }).from(users).where(eq(users.id, req.auth!.userId)).limit(1))[0]!;
         const report = (
           await db
             .insert(reports)
             .values({
               reporterId: req.auth!.userId,
+              reporterEmailCiphertext: encryptText(reporter.email, config.DATA_ENCRYPTION_KEY),
+              publicReference: tracking.publicReference,
+              trackingHash: tracking.trackingHash,
+              category: clock.category,
+              priority: clock.priority,
+              acknowledgeDueAt: clock.acknowledgeDueAt,
+              actionDueAt: clock.actionDueAt,
               targetType: input.targetType,
               targetId: input.targetId,
               reason: input.reason,
@@ -209,7 +224,7 @@ export function userOperationsRouter(db: Database): Router {
             })
             .returning()
         )[0]!;
-        res.status(201).json({ data: report });
+        res.status(201).json({ data: { ...report, reporterEmailCiphertext: undefined, trackingHash: undefined, trackingSecret: tracking.trackingSecret } });
       } catch (error: any) {
         if (
           error?.code === "23505" ||
@@ -493,8 +508,9 @@ async function audit(
   });
 }
 
-export function adminRouter(db: Database): Router {
+export function adminRouter(db: Database, config: AppConfig): Router {
   const router = Router();
+  router.use(requireStaffStepUp);
   const moderation = requireRole("MODERATOR", "SUPER_ADMIN");
   const support = requireRole("SUPPORT_AGENT", "SUPER_ADMIN");
   const admin = requireRole("SUPER_ADMIN");
@@ -837,15 +853,14 @@ export function adminRouter(db: Database): Router {
   router.get(
     "/reports",
     moderation,
-    asyncRoute(async (_req, res) =>
-      res.json({
-        data: await db
+    asyncRoute(async (_req, res) => {
+      const rows = await db
           .select()
           .from(reports)
           .where(inArray(reports.status, ["OPEN", "INVESTIGATING"]))
-          .orderBy(asc(reports.createdAt)),
-      }),
-    ),
+          .orderBy(asc(reports.actionDueAt));
+      res.json({ data: rows.map((row) => ({ ...row, trackingHash: undefined, reporterEmailCiphertext: undefined })) });
+    }),
   );
   router.get(
     "/reports/:id",
@@ -860,6 +875,7 @@ export function adminRouter(db: Database): Router {
       let context: unknown[] = [];
       if (
         report.targetType === "CONVERSATION" &&
+        report.targetId &&
         report.conversationContextStart &&
         report.conversationContextEnd
       ) {
@@ -886,7 +902,7 @@ export function adminRouter(db: Database): Router {
           internalReason: "Report investigation",
         });
       }
-      res.json({ data: { ...report, context } });
+      res.json({ data: { ...report, trackingHash: undefined, reporterEmailCiphertext: undefined, context } });
     }),
   );
   router.post(
@@ -921,6 +937,7 @@ export function adminRouter(db: Database): Router {
         newState: { status: outcome },
         internalReason: reason,
       });
+      await db.insert(reportEvents).values({ reportId: id, actorUserId: req.auth!.userId, eventType: outcome, publicMessage: reason });
       res.json({ data: updated });
     }),
   );
@@ -1095,6 +1112,8 @@ export function adminRouter(db: Database): Router {
         await tx
           .insert(userRoles)
           .values(roles.map((role) => ({ userId: id, role })));
+        await tx.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.userId, id));
+        await tx.insert(notifications).values({ userId: id, type: 'MODERATION_WARNING', title: 'Staff access changed', body: 'Your account permissions changed. Sign in again to continue.', href: '/login' });
       });
       await audit(db, req, {
         action: "USER_ROLES_UPDATE",
@@ -1317,15 +1336,25 @@ export function adminRouter(db: Database): Router {
           "TICKET_FORBIDDEN",
           "Ticket is not assigned to you",
         );
+      const ticketOwner = (await db.select({ email: users.email }).from(users).where(eq(users.id, ticket.userId)).limit(1))[0]!;
+      const tracking = grievanceTracking(config.SESSION_SECRET);
+      const clock = grievanceClock('OTHER');
       const report = (
         await db
           .insert(reports)
           .values({
-            reporterId: req.auth!.userId,
+            reporterId: ticket.userId,
+            reporterEmailCiphertext: encryptText(ticketOwner.email, config.DATA_ENCRYPTION_KEY),
+            publicReference: tracking.publicReference,
+            trackingHash: tracking.trackingHash,
+            category: clock.category,
+            priority: clock.priority,
             targetType: "SUPPORT_TICKET",
             targetId: id,
             reason: "OTHER",
             details: reason,
+            acknowledgeDueAt: clock.acknowledgeDueAt,
+            actionDueAt: clock.actionDueAt,
           })
           .returning()
       )[0]!;
@@ -1445,13 +1474,13 @@ export function adminRouter(db: Database): Router {
     "/prohibited-terms",
     admin,
     asyncRoute(async (req, res) => {
-      const { term } = z
-        .object({ term: z.string().trim().toLowerCase().min(2).max(120) })
+      const { term, severity } = z
+        .object({ term: z.string().trim().toLowerCase().min(2).max(120), severity: z.enum(['FLAG', 'BLOCK']).default('FLAG') })
         .parse(req.body);
       const created = (
         await db
           .insert(prohibitedTerms)
-          .values({ term })
+          .values({ term, severity })
           .onConflictDoNothing()
           .returning()
       )[0];
@@ -1476,7 +1505,7 @@ export function adminRouter(db: Database): Router {
     admin,
     asyncRoute(async (req, res) => {
       const id = idSchema.parse(req.params.id);
-      const { active } = z.object({ active: z.boolean() }).parse(req.body);
+      const input = z.object({ active: z.boolean().optional(), severity: z.enum(['FLAG', 'BLOCK']).optional() }).refine((value) => value.active !== undefined || value.severity !== undefined).parse(req.body);
       const previous = (
         await db
           .select()
@@ -1489,7 +1518,7 @@ export function adminRouter(db: Database): Router {
       const updated = (
         await db
           .update(prohibitedTerms)
-          .set({ active })
+          .set(input)
           .where(eq(prohibitedTerms.id, id))
           .returning()
       )[0]!;

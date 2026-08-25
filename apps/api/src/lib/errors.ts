@@ -23,7 +23,7 @@ export const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
     return;
   }
   if (error instanceof AppError) {
-    res.status(error.status).json({ error: { code: error.code, message: error.message, requestId: req.requestId } });
+    res.status(error.status).json({ error: { code: error.code, message: error.message, ...(error.details === undefined ? {} : { details: error.details }), requestId: req.requestId } });
     return;
   }
   req.log?.error({ err: error, requestId: req.requestId }, 'unhandled request error');

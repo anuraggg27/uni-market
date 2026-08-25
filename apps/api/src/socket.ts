@@ -1,13 +1,15 @@
 import { parse as parseCookie } from 'cookie';
-import { and, eq, gt, isNull, ne, or } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull, ne, or } from 'drizzle-orm';
 import type { Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
 import { messageSchema } from '@campus-market/shared';
 import type { AppConfig } from './config.js';
 import type { Database } from './db/client.js';
-import { blocks, conversations, emailOutbox, messages, notifications, sessions, users } from './db/schema.js';
+import { academicDomains, blocks, conversations, emailOutbox, messageRiskEvents, messages, notifications, policyAcceptances, sessions, users } from './db/schema.js';
 import { sha256 } from './lib/crypto.js';
 import { logger } from './lib/logger.js';
+import { currentPolicyVersion, requiredOnboardingPolicies } from '@campus-market/shared';
+import { createScamConfirmation, scamRiskCodes, verifyScamConfirmation } from './services/scam-risk.js';
 
 export function attachSocket(server: HttpServer, db: Database, config: AppConfig): Server {
   const io = new Server(server, { cors: { origin: config.CLIENT_URL, credentials: true }, maxHttpBufferSize: 20_000, transports: ['websocket', 'polling'] });
@@ -16,8 +18,13 @@ export function attachSocket(server: HttpServer, db: Database, config: AppConfig
     try {
       const raw = parseCookie(socket.handshake.headers.cookie ?? '').campus_session;
       if (!raw) return next(new Error('Authentication required'));
-      const row = (await db.select({ userId: sessions.userId, suspendedAt: users.suspendedAt, phoneVerifiedAt: users.phoneVerifiedAt }).from(sessions).innerJoin(users, eq(users.id, sessions.userId)).where(and(eq(sessions.tokenHash, sha256(`${raw}:${config.SESSION_SECRET}`)), gt(sessions.expiresAt, new Date()), isNull(sessions.revokedAt))).limit(1))[0];
-      if (!row || row.suspendedAt || !row.phoneVerifiedAt) return next(new Error('Account cannot use messaging'));
+      const row = (await db.select({ userId: sessions.userId, suspendedAt: users.suspendedAt, phoneVerifiedAt: users.phoneVerifiedAt, studentEmailDomain: users.studentEmailDomain, studentEmailVerifiedAt: users.studentEmailVerifiedAt, studentEmailExpiresAt: users.studentEmailExpiresAt, adultAttestedAt: users.adultAttestedAt }).from(sessions).innerJoin(users, eq(users.id, sessions.userId)).where(and(eq(sessions.tokenHash, sha256(`${raw}:${config.SESSION_SECRET}`)), gt(sessions.expiresAt, new Date()), isNull(sessions.revokedAt), isNull(users.closedAt))).limit(1))[0];
+      if (!row || row.suspendedAt || !row.phoneVerifiedAt || !row.studentEmailDomain || !row.studentEmailVerifiedAt || !row.studentEmailExpiresAt || row.studentEmailExpiresAt <= new Date() || !row.adultAttestedAt) return next(new Error('Account cannot use messaging'));
+      const [domain, acceptances] = await Promise.all([
+        db.select({ id: academicDomains.id }).from(academicDomains).where(and(eq(academicDomains.domain, row.studentEmailDomain), eq(academicDomains.active, true))).limit(1),
+        db.select({ policy: policyAcceptances.policy }).from(policyAcceptances).where(and(eq(policyAcceptances.userId, row.userId), eq(policyAcceptances.version, currentPolicyVersion), inArray(policyAcceptances.policy, [...requiredOnboardingPolicies]))),
+      ]);
+      if (!domain.length || new Set(acceptances.map(({ policy }) => policy)).size !== requiredOnboardingPolicies.length) return next(new Error('Account cannot use messaging'));
       socket.data.userId = row.userId; next();
     } catch { next(new Error('Authentication failed')); }
   });
@@ -52,8 +59,11 @@ export function attachSocket(server: HttpServer, db: Database, config: AppConfig
         if (blocked) return acknowledge?.({ ok: false, error: 'Blocked' });
         const existing = (await db.select().from(messages).where(and(eq(messages.senderId, userId), eq(messages.clientId, parsed.clientId))).limit(1))[0];
         if (existing) return acknowledge?.({ ok: true, data: existing });
+        const riskCodes = scamRiskCodes(parsed.body);
+        if (riskCodes.length && !verifyScamConfirmation(parsed.safetyConfirmationToken, userId, parsed.clientId, parsed.body, riskCodes, config.SESSION_SECRET)) return acknowledge?.({ ok: false, warning: { riskCodes, confirmationToken: createScamConfirmation(userId, parsed.clientId, parsed.body, riskCodes, config.SESSION_SECRET) } });
         const created = await db.transaction(async (tx) => {
           const message = (await tx.insert(messages).values({ conversationId: conversation.id, senderId: userId, clientId: parsed.clientId, body: parsed.body }).returning())[0]!;
+          if (riskCodes.length) await tx.insert(messageRiskEvents).values({ messageId: message.id, userId, riskCodes, acknowledgedAt: new Date() });
           await tx.update(conversations).set({ lastMessageAt: new Date() }).where(eq(conversations.id, conversation.id));
           await tx.insert(notifications).values({ userId: otherId, type: 'NEW_MESSAGE', title: 'New message', body: 'You have a new marketplace message', href: `/chats/${conversation.id}` });
           if (!conversation.firstMessageEmailQueuedAt) { await tx.update(conversations).set({ firstMessageEmailQueuedAt: new Date() }).where(and(eq(conversations.id, conversation.id), isNull(conversations.firstMessageEmailQueuedAt))); await tx.insert(emailOutbox).values({ recipientUserId: otherId, template: 'first-conversation-message', payload: { conversationId: conversation.id }, dedupeKey: `first-conversation-message:${conversation.id}` }).onConflictDoNothing(); }

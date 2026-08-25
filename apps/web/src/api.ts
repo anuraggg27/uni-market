@@ -7,6 +7,7 @@ export class ApiError extends Error {
     public code: string,
     message: string,
     public fieldErrors?: Record<string, string[]>,
+    public details?: unknown,
   ) {
     super(message);
   }
@@ -64,8 +65,18 @@ export async function api<T = any>(
       payload?.error?.code ?? "REQUEST_FAILED",
       payload?.error?.message ?? "Request failed",
       payload?.error?.fieldErrors,
+      payload?.error?.details,
     );
   }
+  return payload.data as T;
+}
+
+export async function publicApi<T = any>(path: string, options: RequestInit = {}): Promise<T> {
+  const headers = new Headers(options.headers);
+  if (options.body && !headers.has("content-type")) headers.set("content-type", "application/json");
+  const response = await fetch(`${API_URL}${path}`, { ...options, headers, credentials: "omit" });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new ApiError(response.status, payload?.error?.code ?? "REQUEST_FAILED", payload?.error?.message ?? "Request failed", payload?.error?.fieldErrors, payload?.error?.details);
   return payload.data as T;
 }
 

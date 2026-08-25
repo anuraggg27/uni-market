@@ -1,6 +1,8 @@
 # Uni Market
 
-A mobile-first marketplace where students can buy and sell used products, communicate privately, and complete offline exchanges. Registration accepts any verified Google account; institution details are optional.
+A mobile-first independent marketplace where eligible adult students can buy and sell used physical products, communicate privately, and complete offline exchanges. Any verified Google account may sign in; marketplace actions additionally require a verified Indian phone number, a separately verified student email from the reviewed academic-domain registry, an explicit 18+ declaration, and current policy acceptance.
+
+Uni Market is not affiliated with, endorsed by, sponsored by, or operated by any university, college, or educational institution. Institution names and email domains are used only to verify eligibility.
 
 The application is a TypeScript npm workspace with a Vite/React frontend, Express/Socket.IO API, Drizzle data layer, Neon PostgreSQL connections, a PGlite fallback for isolated local/test runs, and a private Cloudflare R2 image pipeline.
 
@@ -22,7 +24,7 @@ npm run dev
 
 Open `http://localhost:5173`. The API listens at `http://localhost:4000`. Use the isolated Neon staging database for shared development, or `DATABASE_URL=pglite://.data/marketplace` for a disposable local database.
 
-Set `DEV_MODE=true` locally to disable external SMS and accept only `999999`. The API logs that development mode is active without logging the code. The configuration validator refuses to start when `NODE_ENV=production` and `DEV_MODE=true`.
+Set `DEV_MODE=true` locally to disable external SMS/email delivery and accept only `999999` for both phone and student-email OTPs. The API logs that development mode is active without logging the code. The configuration validator refuses to start when `NODE_ENV=production` and `DEV_MODE=true`.
 
 Google sign-in requires `GOOGLE_CLIENT_ID` in the API and `VITE_GOOGLE_CLIENT_ID` in the web build. There is no password or email-OTP fallback in production code.
 
@@ -56,7 +58,7 @@ The included production container builds both applications, serves the SPA from 
 
 Pushes to `main` deploy only after both CI jobs pass. The deploy job uses a dedicated forced-command SSH key and a root-owned deployment bootstrap, validates Compose, keeps a rollback image until the new container is healthy, removes only the superseded Uni Market image, and prunes unused build cache older than seven days. It never performs a global image, container, or volume prune on the shared droplet.
 
-For Google Identity Services, configure `http://localhost`, `http://localhost:5173`, and `https://uni-market.shubhang.dev` as Authorized JavaScript origins. The `/gsi/transform` document is Google's private button iframe and must not be configured as an application redirect URI. Uni Market explicitly uses popup mode and receives the credential through its JavaScript callback.
+For Google Identity Services, configure `http://localhost`, `http://localhost:5173`, and `https://uni.rocks` as Authorized JavaScript origins. The `/gsi/transform` document is Google's private button iframe and must not be configured as an application redirect URI. Uni Market explicitly uses popup mode and receives the credential through its JavaScript callback.
 
 ## R2 uploads
 
@@ -81,3 +83,5 @@ Read [docs/moderation-policy.md](docs/moderation-policy.md) before moderating co
 - SMTP and email outbox processing are asynchronous; monitor failed jobs.
 
 Additional documentation: [architecture](docs/architecture.md), [API](docs/api.md), [security](docs/security.md), [testing](docs/testing.md), and [UI references](docs/ui-reference.md).
+
+Before any production release, complete the [India compliance operations runbook](docs/compliance-operations.md) and obtain qualified legal review of the public policies and configured statutory details.

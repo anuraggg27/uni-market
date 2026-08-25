@@ -59,7 +59,7 @@ jobs:
     timeout-minutes: 20
     environment:
       name: production
-      url: https://uni-market.shubhang.dev
+      url: https://uni.rocks
     steps:
       - name: Configure deployment SSH key
         env:
@@ -91,4 +91,4 @@ jobs:
           } | base64 | tr -d '\n')"
           ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" "deploy-with-msg91-env:$MSG91_PAYLOAD"
       - name: Verify production health
-        run: curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors https://uni-market.shubhang.dev/health
+        run: curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors https://uni.rocks/health

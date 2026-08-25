@@ -1,4 +1,4 @@
-uni-market.shubhang.dev {
+uni.rocks {
 	encode zstd gzip
 
 	request_body {
@@ -24,3 +24,6 @@ uni-market.shubhang.dev {
 	}
 }
 
+uni-market.shubhang.dev {
+	redir https://uni.rocks{uri} permanent
+}

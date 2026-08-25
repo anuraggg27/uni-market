@@ -7,20 +7,28 @@ import {
   Link,
   useNavigate,
   useParams,
-  useSearchParams,
 } from "react-router-dom";
-import { listingInputSchema, type ListingInput } from "@campus-market/shared";
+import { currentPolicyVersion, listingInputSchema, type ListingInput } from "@campus-market/shared";
 import { z } from "zod";
 import {
   ArrowDown,
   ArrowLeft,
   Bell,
   Check,
+  CheckCircle2,
   ChevronRight,
+  Circle,
+  Download,
   ImagePlus,
+  KeyRound,
+  LogOut,
+  MailCheck,
   MoreHorizontal,
   SendHorizontal,
+  ShieldAlert,
   ShieldCheck,
+  Smartphone,
+  Trash2,
   X,
 } from "lucide-react";
 import { api, clearCsrf, jsonBody } from "../api";
@@ -63,6 +71,17 @@ import {
 } from "../components/UI";
 
 const API_URL = import.meta.env.VITE_API_URL ?? "";
+const accountDateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+type VerificationProviderConfig =
+  | { provider: "development"; otpLength: number; retryAfter: number }
+  | {
+      provider: "msg91";
+      widgetId: string;
+      tokenAuth: string;
+      otpLength: number;
+      retryAfter: number;
+    };
+
 function useCategories() {
   return useQuery({
     queryKey: ["categories"],
@@ -80,6 +99,7 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
     enabled: edit && Boolean(listingId),
   });
   const [images, setImages] = useState<File[]>([]);
+  const [imageSynthetic, setImageSynthetic] = useState<boolean[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -137,18 +157,20 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
     if (!files?.length) return;
     const selectedFiles = Array.from(files);
     setImages((current) => [...current, ...selectedFiles].slice(0, 8));
+    setImageSynthetic((current) => [...current, ...selectedFiles.map(() => false)].slice(0, 8));
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
   function removeImage(index: number) {
     setImages((current) =>
       current.filter((_, imageIndex) => imageIndex !== index),
     );
+    setImageSynthetic((current) => current.filter((_, imageIndex) => imageIndex !== index));
   }
   async function uploadFiles(id: string) {
-    for (const file of images) {
+    for (const [index, file] of images.entries()) {
       const ticket = await api<any>(`/api/uploads/listings/${id}/presign`, {
         method: "POST",
-        ...jsonBody({ mimeType: file.type, byteSize: file.size }),
+        ...jsonBody({ mimeType: file.type, byteSize: file.size, syntheticStatus: imageSynthetic[index] ? "SYNTHETIC_OR_MATERIALLY_ALTERED" : "NOT_SYNTHETIC" }),
       });
       const uploaded = await fetch(ticket.uploadUrl, {
         method: "PUT",
@@ -253,6 +275,10 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
                     alt={`Selected product image: ${file.name}`}
                   />
                   {index === 0 ? <figcaption>Cover</figcaption> : null}
+                  <label className="photo-ai-toggle">
+                    <input type="checkbox" checked={imageSynthetic[index] ?? false} onChange={(event) => setImageSynthetic((current) => current.map((value, imageIndex) => imageIndex === index ? event.target.checked : value))} />
+                    <span>AI-generated or materially altered</span>
+                  </label>
                   <button
                     type="button"
                     className="photo-remove"
@@ -298,7 +324,6 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
             <label className="field">
               <span>Condition</span>
               <select {...form.register("condition")}>
-                <option value="NEW">New</option>
                 <option value="LIKE_NEW">Like new</option>
                 <option value="GOOD">Good</option>
                 <option value="FAIR">Fair</option>
@@ -417,6 +442,20 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
               placeholder="Main gate security desk"
             />
           </label>
+        </fieldset>
+        <fieldset className="listing-section listing-section-fields">
+          <legend>Seller declarations</legend>
+          <p className="listing-section-intro">Confirm these 4 points before saving your draft.</p>
+          <div className="declaration-list">
+            <label className="declaration-row"><input type="checkbox" {...form.register("ownershipAttested")} /><span><strong>I own this item</strong><small>Or I am lawfully authorised to sell it.</small></span></label>
+            <FieldError>{form.formState.errors.ownershipAttested?.message}</FieldError>
+            <label className="declaration-row"><input type="checkbox" {...form.register("usedPhysicalGoodsAttested")} /><span><strong>This is a used physical good</strong><small>It is not a new item, service, digital product, ticket, account, or credential.</small></span></label>
+            <FieldError>{form.formState.errors.usedPhysicalGoodsAttested?.message}</FieldError>
+            <label className="declaration-row"><input type="checkbox" {...form.register("accurateDescriptionAttested")} /><span><strong>The description, condition, defects, price, and image declarations are accurate</strong><small>Buyers should receive the same item shown here.</small></span></label>
+            <FieldError>{form.formState.errors.accurateDescriptionAttested?.message}</FieldError>
+            <div className="declaration-row declaration-policy-row"><input id="sellerPolicyAccepted" type="checkbox" {...form.register("sellerPolicyAccepted")} /><span><label htmlFor="sellerPolicyAccepted"><strong>I accept the Seller policy and prohibited-items rules</strong></label><small>Read the <Link to="/seller-policy" target="_blank" rel="noreferrer">Seller Policy</Link> and <Link to="/prohibited-items" target="_blank" rel="noreferrer">Prohibited Items</Link> policy.</small></span></div>
+            <FieldError>{form.formState.errors.sellerPolicyAccepted?.message}</FieldError>
+          </div>
         </fieldset>
         <SafetyReminder />
         {serverError ? <p className="field-error">{serverError}</p> : null}
@@ -1071,6 +1110,7 @@ function ChatPanel({
   const [draft, setDraft] = useState("");
   const [optimistic, setOptimistic] = useState<ChatMessage[]>([]);
   const [hasNewMessages, setHasNewMessages] = useState(false);
+  const [scamWarning, setScamWarning] = useState<{ body: string; clientId: string; riskCodes: string[]; confirmationToken: string }>();
   const query = useQuery({
     queryKey: ["messages", id],
     queryFn: () => api<ChatMessage[]>(`/api/conversations/${id}/messages`),
@@ -1174,7 +1214,7 @@ function ChatPanel({
     setHasNewMessages(true);
   }, [all, query.isSuccess, user?.id]);
 
-  function deliver(body: string, clientId: string) {
+  function deliver(body: string, clientId: string, safetyConfirmationToken?: string) {
     const pendingMessage: ChatMessage = {
       id: clientId,
       clientId,
@@ -1198,10 +1238,16 @@ function ChatPanel({
       .timeout(8_000)
       .emit(
       "message:send",
-      { conversationId: id, clientId, body },
-        (error: Error | null, result: { ok: boolean; data?: ChatMessage }) => {
+      { conversationId: id, clientId, body, safetyConfirmationToken },
+        (error: Error | null, result: { ok: boolean; data?: ChatMessage; warning?: { riskCodes: string[]; confirmationToken: string } }) => {
           if (!error && result?.ok && result.data) {
+            setScamWarning(undefined);
             receiveMessage(result.data);
+            return;
+          }
+          if (!error && result?.warning) {
+            setOptimistic((current) => current.filter((message) => message.clientId !== clientId));
+            setScamWarning({ body, clientId, ...result.warning });
             return;
           }
           setOptimistic((current) =>
@@ -1412,6 +1458,10 @@ function ChatPanel({
           </button>
         ) : null}
       </div>
+      {scamWarning ? <div className="chat-risk-warning" role="alert">
+        <ShieldAlert aria-hidden="true" />
+        <div><div className="chat-risk-warning-heading"><strong>Pause before sending</strong><span>Possible account-security risk</span></div><p>Never share an OTP, password, recovery code, card PIN, or pay an advance fee because of a chat request.</p><small>Detected: {scamWarning.riskCodes.map((riskCode) => riskCode.replaceAll("_", " ").toLowerCase()).join(", ")}</small><div className="button-row"><button type="button" className="button secondary" onClick={() => { setDraft(scamWarning.body); setScamWarning(undefined); }}>Edit Message</button><button type="button" className="button danger" onClick={() => deliver(scamWarning.body, scamWarning.clientId, scamWarning.confirmationToken)}>Send Anyway</button></div></div>
+      </div> : null}
       <form
         className="composer"
         onSubmit={(e) => {
@@ -1617,10 +1667,10 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
   const navigate = useNavigate();
   const mutation = useMutation({
     mutationFn: (data: any) =>
-      api("/api/auth/me", { method: "PATCH", ...jsonBody(data) }),
+      api(onboarding ? "/api/onboarding/complete" : "/api/auth/me", { method: onboarding ? "POST" : "PATCH", ...jsonBody(data) }),
     onSuccess: async () => {
       await refresh();
-      if (onboarding) navigate("/settings?verify=phone");
+      if (onboarding) navigate("/settings?verify=eligibility");
     },
   });
   if (!user) return null;
@@ -1647,7 +1697,13 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
             graduationYear: f.get("graduationYear")
               ? Number(f.get("graduationYear"))
               : null,
-            onboardingComplete: true,
+            ...(onboarding ? {
+              adultAttested: f.get("adultAttested") === "on",
+              acceptTerms: f.get("acceptTerms") === "on",
+              acknowledgePrivacy: f.get("acknowledgePrivacy") === "on",
+              acceptCommunityRules: f.get("acceptCommunityRules") === "on",
+              policyVersion: currentPolicyVersion,
+            } : {}),
           });
         }}
       >
@@ -1681,6 +1737,42 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
             />
           </label>
         </div>
+        {onboarding ? (
+          <fieldset className="eligibility-policy-card">
+            <legend>Eligibility and policies</legend>
+            <p className="eligibility-policy-intro">Please confirm each requirement before continuing.</p>
+            <div className="eligibility-policy-options">
+              <div className="eligibility-policy-option">
+                <input id="adultAttested" name="adultAttested" type="checkbox" required aria-describedby="adultAttested-copy" />
+                <div className="eligibility-policy-copy">
+                  <label htmlFor="adultAttested">I declare that I am at least 18 years old</label>
+                  <p id="adultAttested-copy">You must be an adult to create listings or contact other members.</p>
+                </div>
+              </div>
+              <div className="eligibility-policy-option">
+                <input id="acceptTerms" name="acceptTerms" type="checkbox" required aria-describedby="acceptTerms-copy" />
+                <div className="eligibility-policy-copy">
+                  <label htmlFor="acceptTerms">I accept the Terms of use and Seller policy</label>
+                  <p id="acceptTerms-copy">Review the <Link to="/terms" target="_blank" rel="noreferrer">Terms of use</Link> and <Link to="/seller-policy" target="_blank" rel="noreferrer">Seller policy</Link>.</p>
+                </div>
+              </div>
+              <div className="eligibility-policy-option">
+                <input id="acknowledgePrivacy" name="acknowledgePrivacy" type="checkbox" required aria-describedby="acknowledgePrivacy-copy" />
+                <div className="eligibility-policy-copy">
+                  <label htmlFor="acknowledgePrivacy">I have read the Privacy notice</label>
+                  <p id="acknowledgePrivacy-copy">See how we use and retain information in the <Link to="/privacy" target="_blank" rel="noreferrer">Privacy notice</Link>.</p>
+                </div>
+              </div>
+              <div className="eligibility-policy-option">
+                <input id="acceptCommunityRules" name="acceptCommunityRules" type="checkbox" required aria-describedby="acceptCommunityRules-copy" />
+                <div className="eligibility-policy-copy">
+                  <label htmlFor="acceptCommunityRules">I accept the Community rules and prohibited-items rules</label>
+                  <p id="acceptCommunityRules-copy">Review the <Link to="/community-rules" target="_blank" rel="noreferrer">Community rules</Link> and <Link to="/prohibited-items" target="_blank" rel="noreferrer">prohibited-items rules</Link>.</p>
+                </div>
+              </div>
+            </div>
+          </fieldset>
+        ) : null}
         <SubmitButton pending={mutation.isPending}>
           {onboarding ? "Continue" : "Save profile"}
         </SubmitButton>
@@ -2024,28 +2116,45 @@ export function SupportDetailPage() {
 export function SettingsPage() {
   const { user, refresh, clearSession } = useAuth();
   const navigate = useNavigate();
-  const [params] = useSearchParams();
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [codeSent, setCodeSent] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [requestId, setRequestId] = useState<string>();
+  const [studentEmail, setStudentEmail] = useState("");
+  const [studentCode, setStudentCode] = useState("");
+  const [studentCodeSent, setStudentCodeSent] = useState(false);
+  const [studentResendCooldown, setStudentResendCooldown] = useState(0);
+  const [studentRequestId, setStudentRequestId] = useState<string>();
+  const [activeVerification, setActiveVerification] = useState<"phone" | "student">(
+    user?.phoneVerifiedAt ? "student" : "phone",
+  );
+  const [captchaInitializationError, setCaptchaInitializationError] = useState("");
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const verificationConfig = useQuery({
     queryKey: ["phone-verification-config"],
-    queryFn: () =>
-      api<
-        | { provider: "development"; otpLength: number; retryAfter: number }
-        | {
-            provider: "msg91";
-            widgetId: string;
-            tokenAuth: string;
-            otpLength: number;
-            retryAfter: number;
-          }
-      >("/api/phone/config"),
+    queryFn: () => api<VerificationProviderConfig>("/api/phone/config"),
     enabled: !user?.phoneVerifiedAt,
     staleTime: Number.POSITIVE_INFINITY,
   });
+  const studentVerificationConfig = useQuery({
+    queryKey: ["student-email-verification-config"],
+    queryFn: () => api<VerificationProviderConfig>("/api/student-email/config"),
+    enabled: !user?.studentEmailVerifiedAt,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  async function prepareVerificationCard(target: "phone" | "student") {
+    setActiveVerification(target);
+    await new Promise<void>((resolve) => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  }
+  function clearVerificationCaptcha(target: "phone" | "student") {
+    const captchaId = target === "phone"
+      ? "msg91-phone-captcha"
+      : "msg91-student-email-captcha";
+    document.getElementById(captchaId)?.replaceChildren();
+  }
   const send = useMutation({
     mutationFn: async () => {
       const provider = verificationConfig.data;
@@ -2062,20 +2171,25 @@ export function SettingsPage() {
         return { ...result, requestId: undefined };
       }
 
-      await initializeMsg91({
-        widgetId: provider.widgetId,
-        tokenAuth: provider.tokenAuth,
-        captchaRenderId: "msg91-captcha",
-      });
-      const result = codeSent
-        ? await retryMsg91Otp(requestId)
-        : await sendMsg91Otp(msg91Identifier(phone));
+      let result: unknown;
+      if (codeSent) {
+        result = await retryMsg91Otp(requestId);
+      } else {
+        await prepareVerificationCard("phone");
+        await initializeMsg91({
+          widgetId: provider.widgetId,
+          tokenAuth: provider.tokenAuth,
+          captchaRenderId: "msg91-phone-captcha",
+        });
+        result = await sendMsg91Otp(msg91Identifier(phone));
+      }
       return {
         retryAfter: provider.retryAfter,
         requestId: msg91RequestId(result) ?? requestId,
       };
     },
     onSuccess: ({ retryAfter, requestId: nextRequestId }) => {
+      clearVerificationCaptcha("phone");
       setCodeSent(true);
       setResendCooldown(retryAfter);
       setRequestId(nextRequestId);
@@ -2098,7 +2212,88 @@ export function SettingsPage() {
         ...jsonBody({ phone, accessToken: msg91AccessToken(result) }),
       });
     },
-    onSuccess: () => void refresh(),
+    onSuccess: async () => {
+      clearVerificationCaptcha("phone");
+      await refresh();
+    },
+  });
+  const sendStudentCode = useMutation({
+    mutationFn: async () => {
+      const provider = studentVerificationConfig.data;
+      if (!provider) throw new Error("Student email verification is not ready");
+      if (provider.provider === "development") {
+        const result = await api<{ retryAfter: number }>("/api/student-email/send", {
+          method: "POST",
+          ...jsonBody({ email: studentEmail }),
+        });
+        return { ...result, requestId: undefined };
+      }
+
+      await api("/api/student-email/check-availability", {
+        method: "POST",
+        ...jsonBody({ email: studentEmail }),
+      });
+      let result: unknown;
+      if (studentCodeSent) {
+        result = await retryMsg91Otp(studentRequestId, "3");
+      } else {
+        await prepareVerificationCard("student");
+        await initializeMsg91({
+          widgetId: provider.widgetId,
+          tokenAuth: provider.tokenAuth,
+          captchaRenderId: "msg91-student-email-captcha",
+        });
+        result = await sendMsg91Otp(studentEmail.trim().toLowerCase());
+      }
+      return {
+        retryAfter: provider.retryAfter,
+        requestId: msg91RequestId(result) ?? studentRequestId,
+      };
+    },
+    onSuccess: ({ retryAfter, requestId: nextRequestId }) => {
+      clearVerificationCaptcha("student");
+      setStudentCodeSent(true);
+      setStudentResendCooldown(retryAfter);
+      setStudentRequestId(nextRequestId);
+    },
+  });
+  const verifyStudentEmail = useMutation({
+    mutationFn: async () => {
+      const provider = studentVerificationConfig.data;
+      if (!provider) throw new Error("Student email verification is not ready");
+      if (provider.provider === "development") {
+        return api("/api/student-email/verify", {
+          method: "POST",
+          ...jsonBody({ email: studentEmail, code: studentCode }),
+        });
+      }
+
+      const result = await verifyMsg91Otp(studentCode, studentRequestId);
+      return api("/api/student-email/verify-provider", {
+        method: "POST",
+        ...jsonBody({ email: studentEmail, accessToken: msg91AccessToken(result) }),
+      });
+    },
+    onSuccess: async () => {
+      clearVerificationCaptcha("student");
+      await refresh();
+    },
+  });
+  const revokeSessions = useMutation({
+    mutationFn: () => api("/api/account/revoke-sessions", { method: "POST" }),
+    onSuccess: () => {
+      clearCsrf();
+      clearSession();
+      navigate("/login");
+    },
+  });
+  const deleteAccount = useMutation({
+    mutationFn: () => api("/api/account", { method: "DELETE", ...jsonBody({ confirmation: deleteConfirmation }) }),
+    onSuccess: () => {
+      clearCsrf();
+      clearSession();
+      navigate("/");
+    },
   });
   const logout = useMutation({
     mutationFn: () => api("/api/auth/logout", { method: "POST" }),
@@ -2116,124 +2311,109 @@ export function SettingsPage() {
     );
     return () => window.clearTimeout(timer);
   }, [resendCooldown]);
+  useEffect(() => {
+    if (studentResendCooldown <= 0) return;
+    const timer = window.setTimeout(
+      () => setStudentResendCooldown((seconds) => Math.max(0, seconds - 1)),
+      1000,
+    );
+    return () => window.clearTimeout(timer);
+  }, [studentResendCooldown]);
+  useEffect(() => {
+    if (user?.phoneVerifiedAt && !user.studentEmailVerifiedAt) {
+      setActiveVerification("student");
+    }
+  }, [user?.phoneVerifiedAt, user?.studentEmailVerifiedAt]);
+  useEffect(() => {
+    const provider = activeVerification === "phone"
+      ? verificationConfig.data
+      : studentVerificationConfig.data;
+    const alreadyVerified = activeVerification === "phone"
+      ? Boolean(user?.phoneVerifiedAt)
+      : Boolean(user?.studentEmailVerifiedAt);
+    const codeAlreadySent = activeVerification === "phone"
+      ? codeSent
+      : studentCodeSent;
+    if (!provider || provider.provider !== "msg91" || alreadyVerified || codeAlreadySent) return;
+
+    setCaptchaInitializationError("");
+    void initializeMsg91({
+      widgetId: provider.widgetId,
+      tokenAuth: provider.tokenAuth,
+      captchaRenderId: activeVerification === "phone"
+        ? "msg91-phone-captcha"
+        : "msg91-student-email-captcha",
+    }).catch((error: unknown) => {
+      setCaptchaInitializationError(
+        error instanceof Error ? error.message : "Verification could not be loaded",
+      );
+    });
+  }, [activeVerification, codeSent, studentCodeSent, studentVerificationConfig.data, user?.phoneVerifiedAt, user?.studentEmailVerifiedAt, verificationConfig.data]);
   const otpLength = verificationConfig.data?.otpLength ?? 4;
+  const studentOtpLength = studentVerificationConfig.data?.otpLength ?? 6;
+  const eligibilityItems = [
+    { label: "Age & policies", detail: "18+ declaration and current policies", complete: Boolean(user?.eligibility?.adultAttested) },
+    { label: "Mobile number", detail: "Verified Indian mobile number", complete: Boolean(user?.eligibility?.phoneVerified) },
+    { label: "Student email", detail: "Verified academic email address", complete: Boolean(user?.eligibility?.studentEmailVerified) },
+  ];
   return (
-    <div className="page narrow">
-      <div className="page-header">
-        <div>
-          <p className="eyebrow">Account</p>
-          <h1>Settings</h1>
+    <div className="page settings-page">
+      <header className="settings-masthead">
+        <div><p className="eyebrow">Account</p><h1>Settings</h1><p>Manage verification, privacy, and account security.</p></div>
+        <Link className="button secondary" to="/profile">Edit Profile</Link>
+      </header>
+
+      <section className="eligibility-overview" aria-labelledby="eligibility-title">
+        <div className="eligibility-overview-heading">
+          <div><p className="eyebrow">Marketplace access</p><h2 id="eligibility-title">Your eligibility</h2></div>
+          <StatusBadge value={user?.marketplaceEligible ? "VERIFIED" : "INCOMPLETE"} />
         </div>
+        <div className="eligibility-checks">
+          {eligibilityItems.map((item) => <div className={item.complete ? "is-complete" : ""} key={item.label}>{item.complete ? <CheckCircle2 aria-hidden="true" /> : <Circle aria-hidden="true" />}<div><strong>{item.label}</strong><span>{item.detail}</span></div></div>)}
+        </div>
+        <p className="eligibility-guidance">{user?.marketplaceEligible ? "You can list, message, and transact." : "Complete all 3 checks to use marketplace features. Your Google sign-in and student email can be different."}</p>
+      </section>
+
+      <div className="settings-grid">
+        <section className="settings-card" aria-labelledby="phone-verification-title">
+          <header><span className="settings-card-icon"><Smartphone aria-hidden="true" /></span><div><h2 id="phone-verification-title">Mobile Number</h2><p>Kept private and used for account trust.</p></div></header>
+          {user?.phoneVerifiedAt ? <div className="verification-complete"><CheckCircle2 aria-hidden="true" /><div><strong>Your phone is verified</strong><span>Your Indian mobile number is confirmed.</span></div></div> : <div className="settings-card-form" onFocusCapture={() => setActiveVerification("phone")}>
+            <label className="field"><span>Indian mobile number</span><input name="phone" type="tel" value={phone} onChange={(event) => { setPhone(event.target.value); if (codeSent) { setCodeSent(false); setCode(""); setRequestId(undefined); setResendCooldown(0); } }} placeholder="e.g. 98765 43210…" inputMode="tel" autoComplete="tel" disabled={send.isPending || verify.isPending} /></label>
+            {activeVerification === "phone" && !codeSent ? <div id="msg91-phone-captcha" className="msg91-captcha-host" /> : null}
+            <button type="button" className="button secondary" onClick={() => send.mutate()} disabled={verificationConfig.isPending || send.isPending || resendCooldown > 0}>{send.isPending ? "Sending…" : codeSent ? resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend Code" : "Send Code"}</button>
+            {codeSent ? <><label className="field"><span>{otpLength}-digit code</span><input name="phoneCode" value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, otpLength))} inputMode="numeric" autoComplete="one-time-code" maxLength={otpLength} /></label><button type="button" className="button primary" onClick={() => verify.mutate()} disabled={verify.isPending || code.length !== otpLength || !/^\d+$/.test(code)}>{verify.isPending ? "Verifying…" : "Verify Phone"}</button></> : null}
+            {send.error ? <p className="field-error" role="alert">{send.error.message}</p> : null}{verify.error ? <p className="field-error" role="alert">{verify.error.message}</p> : null}{verificationConfig.error ? <p className="field-error" role="alert">{verificationConfig.error.message}</p> : null}{activeVerification === "phone" && captchaInitializationError ? <p className="field-error" role="alert">{captchaInitializationError}</p> : null}
+          </div>}
+        </section>
+
+        <section className="settings-card" aria-label="Academic verification controls">
+          <header><span className="settings-card-icon"><MailCheck aria-hidden="true" /></span><div><h2>Student Email</h2><p>Verified separately from your Google sign-in.</p></div></header>
+          {user?.studentEmailVerifiedAt ? <div className="verification-complete"><CheckCircle2 aria-hidden="true" /><div><strong>{user.studentEmailMasked} is verified</strong><span>Valid until {user.studentEmailExpiresAt ? accountDateFormatter.format(new Date(user.studentEmailExpiresAt)) : "12 months after verification"}.</span></div></div> : <div className="settings-card-form" onFocusCapture={() => setActiveVerification("student")}>
+            <label className="field"><span>Student email</span><input name="studentEmail" type="email" value={studentEmail} onChange={(event) => { setStudentEmail(event.target.value); setStudentCodeSent(false); setStudentCode(""); setStudentRequestId(undefined); setStudentResendCooldown(0); }} autoComplete="email" spellCheck={false} placeholder="you@stu.upes.ac.in…" /></label>
+            {activeVerification === "student" && !studentCodeSent ? <div id="msg91-student-email-captcha" className="msg91-captcha-host" /> : null}
+            <button type="button" className="button secondary" onClick={() => sendStudentCode.mutate()} disabled={studentVerificationConfig.isPending || sendStudentCode.isPending || !studentEmail || studentResendCooldown > 0}>{sendStudentCode.isPending ? "Sending…" : studentCodeSent ? studentResendCooldown > 0 ? `Resend in ${studentResendCooldown}s` : "Resend Code" : "Send Email Code"}</button>
+            {studentCodeSent ? <><label className="field"><span>{studentOtpLength}-digit email code</span><input name="studentCode" value={studentCode} onChange={(event) => setStudentCode(event.target.value.replace(/\D/g, "").slice(0, studentOtpLength))} inputMode="numeric" autoComplete="one-time-code" maxLength={studentOtpLength} /></label><button type="button" className="button primary" onClick={() => verifyStudentEmail.mutate()} disabled={verifyStudentEmail.isPending || studentCode.length !== studentOtpLength}>{verifyStudentEmail.isPending ? "Verifying…" : "Verify Student Email"}</button></> : null}
+            {sendStudentCode.error ? <p className="field-error" role="alert">{sendStudentCode.error.message}</p> : null}{verifyStudentEmail.error ? <p className="field-error" role="alert">{verifyStudentEmail.error.message}</p> : null}{studentVerificationConfig.error ? <p className="field-error" role="alert">{studentVerificationConfig.error.message}</p> : null}{activeVerification === "student" && captchaInitializationError ? <p className="field-error" role="alert">{captchaInitializationError}</p> : null}
+          </div>}
+        </section>
       </div>
-      <section className="panel form">
-        <h2>Phone verification</h2>
-        {user?.phoneVerifiedAt ? (
-          <p>
-            <StatusBadge value="VERIFIED" /> Your phone is verified.
-          </p>
-        ) : (
-          <>
-            <p className="lede">
-              Required before listing, messaging or completing a transaction.
-              Stored privately.
-            </p>
-            <label className="field">
-              <span>Indian mobile number</span>
-              <input
-                value={phone}
-                onChange={(e) => {
-                  setPhone(e.target.value);
-                  if (codeSent) {
-                    setCodeSent(false);
-                    setCode("");
-                    setRequestId(undefined);
-                    setResendCooldown(0);
-                  }
-                }}
-                placeholder="9876543210"
-                inputMode="tel"
-                autoComplete="tel"
-                disabled={send.isPending || verify.isPending}
-              />
-            </label>
-            <div id="msg91-captcha" />
-            <button
-              className="button secondary"
-              onClick={() => send.mutate()}
-              disabled={
-                verificationConfig.isPending ||
-                send.isPending ||
-                resendCooldown > 0
-              }
-            >
-              {send.isPending
-                ? "Sending…"
-                : codeSent
-                  ? resendCooldown > 0
-                    ? `Resend code in ${resendCooldown}s`
-                    : "Resend code"
-                  : "Send code"}
-            </button>
-            {codeSent ? (
-              <>
-                <label className="field">
-                  <span>{otpLength}-digit code</span>
-                  <input
-                    value={code}
-                    onChange={(e) =>
-                      setCode(e.target.value.replace(/\D/g, "").slice(0, otpLength))
-                    }
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={otpLength}
-                  />
-                </label>
-                <button
-                  className="button primary"
-                  onClick={() => verify.mutate()}
-                  disabled={
-                    verify.isPending ||
-                    code.length !== otpLength ||
-                    !/^\d+$/.test(code)
-                  }
-                >
-                  {verify.isPending ? "Verifying…" : "Verify phone"}
-                </button>
-              </>
-            ) : null}
-            {send.error ? (
-              <p className="field-error">{send.error.message}</p>
-            ) : null}
-            {verify.error ? (
-              <p className="field-error">{verify.error.message}</p>
-            ) : null}
-            {verificationConfig.error ? (
-              <p className="field-error">
-                {verificationConfig.error.message}
-              </p>
-            ) : null}
-          </>
-        )}
-      </section>
-      <section className="panel form section">
-        <h2>Session</h2>
-        <p>
-          Signing out invalidates this server session and clears its secure
-          cookie.
-        </p>
-        <button
-          className="button danger"
-          onClick={() => logout.mutate()}
-          disabled={logout.isPending}
-        >
-          Sign out
-        </button>
-      </section>
-      {params.get("verify") === "phone" && !user?.phoneVerifiedAt ? (
-        <div className="settings-safety-reminder">
-          <SafetyReminder />
+
+      <section className="settings-wide-card" aria-labelledby="privacy-controls-title">
+        <header><div><p className="eyebrow">Your data</p><h2 id="privacy-controls-title">Privacy & Security</h2><p>Export your information or sign out every active device.</p></div></header>
+        <div className="settings-action-list">
+          <div><span className="settings-action-icon"><Download aria-hidden="true" /></span><div><strong>Download account data</strong><p>Get a machine-readable export with other members’ private details removed.</p></div><a className="button secondary" href={`${API_URL}/api/account/export`} download>Download Data</a></div>
+          <div><span className="settings-action-icon"><KeyRound aria-hidden="true" /></span><div><strong>Revoke all sessions</strong><p>Sign out every device, including this one.</p></div><button type="button" className="button secondary" onClick={() => revokeSessions.mutate()} disabled={revokeSessions.isPending}>{revokeSessions.isPending ? "Revoking…" : "Revoke Sessions"}</button></div>
         </div>
-      ) : null}
+        {revokeSessions.error ? <p className="field-error" role="alert">{revokeSessions.error.message}</p> : null}
+      </section>
+
+      <section className="settings-wide-card danger-zone" aria-labelledby="delete-account-title">
+        <header><span className="settings-card-icon"><Trash2 aria-hidden="true" /></span><div><p className="eyebrow">Danger zone</p><h2 id="delete-account-title">Close Account</h2><p>Access ends immediately. Eligible data is deleted or anonymised after 180 days; legal holds and required records can remain longer.</p></div></header>
+        <div className="danger-zone-action"><label className="field"><span>Type <strong>DELETE MY ACCOUNT</strong> to confirm</span><input name="deleteConfirmation" value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} autoComplete="off" spellCheck={false} /></label><button type="button" className="button danger" onClick={() => deleteAccount.mutate()} disabled={deleteAccount.isPending || deleteConfirmation !== "DELETE MY ACCOUNT"}>{deleteAccount.isPending ? "Closing Account…" : "Close Account"}</button></div>
+        {deleteAccount.error ? <p className="field-error" role="alert">{deleteAccount.error.message}</p> : null}
+      </section>
+
+      <section className="settings-signout"><div><LogOut aria-hidden="true" /><div><strong>Sign out of this device</strong><p>Your current secure session will end.</p></div></div><button type="button" className="button secondary" onClick={() => logout.mutate()} disabled={logout.isPending}>{logout.isPending ? "Signing Out…" : "Sign Out"}</button></section>
     </div>
   );
 }

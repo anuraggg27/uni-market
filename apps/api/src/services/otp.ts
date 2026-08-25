@@ -5,14 +5,10 @@ import { phoneVerifications, users } from '../db/schema.js';
 import { keyedHash, maskPhone, safeEqual } from '../lib/crypto.js';
 import { AppError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
+import { verifiedMsg91Identifier } from './msg91.js';
 
 const GENERIC_FAILURE = 'The verification code could not be accepted';
 const GENERIC_PROVIDER_FAILURE = 'The phone verification could not be accepted';
-
-type Msg91VerificationResponse = {
-  type?: unknown;
-  message?: unknown;
-};
 
 function isUniqueViolation(error: unknown): boolean {
   const candidate = error as { code?: unknown; cause?: { code?: unknown } };
@@ -92,44 +88,17 @@ export class OtpService {
     if (this.config.DEV_MODE) {
       throw new AppError(400, 'OTP_DEVELOPMENT_MODE', 'Provider verification is disabled in development mode');
     }
-    if (!this.config.MSG91_AUTH_KEY) {
-      throw new AppError(503, 'OTP_UNAVAILABLE', 'Phone verification is temporarily unavailable');
-    }
-
     const tokenHash = keyedHash(`msg91:${accessToken}`, this.config.SESSION_SECRET);
     const alreadyUsed = (await this.db.select({ id: phoneVerifications.id }).from(phoneVerifications).where(eq(phoneVerifications.otpHash, tokenHash)).limit(1))[0];
     if (alreadyUsed) throw new AppError(400, 'OTP_INVALID', GENERIC_PROVIDER_FAILURE);
 
-    let response: Response;
-    try {
-      response = await fetch(this.config.MSG91_VERIFY_ACCESS_TOKEN_URL, {
-        method: 'POST',
-        headers: {
-          authkey: this.config.MSG91_AUTH_KEY,
-          'content-type': 'application/json'
-        },
-        body: JSON.stringify({ 'access-token': accessToken }),
-        signal: AbortSignal.timeout(8_000)
-      });
-    } catch (error) {
-      logger.warn({ err: error }, 'MSG91 access-token verification request failed');
-      throw new AppError(503, 'OTP_UNAVAILABLE', 'Phone verification is temporarily unavailable');
-    }
-
-    let body: Msg91VerificationResponse = {};
-    try {
-      body = await response.json() as Msg91VerificationResponse;
-    } catch {
-      // A non-JSON provider response cannot prove ownership of the phone number.
-    }
-    if (response.status === 429 || response.status >= 500) {
-      logger.warn({ status: response.status }, 'MSG91 access-token verification unavailable');
-      throw new AppError(503, 'OTP_UNAVAILABLE', 'Phone verification is temporarily unavailable');
-    }
-
-    const identifier = typeof body.message === 'string' ? body.message.replace(/\D/g, '') : '';
+    const providerIdentifier = await verifiedMsg91Identifier(this.config, accessToken, {
+      unavailable: 'Phone verification is temporarily unavailable',
+      invalid: GENERIC_PROVIDER_FAILURE,
+    });
+    const identifier = providerIdentifier.replace(/\D/g, '');
     const expectedIdentifier = phoneE164.slice(1);
-    if (!response.ok || body.type !== 'success' || identifier !== expectedIdentifier) {
+    if (identifier !== expectedIdentifier) {
       throw new AppError(400, 'OTP_INVALID', GENERIC_PROVIDER_FAILURE);
     }
 

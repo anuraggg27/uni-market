@@ -4,7 +4,18 @@ declare global {
   namespace Express {
     interface Request {
       requestId: string;
-      auth?: { userId: string; sessionId: string; roles: Role[]; phoneVerified: boolean; suspended: boolean };
+      auth?: {
+        userId: string;
+        sessionId: string;
+        roles: Role[];
+        phoneVerified: boolean;
+        studentEmailVerified: boolean;
+        adultAttested: boolean;
+        policiesAccepted: boolean;
+        marketplaceEligible: boolean;
+        staffVerified: boolean;
+        suspended: boolean;
+      };
     }
   }
 }

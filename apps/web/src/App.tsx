@@ -15,6 +15,8 @@ function lazyNamed<Props = Record<string, never>>(
 const publicPages = () => import("./pages/PublicPages");
 const userPages = () => import("./pages/UserPages");
 const adminPages = () => import("./pages/AdminPages");
+const complianceAdminPages = () => import("./pages/ComplianceAdminPages");
+const legalPages = () => import("./pages/LegalPages");
 const BrowsePage = lazyNamed(publicPages, "BrowsePage");
 const HomePage = lazyNamed(publicPages, "HomePage");
 const LeaderboardPage = lazyNamed(publicPages, "LeaderboardPage");
@@ -38,10 +40,12 @@ const SupportDetailPage = lazyNamed(userPages, "SupportDetailPage");
 const SupportPage = lazyNamed(userPages, "SupportPage");
 const TransactionsPage = lazyNamed(userPages, "TransactionsPage");
 const AdminCategories = lazyNamed(adminPages, "AdminCategories");
+const AdminCompliance = lazyNamed(complianceAdminPages, "AdminCompliance");
 const AdminDashboard = lazyNamed(adminPages, "AdminDashboard");
 const AdminListingReview = lazyNamed(adminPages, "AdminListingReview");
 const AdminReportDetail = lazyNamed(adminPages, "AdminReportDetail");
 const AdminReports = lazyNamed(adminPages, "AdminReports");
+const AdminGrievances = lazyNamed(complianceAdminPages, "AdminGrievances");
 const AdminReviews = lazyNamed(adminPages, "AdminReviews");
 const AdminShell = lazyNamed(adminPages, "AdminShell");
 const AdminSupport = lazyNamed(adminPages, "AdminSupport");
@@ -50,6 +54,14 @@ const AdminUserDetail = lazyNamed(adminPages, "AdminUserDetail");
 const AdminUsers = lazyNamed(adminPages, "AdminUsers");
 const AuditLogs = lazyNamed(adminPages, "AuditLogs");
 const PendingListings = lazyNamed(adminPages, "PendingListings");
+const CommunityRulesPage = lazyNamed(legalPages, "CommunityRulesPage");
+const GrievancePage = lazyNamed(legalPages, "GrievancePage");
+const GrievanceTrackPage = lazyNamed(legalPages, "GrievanceTrackPage");
+const MarketplaceDisclosurePage = lazyNamed(legalPages, "MarketplaceDisclosurePage");
+const PrivacyPage = lazyNamed(legalPages, "PrivacyPage");
+const ProhibitedItemsPage = lazyNamed(legalPages, "ProhibitedItemsPage");
+const SellerPolicyPage = lazyNamed(legalPages, "SellerPolicyPage");
+const TermsPage = lazyNamed(legalPages, "TermsPage");
 
 export function App() {
   return (
@@ -62,6 +74,14 @@ export function App() {
             <Route path="login" element={<LoginPage />} />
             <Route path="seller/:sellerId" element={<SellerPage />} />
             <Route path="leaderboard" element={<LeaderboardPage />} />
+            <Route path="terms" element={<TermsPage />} />
+            <Route path="privacy" element={<PrivacyPage />} />
+            <Route path="community-rules" element={<CommunityRulesPage />} />
+            <Route path="prohibited-items" element={<ProhibitedItemsPage />} />
+            <Route path="seller-policy" element={<SellerPolicyPage />} />
+            <Route path="marketplace-disclosure" element={<MarketplaceDisclosurePage />} />
+            <Route path="grievance" element={<GrievancePage />} />
+            <Route path="grievance/track" element={<GrievanceTrackPage />} />
             <Route
               path="onboarding"
               element={
@@ -201,6 +221,7 @@ export function App() {
                   </RequireAuth>
                 }
               />
+              <Route path="grievances" element={<AdminGrievances />} />
               <Route
                 path="reports/:reportId"
                 element={
@@ -262,6 +283,14 @@ export function App() {
                 element={
                   <RequireAuth roles={["SUPER_ADMIN"]}>
                     <AdminCategories />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="compliance"
+                element={
+                  <RequireAuth roles={["SUPPORT_AGENT", "SUPER_ADMIN"]}>
+                    <AdminCompliance />
                   </RequireAuth>
                 }
               />

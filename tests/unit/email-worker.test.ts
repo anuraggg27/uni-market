@@ -26,8 +26,8 @@ function fakeDatabase(jobs: EmailJob[]) {
   const limit = vi.fn(() => ({ for: forUpdate }));
   const orderBy = vi.fn(() => ({ limit }));
   const where = vi.fn(() => ({ orderBy }));
-  const innerJoin = vi.fn(() => ({ where }));
-  const from = vi.fn(() => ({ innerJoin }));
+  const leftJoin = vi.fn(() => ({ where }));
+  const from = vi.fn(() => ({ leftJoin }));
   const select = vi.fn(() => ({ from }));
   const update = vi.fn(() => ({
     set: vi.fn((values: Record<string, unknown>) => {
@@ -172,6 +172,33 @@ describe("EmailWorker", () => {
       const job = (await ctx.db.select().from(schema.emailOutbox))[0]!;
       expect(job.attempts).toBe(1);
       expect(job.sentAt).toBeInstanceOf(Date);
+    } finally {
+      await ctx.client.close();
+    }
+  });
+
+  it("never claims legacy student-email OTP jobs for SMTP delivery", async () => {
+    const ctx = await setup();
+    try {
+      const recipient = (
+        await ctx.db
+          .insert(schema.users)
+          .values({ email: "student-otp@example.edu", displayName: "Student OTP" })
+          .returning()
+      )[0]!;
+      await ctx.db.insert(schema.emailOutbox).values({
+        recipientUserId: recipient.id,
+        template: "student-email-otp",
+        payload: {},
+        dedupeKey: "legacy-student-email-otp",
+      });
+
+      await new EmailWorker(ctx.db, smtpConfig()).runOnce();
+
+      expect(sendMail).not.toHaveBeenCalled();
+      const job = (await ctx.db.select().from(schema.emailOutbox))[0]!;
+      expect(job.attempts).toBe(0);
+      expect(job.sentAt).toBeNull();
     } finally {
       await ctx.client.close();
     }

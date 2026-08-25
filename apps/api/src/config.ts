@@ -47,6 +47,22 @@ const schema = z
     SMTP_PASSWORD: z.string().default(""),
     SMTP_FROM_NAME: z.string().default("Uni Market"),
     SMTP_FROM_EMAIL: z.string().email().default("noreply@example.test"),
+    DATA_ENCRYPTION_KEY: z.string().regex(/^[a-fA-F0-9]{64}$/).default("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"),
+    LEGAL_OPERATOR_NAME: z.string().default("Uni Market Development Operator"),
+    LEGAL_OPERATOR_ADDRESS: z.string().default("Development environment — not for public use"),
+    CUSTOMER_CARE_EMAIL: z.string().email().default("support@uni.rocks"),
+    GRIEVANCE_OFFICER_NAME: z.string().default("Development Grievance Officer"),
+    GRIEVANCE_OFFICER_DESIGNATION: z.string().default("Grievance Officer"),
+    GRIEVANCE_EMAIL: z.string().email().default("grievance@example.test"),
+    PRIVACY_EMAIL: z.string().email().default("privacy@example.test"),
+    LEGAL_JURISDICTION_CITY: z.string().default("India"),
+    LEGAL_POLICY_VERSION: z.string().default("2026-08-25"),
+    EMAIL_PROVIDER_NAME: z.string().default("Configured SMTP provider"),
+    EMAIL_PROVIDER_REGION: z.string().default("Contract review required"),
+    DATABASE_REGION: z.string().default("Contract review required"),
+    OBJECT_STORAGE_REGION: z.string().default("Contract review required"),
+    LOG_REGION: z.string().default("Contract review required"),
+    RETENTION_MODE: z.enum(["dry-run", "enforce"]).default("dry-run"),
     CLOUDFLARE_ACCOUNT_ID: z.string().default(""),
     R2_ACCESS_KEY_ID: z.string().default(""),
     R2_SECRET_ACCESS_KEY: z.string().default(""),
@@ -77,6 +93,8 @@ const schema = z
     if (env.NODE_ENV === "production") {
       const required = [
         "DATABASE_URL",
+        "CLIENT_URL",
+        "API_URL",
         "GOOGLE_CLIENT_ID",
         "SESSION_SECRET",
         "CSRF_SECRET",
@@ -87,6 +105,21 @@ const schema = z
         "R2_SECRET_ACCESS_KEY",
         "R2_BUCKET_NAME",
         "TURNSTILE_SECRET_KEY",
+        "DATA_ENCRYPTION_KEY",
+        "LEGAL_OPERATOR_NAME",
+        "LEGAL_OPERATOR_ADDRESS",
+        "CUSTOMER_CARE_EMAIL",
+        "GRIEVANCE_OFFICER_NAME",
+        "GRIEVANCE_EMAIL",
+        "PRIVACY_EMAIL",
+        "LEGAL_JURISDICTION_CITY",
+        "EMAIL_PROVIDER_NAME",
+        "EMAIL_PROVIDER_REGION",
+        "DATABASE_REGION",
+        "OBJECT_STORAGE_REGION",
+        "LOG_REGION",
+        "SMTP_HOST",
+        "SMTP_FROM_EMAIL",
       ] as const;
       for (const key of required) {
         if (
@@ -100,6 +133,22 @@ const schema = z
             message: `${key} is required and must be production-safe`,
           });
         }
+      }
+      if (env.LEGAL_POLICY_VERSION !== "2026-08-25") {
+        context.addIssue({ code: "custom", path: ["LEGAL_POLICY_VERSION"], message: "LEGAL_POLICY_VERSION must match the reviewed policy release" });
+      }
+      if (env.DATA_ENCRYPTION_KEY === "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef") {
+        context.addIssue({ code: "custom", path: ["DATA_ENCRYPTION_KEY"], message: "DATA_ENCRYPTION_KEY must be replaced in production" });
+      }
+      if (!env.CLIENT_URL.startsWith("https://") || !env.API_URL.startsWith("https://")) {
+        context.addIssue({ code: "custom", path: ["CLIENT_URL"], message: "Production public origins must use HTTPS" });
+      }
+      if (!env.R2_ENDPOINT && !env.CLOUDFLARE_ACCOUNT_ID) {
+        context.addIssue({ code: "custom", path: ["R2_ENDPOINT"], message: "Set R2_ENDPOINT or CLOUDFLARE_ACCOUNT_ID in production" });
+      }
+      const publicValues = [env.LEGAL_OPERATOR_NAME, env.LEGAL_OPERATOR_ADDRESS, env.CUSTOMER_CARE_EMAIL, env.GRIEVANCE_OFFICER_NAME, env.GRIEVANCE_EMAIL, env.PRIVACY_EMAIL, env.EMAIL_PROVIDER_NAME, env.EMAIL_PROVIDER_REGION, env.DATABASE_REGION, env.OBJECT_STORAGE_REGION, env.LOG_REGION];
+      if (publicValues.some((value) => /development|example\.test|contract review required|0000000000/i.test(value))) {
+        context.addIssue({ code: "custom", path: ["LEGAL_OPERATOR_NAME"], message: "Production legal and processor details must not use development placeholders" });
       }
     }
   });

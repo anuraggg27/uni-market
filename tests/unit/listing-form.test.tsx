@@ -132,16 +132,21 @@ describe("ListingFormPage photos", () => {
       screen.getByLabelText(/Campus, hostel area or neighbourhood/),
       { target: { value: "Main campus" } },
     );
+    fireEvent.click(screen.getByLabelText(/I own this item/));
+    fireEvent.click(screen.getByLabelText(/This is a used physical good/));
+    fireEvent.click(screen.getByLabelText(/description, condition, defects/));
+    fireEvent.click(screen.getByLabelText(/I accept the Seller policy/));
     fireEvent.click(
       screen.getByRole("button", { name: "Save private draft" }),
     );
-
     await waitFor(() =>
       expect(apiMock).toHaveBeenCalledWith(
         "/api/uploads/listings/listing-1/presign",
         expect.objectContaining({ method: "POST" }),
       ),
     );
+    const presignCall = apiMock.mock.calls.find(([path]) => path === "/api/uploads/listings/listing-1/presign");
+    expect(JSON.parse(String(presignCall?.[1]?.body))).toMatchObject({ syntheticStatus: "NOT_SYNTHETIC" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
       "https://uploads.example.test/image",

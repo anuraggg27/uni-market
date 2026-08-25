@@ -24,6 +24,18 @@ export async function setup() {
   await migrate(db, { migrationsFolder: resolve(process.cwd(), 'apps/api/drizzle') });
   const config = loadConfig({ NODE_ENV: 'test', APP_ENV: 'test', DEV_MODE: 'true', CLIENT_URL: 'http://localhost:5173', API_URL: 'http://localhost:4000', DATABASE_URL: 'pglite://:memory:', SESSION_SECRET: 'test-session-secret-at-least-32-chars', CSRF_SECRET: 'test-csrf-secret-at-least-32-chars', SMTP_FROM_EMAIL: 'test@example.com', R2_BUCKET_NAME: 'uni-market-test', R2_ENDPOINT: 'https://test-account.r2.cloudflarestorage.com' });
   const app = createApp({ db, config, googleVerifier: new FakeGoogleVerifier() });
+  await db.insert(schema.academicDomains).values([
+    {
+      domain: 'students.example.edu',
+      institutionName: 'Example Institute',
+      sourceUrl: 'https://students.example.edu',
+    },
+    {
+      domain: 'stu.upes.ac.in',
+      institutionName: 'UPES',
+      sourceUrl: 'https://www.upes.ac.in/',
+    },
+  ]);
   const category = (await db.insert(schema.categories).values({ name: 'Books', slug: 'books' }).returning())[0]!;
   return { client, db, config, app, category };
 }
@@ -41,18 +53,32 @@ export async function login(app: ReturnType<typeof createApp>, credential: strin
 
 export async function verifyPhone(auth: Awaited<ReturnType<typeof login>>, phone = '9876543210') {
   await auth.agent.post('/api/phone/send').set(auth.headers).send({ phone }).expect(200);
-  return auth.agent.post('/api/phone/verify').set(auth.headers).send({ phone, code: '999999' });
+  await auth.agent.post('/api/phone/verify').set(auth.headers).send({ phone, code: '999999' }).expect(200);
+  const studentEmail = `${auth.user.id}@students.example.edu`;
+  await auth.agent.post('/api/student-email/send').set(auth.headers).send({ email: studentEmail }).expect(200);
+  await auth.agent.post('/api/student-email/verify').set(auth.headers).send({ email: studentEmail, code: '999999' }).expect(200);
+  return auth.agent.post('/api/onboarding/complete').set(auth.headers).send({
+    displayName: auth.user.displayName,
+    institution: null,
+    campus: null,
+    graduationYear: null,
+    adultAttested: true,
+    acceptTerms: true,
+    acknowledgePrivacy: true,
+    acceptCommunityRules: true,
+    policyVersion: '2026-08-25',
+  });
 }
 
 export async function createDraft(auth: Awaited<ReturnType<typeof login>>, categoryId: string, overrides: Record<string, unknown> = {}) {
-  const response = await auth.agent.post('/api/listings').set(auth.headers).send({ title: 'Linear algebra textbook', description: 'Barely used textbook with clean pages and no missing chapters.', categoryId, condition: 'GOOD', conditionExplanation: '', priceType: 'FIXED', exactPrice: 450, negotiable: true, location: 'Main campus library', brand: '', defects: '', meetupPoint: 'Library entrance', ...overrides });
+  const response = await auth.agent.post('/api/listings').set(auth.headers).send({ title: 'Linear algebra textbook', description: 'Barely used textbook with clean pages and no missing chapters.', categoryId, condition: 'GOOD', conditionExplanation: '', priceType: 'FIXED', exactPrice: 450, negotiable: true, location: 'Main campus library', brand: '', defects: '', meetupPoint: 'Library entrance', ownershipAttested: true, usedPhysicalGoodsAttested: true, accurateDescriptionAttested: true, sellerPolicyAccepted: true, ...overrides });
   if (response.status !== 201) throw new Error(`draft failed ${response.status}: ${JSON.stringify(response.body)}`);
   return response.body.data;
 }
 
 export async function uploadImage(auth: Awaited<ReturnType<typeof login>>, listingId: string, content?: Buffer) {
   const buffer = content ?? await sharp({ create: { width: 640, height: 480, channels: 3, background: '#56806a' } }).jpeg().toBuffer();
-  const presign = await auth.agent.post(`/api/uploads/listings/${listingId}/presign`).set(auth.headers).send({ mimeType: 'image/jpeg', byteSize: buffer.length }).expect(201);
+  const presign = await auth.agent.post(`/api/uploads/listings/${listingId}/presign`).set(auth.headers).send({ mimeType: 'image/jpeg', byteSize: buffer.length, syntheticStatus: 'NOT_SYNTHETIC' }).expect(201);
   const url = new URL(presign.body.data.uploadUrl);
   await auth.agent.put(`${url.pathname}${url.search}`).set('content-type', 'image/jpeg').send(buffer).expect(204);
   return auth.agent.post(`/api/uploads/listings/${listingId}/finalize`).set(auth.headers).send({ imageId: presign.body.data.imageId });
@@ -60,6 +86,7 @@ export async function uploadImage(auth: Awaited<ReturnType<typeof login>>, listi
 
 export async function makeRole(db: any, userId: string, role: 'MODERATOR'|'SUPPORT_AGENT'|'SUPER_ADMIN') {
   await db.insert(schema.userRoles).values({ userId, role }).onConflictDoNothing();
+  await db.update(schema.sessions).set({ staffVerifiedAt: new Date() }).where(eq(schema.sessions.userId, userId));
 }
 
 export async function refreshAuthRoles(db: any, auth: Awaited<ReturnType<typeof login>>) {
