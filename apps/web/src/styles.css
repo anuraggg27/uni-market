@@ -3322,26 +3322,6 @@ html.dark [data-site-header] :where(
   font-size: 1.35rem;
   letter-spacing: -0.035em;
 }
-.realtime-state {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--color-muted);
-  font-size: 0.72rem;
-  white-space: nowrap;
-}
-.realtime-state > span {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #d97706;
-}
-.realtime-state.connected > span {
-  background: #16804a;
-}
-.realtime-state.offline > span {
-  background: #b42318;
-}
 .conversation-link {
   position: relative;
   display: grid;
@@ -3429,7 +3409,7 @@ html.dark [data-site-header] :where(
   z-index: 3;
   min-height: 74px;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
@@ -4366,7 +4346,7 @@ html.dark .site-footer-wordmark:hover > span:first-child {
   }
   .chat-header {
     min-height: 64px;
-    grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
     gap: 8px;
     padding: 7px 9px;
   }
@@ -4376,13 +4356,6 @@ html.dark .site-footer-wordmark:hover > span:first-child {
   .chat-listing-image {
     width: 40px;
     height: 40px;
-  }
-  .chat-realtime {
-    font-size: 0;
-  }
-  .chat-realtime > span {
-    width: 8px;
-    height: 8px;
   }
   .chat-actions-menu {
     right: -2px;

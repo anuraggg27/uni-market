@@ -981,18 +981,6 @@ export function ChatsPage() {
               <p className="eyebrow">Private</p>
               <h1>Messages</h1>
             </div>
-            <span
-              className={`realtime-state ${realtimeState}`}
-              role="status"
-              aria-live="polite"
-            >
-              <span aria-hidden="true" />
-              {realtimeState === "connected"
-                ? "Live"
-                : realtimeState === "offline"
-                  ? "Retrying"
-                  : "Connecting"}
-            </span>
           </header>
           {conversations.isLoading ? (
             <Loading variant="chat-list" label="Loading conversations" />
@@ -1276,13 +1264,6 @@ function ChatPanel({
             <span>Loading listing…</span>
           )}
         </div>
-        <span
-          className={`realtime-state chat-realtime ${realtimeState}`}
-          role="status"
-        >
-          <span aria-hidden="true" />
-          {realtimeState === "connected" ? "Live" : "Reconnecting"}
-        </span>
         <details className="chat-actions">
           <summary aria-label="Conversation actions">
             <MoreHorizontal aria-hidden="true" />

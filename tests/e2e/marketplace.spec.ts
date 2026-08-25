@@ -287,8 +287,8 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
   ).toBeVisible();
   const conversationPath = new URL(buyerPage.url()).pathname;
   await expect(
-    sellerPage.getByLabel("Conversations").getByText("Live"),
-  ).toBeVisible();
+    sellerPage.getByText(/^(Live|Connecting|Retrying|Reconnecting)$/),
+  ).toHaveCount(0);
   await expect(
     sellerPage.getByRole("link", { name: /transaction-buyer/ }),
   ).toBeVisible();
