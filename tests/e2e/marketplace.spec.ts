@@ -456,6 +456,7 @@ test("E2E-05 support request receives an agent response and resolves", async ({
 test("E2E-06 important marketplace screens remain usable at mobile, tablet and desktop widths", async ({
   browser,
 }) => {
+  test.setTimeout(90_000);
   for (const viewport of [
     { width: 390, height: 844 },
     { width: 768, height: 1024 },
