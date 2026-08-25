@@ -78,17 +78,39 @@ jobs:
           MSG91_OTP_LENGTH: ${{ vars.MSG91_OTP_LENGTH }}
           MSG91_TOKEN_AUTH: ${{ secrets.MSG91_TOKEN_AUTH }}
           MSG91_AUTH_KEY: ${{ secrets.MSG91_AUTH_KEY }}
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT }}
+          SMTP_SECURE: ${{ vars.SMTP_SECURE }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          SMTP_FROM_NAME: ${{ vars.SMTP_FROM_NAME }}
+          SMTP_FROM_EMAIL: ${{ vars.SMTP_FROM_EMAIL }}
+          DATA_ENCRYPTION_KEY: ${{ secrets.DATA_ENCRYPTION_KEY }}
+          CUSTOMER_CARE_EMAIL: ${{ vars.CUSTOMER_CARE_EMAIL }}
+          GRIEVANCE_EMAIL: ${{ vars.GRIEVANCE_EMAIL }}
+          PRIVACY_EMAIL: ${{ vars.PRIVACY_EMAIL }}
+          LEGAL_POLICY_VERSION: ${{ vars.LEGAL_POLICY_VERSION }}
+          EMAIL_PROVIDER_NAME: ${{ vars.EMAIL_PROVIDER_NAME }}
+          EMAIL_PROVIDER_REGION: ${{ vars.EMAIL_PROVIDER_REGION }}
+          DATABASE_REGION: ${{ vars.DATABASE_REGION }}
+          OBJECT_STORAGE_REGION: ${{ vars.OBJECT_STORAGE_REGION }}
+          LOG_REGION: ${{ vars.LOG_REGION }}
+          RETENTION_MODE: ${{ vars.RETENTION_MODE }}
+          GRIEVANCE_RETENTION_DAYS: ${{ vars.GRIEVANCE_RETENTION_DAYS }}
         run: |
-          test -n "$MSG91_WIDGET_ID"
-          test -n "$MSG91_OTP_LENGTH"
-          test -n "$MSG91_TOKEN_AUTH"
-          test -n "$MSG91_AUTH_KEY"
-          MSG91_PAYLOAD="$({
-            printf '%s\n' "$MSG91_WIDGET_ID"
-            printf '%s\n' "$MSG91_OTP_LENGTH"
-            printf '%s\n' "$MSG91_TOKEN_AUTH"
-            printf '%s\n' "$MSG91_AUTH_KEY"
+          for name in MSG91_WIDGET_ID MSG91_OTP_LENGTH MSG91_TOKEN_AUTH MSG91_AUTH_KEY SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASSWORD SMTP_FROM_NAME SMTP_FROM_EMAIL DATA_ENCRYPTION_KEY CUSTOMER_CARE_EMAIL GRIEVANCE_EMAIL PRIVACY_EMAIL LEGAL_POLICY_VERSION EMAIL_PROVIDER_NAME EMAIL_PROVIDER_REGION DATABASE_REGION OBJECT_STORAGE_REGION LOG_REGION RETENTION_MODE GRIEVANCE_RETENTION_DAYS; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error title=Missing production configuration::$name is not configured for the production deployment"
+              exit 1
+            fi
+          done
+          RELEASE_PAYLOAD="$({
+            printf '%s\n' "$MSG91_WIDGET_ID" "$MSG91_OTP_LENGTH" "$MSG91_TOKEN_AUTH" "$MSG91_AUTH_KEY"
+            printf '%s\n' "$SMTP_HOST" "$SMTP_PORT" "$SMTP_SECURE" "$SMTP_USER" "$SMTP_PASSWORD" "$SMTP_FROM_NAME" "$SMTP_FROM_EMAIL"
+            printf '%s\n' "$DATA_ENCRYPTION_KEY" "$CUSTOMER_CARE_EMAIL" "$GRIEVANCE_EMAIL" "$PRIVACY_EMAIL" "$LEGAL_POLICY_VERSION"
+            printf '%s\n' "$EMAIL_PROVIDER_NAME" "$EMAIL_PROVIDER_REGION" "$DATABASE_REGION" "$OBJECT_STORAGE_REGION" "$LOG_REGION"
+            printf '%s\n' "$RETENTION_MODE" "$GRIEVANCE_RETENTION_DAYS"
           } | base64 | tr -d '\n')"
-          ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" "deploy-with-msg91-env:$MSG91_PAYLOAD"
+          ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" "deploy-with-release-env:$RELEASE_PAYLOAD"
       - name: Verify production health
         run: curl --fail --silent --show-error --retry 12 --retry-delay 5 --retry-all-errors https://uni.rocks/health

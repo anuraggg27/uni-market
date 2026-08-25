@@ -51,31 +51,11 @@ function isUniqueViolation(error: unknown): boolean {
 
 export function publicCompliance(config: AppConfig) {
   return {
-    policyVersion: currentPolicyVersion,
-    effectiveDate: '2026-08-25',
-    operator: {
-      name: config.LEGAL_OPERATOR_NAME,
-      address: config.LEGAL_OPERATOR_ADDRESS,
-      email: config.CUSTOMER_CARE_EMAIL,
-    },
-    grievanceOfficer: {
-      name: config.GRIEVANCE_OFFICER_NAME,
-      designation: config.GRIEVANCE_OFFICER_DESIGNATION,
-      email: config.GRIEVANCE_EMAIL,
-      address: config.LEGAL_OPERATOR_ADDRESS,
-    },
+    customerCareEmail: config.CUSTOMER_CARE_EMAIL,
     privacyEmail: config.PRIVACY_EMAIL,
-    jurisdictionCity: config.LEGAL_JURISDICTION_CITY,
-    nonAffiliation: 'Uni Market is an independent marketplace. It is not affiliated with, endorsed by, sponsored by, or operated by any university, college, or educational institution. Institution names and email domains are used only to verify eligibility.',
+    grievanceRetentionDays: config.GRIEVANCE_RETENTION_DAYS,
     transactionModel: 'Uni Market only facilitates introductions between users. Payments, inspection, delivery, returns and any exchange happen directly between users offline. Uni Market does not provide payment processing, escrow, shipping, refunds, warranties or guarantees.',
     ranking: 'The default order is newest approved first. Price sorts use the listing price. Popular order uses views plus three times favourites. There is no paid placement, personalisation or university preference.',
-    processors: [
-      { name: 'Google', purpose: 'Sign-in identity verification', data: 'OAuth identity and login email', region: 'According to the operator contract' },
-      { name: 'MSG91', purpose: 'Indian phone and student-email verification', data: 'Phone number, student email and verification events', region: 'According to the operator contract' },
-      { name: config.EMAIL_PROVIDER_NAME, purpose: 'Non-OTP transactional email', data: 'Recipient email and message delivery data', region: config.EMAIL_PROVIDER_REGION },
-      { name: 'Neon', purpose: 'Application database', data: 'Marketplace and account records', region: config.DATABASE_REGION },
-      { name: 'Cloudflare', purpose: 'Object storage, bot protection and delivery security', data: 'Listing images, network and challenge data', region: config.OBJECT_STORAGE_REGION },
-    ],
   };
 }
 

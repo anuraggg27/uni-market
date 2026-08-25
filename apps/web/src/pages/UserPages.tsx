@@ -65,7 +65,6 @@ import {
   ErrorState,
   FieldError,
   Loading,
-  SafetyReminder,
   StatusBadge,
   SubmitButton,
 } from "../components/UI";
@@ -221,7 +220,6 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
     <div className="page listing-form-page">
       <div className="page-header listing-form-header">
         <div>
-          <p className="eyebrow">{edit ? "Update" : "Sell"}</p>
           <h1>{edit ? "Edit your listing" : "List a product"}</h1>
           <p className="lede">
             One clear page, saved as a private draft. Every submitted listing is
@@ -457,7 +455,6 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
             <FieldError>{form.formState.errors.sellerPolicyAccepted?.message}</FieldError>
           </div>
         </fieldset>
-        <SafetyReminder />
         {serverError ? <p className="field-error">{serverError}</p> : null}
         <div className="listing-form-actions">
           <Link className="button secondary" to="/my-listings">
@@ -599,7 +596,6 @@ export function MyListingsPage() {
     <div className="page my-listings-page" ref={pageRef}>
       <div className="my-listings-header">
         <div>
-          <p className="eyebrow">Selling</p>
           <h1>My listings</h1>
           <p className="my-listings-intro">
             Manage your listings and track their status.
@@ -850,7 +846,6 @@ export function SavedPage() {
     <div className="page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">Shortlist</p>
           <h1>Saved products</h1>
         </div>
       </div>
@@ -1017,7 +1012,6 @@ export function ChatsPage() {
         <aside className="conversation-list" aria-label="Conversations">
           <header className="inbox-header">
             <div>
-              <p className="eyebrow">Private</p>
               <h1>Messages</h1>
             </div>
           </header>
@@ -1541,11 +1535,9 @@ export function TransactionsPage() {
     <div className="page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">Offline exchange</p>
           <h1>Transactions</h1>
         </div>
       </div>
-      <SafetyReminder />
       {query.isLoading ? (
         <Loading label="Loading transactions" />
       ) : query.isError ? (
@@ -1678,7 +1670,6 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
     <div className="page narrow">
       <div className="page-header">
         <div>
-          <p className="eyebrow">{onboarding ? "One quick step" : "Account"}</p>
           <h1>{onboarding ? "Confirm your name" : "Your profile"}</h1>
           <p className="lede">
             Institution details are optional and never restrict registration.
@@ -1945,7 +1936,6 @@ export function SupportPage() {
     <div className="page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">Help</p>
           <h1>Support</h1>
         </div>
       </div>
@@ -2359,13 +2349,13 @@ export function SettingsPage() {
   return (
     <div className="page settings-page">
       <header className="settings-masthead">
-        <div><p className="eyebrow">Account</p><h1>Settings</h1><p>Manage verification, privacy, and account security.</p></div>
+        <div><h1>Settings</h1><p>Manage verification, privacy, and account security.</p></div>
         <Link className="button secondary" to="/profile">Edit Profile</Link>
       </header>
 
       <section className="eligibility-overview" aria-labelledby="eligibility-title">
         <div className="eligibility-overview-heading">
-          <div><p className="eyebrow">Marketplace access</p><h2 id="eligibility-title">Your eligibility</h2></div>
+          <div><h2 id="eligibility-title">Your eligibility</h2></div>
           <StatusBadge value={user?.marketplaceEligible ? "VERIFIED" : "INCOMPLETE"} />
         </div>
         <div className="eligibility-checks">
@@ -2399,7 +2389,7 @@ export function SettingsPage() {
       </div>
 
       <section className="settings-wide-card" aria-labelledby="privacy-controls-title">
-        <header><div><p className="eyebrow">Your data</p><h2 id="privacy-controls-title">Privacy & Security</h2><p>Export your information or sign out every active device.</p></div></header>
+        <header><div><h2 id="privacy-controls-title">Privacy & Security</h2><p>Export your information or sign out every active device.</p></div></header>
         <div className="settings-action-list">
           <div><span className="settings-action-icon"><Download aria-hidden="true" /></span><div><strong>Download account data</strong><p>Get a machine-readable export with other members’ private details removed.</p></div><a className="button secondary" href={`${API_URL}/api/account/export`} download>Download Data</a></div>
           <div><span className="settings-action-icon"><KeyRound aria-hidden="true" /></span><div><strong>Revoke all sessions</strong><p>Sign out every device, including this one.</p></div><button type="button" className="button secondary" onClick={() => revokeSessions.mutate()} disabled={revokeSessions.isPending}>{revokeSessions.isPending ? "Revoking…" : "Revoke Sessions"}</button></div>
@@ -2408,7 +2398,7 @@ export function SettingsPage() {
       </section>
 
       <section className="settings-wide-card danger-zone" aria-labelledby="delete-account-title">
-        <header><span className="settings-card-icon"><Trash2 aria-hidden="true" /></span><div><p className="eyebrow">Danger zone</p><h2 id="delete-account-title">Close Account</h2><p>Access ends immediately. Eligible data is deleted or anonymised after 180 days; legal holds and required records can remain longer.</p></div></header>
+        <header><span className="settings-card-icon"><Trash2 aria-hidden="true" /></span><div><h2 id="delete-account-title">Close Account</h2><p>Access ends immediately. Eligible data is deleted or anonymised after 180 days; legal holds and required records can remain longer.</p></div></header>
         <div className="danger-zone-action"><label className="field"><span>Type <strong>DELETE MY ACCOUNT</strong> to confirm</span><input name="deleteConfirmation" value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} autoComplete="off" spellCheck={false} /></label><button type="button" className="button danger" onClick={() => deleteAccount.mutate()} disabled={deleteAccount.isPending || deleteConfirmation !== "DELETE MY ACCOUNT"}>{deleteAccount.isPending ? "Closing Account…" : "Close Account"}</button></div>
         {deleteAccount.error ? <p className="field-error" role="alert">{deleteAccount.error.message}</p> : null}
       </section>

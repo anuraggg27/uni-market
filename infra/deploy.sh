@@ -8,28 +8,39 @@ readonly IMAGE_NAME="uni-market:production"
 readonly ROLLBACK_IMAGE="uni-market:rollback"
 readonly CONTAINER_NAME="uni-market"
 
-sync_msg91_environment() {
-  local widget_id="$1"
-  local otp_length="$2"
-  local token_auth="$3"
-  local auth_key="$4"
+sync_release_environment() {
+  local values=("$@")
+  local keys=(
+    MSG91_WIDGET_ID MSG91_OTP_LENGTH MSG91_TOKEN_AUTH MSG91_AUTH_KEY
+    SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASSWORD SMTP_FROM_NAME SMTP_FROM_EMAIL
+    DATA_ENCRYPTION_KEY CUSTOMER_CARE_EMAIL GRIEVANCE_EMAIL PRIVACY_EMAIL LEGAL_POLICY_VERSION
+    EMAIL_PROVIDER_NAME EMAIL_PROVIDER_REGION DATABASE_REGION OBJECT_STORAGE_REGION LOG_REGION
+    RETENTION_MODE GRIEVANCE_RETENTION_DAYS
+  )
   local env_temp
 
-  [[ "$widget_id" =~ ^[A-Za-z0-9_-]+$ ]]
-  [[ "$otp_length" =~ ^[4-8]$ ]]
-  [[ "$token_auth" =~ ^[A-Za-z0-9_-]+$ ]]
-  [[ "$auth_key" =~ ^[A-Za-z0-9_-]+$ ]]
+  [[ "${#values[@]}" -eq "${#keys[@]}" ]]
+  [[ "${values[0]}" =~ ^[A-Za-z0-9_-]+$ ]]
+  [[ "${values[1]}" =~ ^[4-8]$ ]]
+  [[ "${values[2]}" =~ ^[A-Za-z0-9_-]+$ ]]
+  [[ "${values[3]}" =~ ^[A-Za-z0-9_-]+$ ]]
+  [[ "${values[5]}" =~ ^[0-9]+$ ]]
+  [[ "${values[6]}" =~ ^(true|false)$ ]]
+  [[ "${values[11]}" =~ ^[A-Fa-f0-9]{64}$ ]]
+  [[ "${values[21]}" =~ ^(dry-run|enforce)$ ]]
+  [[ "${values[22]}" =~ ^[0-9]+$ ]]
+  for value in "${values[@]}"; do
+    [[ -n "$value" && "$value" != *$'\r'* && "$value" != *'#'* ]]
+  done
 
   env_temp="$(mktemp "${ENV_FILE}.tmp.XXXXXX")"
   chmod 600 "$env_temp"
-  grep -Ev '^(DEV_MODE|MSG91_WIDGET_ID|MSG91_OTP_LENGTH|MSG91_TOKEN_AUTH|MSG91_AUTH_KEY|OTP_SERVICE_API_KEY|OTP_SERVICE_BASE_URL)=' "$ENV_FILE" > "$env_temp"
-  {
-    printf 'DEV_MODE=false\n'
-    printf 'MSG91_WIDGET_ID=%s\n' "$widget_id"
-    printf 'MSG91_OTP_LENGTH=%s\n' "$otp_length"
-    printf 'MSG91_TOKEN_AUTH=%s\n' "$token_auth"
-    printf 'MSG91_AUTH_KEY=%s\n' "$auth_key"
-  } >> "$env_temp"
+  # Remove retired legal-identity keys as well as the values replaced below.
+  grep -Ev '^(DEV_MODE|MSG91_WIDGET_ID|MSG91_OTP_LENGTH|MSG91_TOKEN_AUTH|MSG91_AUTH_KEY|OTP_SERVICE_API_KEY|OTP_SERVICE_BASE_URL|SMTP_HOST|SMTP_PORT|SMTP_SECURE|SMTP_USER|SMTP_PASSWORD|SMTP_FROM_NAME|SMTP_FROM_EMAIL|DATA_ENCRYPTION_KEY|LEGAL_OPERATOR_NAME|LEGAL_OPERATOR_ADDRESS|LEGAL_JURISDICTION_CITY|CUSTOMER_CARE_EMAIL|GRIEVANCE_EMAIL|PRIVACY_EMAIL|LEGAL_POLICY_VERSION|EMAIL_PROVIDER_NAME|EMAIL_PROVIDER_REGION|DATABASE_REGION|OBJECT_STORAGE_REGION|LOG_REGION|RETENTION_MODE|GRIEVANCE_RETENTION_DAYS)=' "$ENV_FILE" > "$env_temp"
+  printf 'DEV_MODE=false\n' >> "$env_temp"
+  for index in "${!keys[@]}"; do
+    printf '%s=%s\n' "${keys[$index]}" "${values[$index]}" >> "$env_temp"
+  done
   mv "$env_temp" "$ENV_FILE"
 }
 
@@ -42,12 +53,11 @@ fi
 cd "$REPOSITORY_DIR"
 test -s "$ENV_FILE"
 
-if [[ "${SSH_ORIGINAL_COMMAND:-}" == deploy-with-msg91-env:* ]]; then
-  encoded_msg91_environment="${SSH_ORIGINAL_COMMAND#deploy-with-msg91-env:}"
-  [[ "$encoded_msg91_environment" =~ ^[A-Za-z0-9+/=]+$ ]]
-  mapfile -t msg91_environment < <(printf '%s' "$encoded_msg91_environment" | base64 --decode)
-  [[ "${#msg91_environment[@]}" -eq 4 ]]
-  sync_msg91_environment "${msg91_environment[@]}"
+if [[ "${SSH_ORIGINAL_COMMAND:-}" == deploy-with-release-env:* ]]; then
+  encoded_release_environment="${SSH_ORIGINAL_COMMAND#deploy-with-release-env:}"
+  [[ "$encoded_release_environment" =~ ^[A-Za-z0-9+/=]+$ ]]
+  mapfile -t release_environment < <(printf '%s' "$encoded_release_environment" | base64 --decode)
+  sync_release_environment "${release_environment[@]}"
 fi
 
 git fetch --prune origin main

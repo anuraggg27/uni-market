@@ -36,7 +36,6 @@ export function AdminShell() {
     <div className="page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">Staff workspace</p>
           <h1>Administration</h1>
         </div>
       </div>

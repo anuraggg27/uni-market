@@ -54,7 +54,7 @@ npm run start -w @campus-market/api
 
 The production frontend is in `apps/web/dist`; the API entry point is `apps/api/dist/index.js`. Serve both behind TLS, keep `CLIENT_URL` exact, and set `TRUST_PROXY=true` only behind a trusted single proxy.
 
-The included production container builds both applications, serves the SPA from Express, runs database migrations before startup, and exposes only port `4000` inside the container. On the shared deployment droplet, Compose binds it to `127.0.0.1:3020` and Caddy uses the isolated site fragment in `infra/uni-market.caddy`.
+The included production container builds both applications, serves the SPA from Express, runs database migrations before startup, and exposes only port `4000` inside the container. On the shared deployment droplet, Compose binds it to `127.0.0.1:3020` and Caddy uses the isolated site fragment in `infra/uni-market.caddy`. Application logs are capped at three 10 MiB Docker files. Uni Market's Caddy access log rolls at 10 MiB and keeps no more than three rolled files or seven days, whichever removes a file first.
 
 Pushes to `main` deploy only after both CI jobs pass. The deploy job uses a dedicated forced-command SSH key and a root-owned deployment bootstrap, validates Compose, keeps a rollback image until the new container is healthy, removes only the superseded Uni Market image, and prunes unused build cache older than seven days. It never performs a global image, container, or volume prune on the shared droplet.
 

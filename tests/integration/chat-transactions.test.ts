@@ -59,6 +59,14 @@ describe('chat acceptance',()=>{
 
 describe('transaction and review acceptance',()=>{
   async function requested(){return (await buyer.agent.post('/api/transactions').set(buyer.headers).send({listingId:listing.id}).expect(201)).body.data;}
+  it('returns monthly and all-time leaderboard results without a timestamp encoding failure',async()=>{
+    const [monthly,allTime]=await Promise.all([
+      seller.agent.get('/api/leaderboard?scope=monthly').expect(200),
+      seller.agent.get('/api/leaderboard?scope=all-time').expect(200),
+    ]);
+    expect(monthly.body.data).toEqual([]);
+    expect(allTime.body.data).toEqual([]);
+  });
   it('TX-01 creates a purchase request and TX-02 prevents self-purchase',async()=>{const tx=await requested();expect(tx.status).toBe('REQUESTED');await seller.agent.post('/api/transactions').set(seller.headers).send({listingId:listing.id}).expect(400);});
   it('TX-03 reserves atomically and records the buyer',async()=>{const tx=await requested();const accepted=await seller.agent.post(`/api/transactions/${tx.id}/accept`).set(seller.headers).expect(200);expect(accepted.body.data.status).toBe('RESERVED');const row=(await ctx.db.select().from(schema.listings).where(eq(schema.listings.id,listing.id)))[0];expect(row?.lifecycleState).toBe('RESERVED');expect(row?.reservedBuyerId).toBe(buyer.user.id);});
   it('TX-04 only one concurrent acceptance can reserve a listing',async()=>{const other=await login(ctx.app,'second-buyer');await verifyPhone(other,'9965432109');const secondSellerSession=await login(ctx.app,'chat-seller');const [one,two]=await Promise.all([buyer.agent.post('/api/transactions').set(buyer.headers).send({listingId:listing.id}),other.agent.post('/api/transactions').set(other.headers).send({listingId:listing.id})]);const results=await Promise.all([seller.agent.post(`/api/transactions/${one.body.data.id}/accept`).set(seller.headers),secondSellerSession.agent.post(`/api/transactions/${two.body.data.id}/accept`).set(secondSellerSession.headers)]);expect(results.map((r)=>r.status).sort()).toEqual([200,409]);expect((await ctx.db.select().from(schema.transactions).where(eq(schema.transactions.status,'RESERVED')))).toHaveLength(1);});

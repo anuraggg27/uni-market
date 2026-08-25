@@ -50,13 +50,17 @@ export class EmailWorker {
 }
 
 function subject(template: string): string {
-  const subjects: Record<string, string> = { 'first-conversation-message': 'A buyer messaged you', listing_approved: 'Your listing was approved', listing_rejected: 'Your listing needs attention', listing_removed: 'Your listing was removed', 'support-response': 'Support replied to your request', 'grievance-received': 'Your Uni Market grievance receipt', 'grievance-response': 'Update on your Uni Market grievance', 'policy-reminder': 'Reminder: Uni Market rules and policies' };
+  const subjects: Record<string, string> = { 'first-conversation-message': 'A buyer messaged you', listing_approved: 'Your listing was approved', listing_rejected: 'Your listing needs attention', listing_removed: 'Your listing was removed', 'support-response': 'Support replied to your request', 'grievance-received': 'Your Uni Market grievance receipt', 'grievance-response': 'Update on your Uni Market grievance', 'grievance-new-internal': 'New grievance requires review', 'grievance-follow-up-internal': 'New information on a grievance', 'grievance-appeal-internal': 'Grievance appeal requires review', 'grievance-deadline-internal': 'Grievance deadline alert', 'policy-reminder': 'Reminder: Uni Market rules and policies' };
   return subjects[template] ?? 'Important Uni Market update';
 }
 function body(template: string, payload: Record<string, unknown> = {}): string {
   const bodies: Record<string, string> = { 'first-conversation-message': 'A buyer started a conversation about your listing.', listing_approved: 'Your listing passed manual review and is now visible.', listing_rejected: 'Your listing did not pass review. Open the listing to read the reason and edit it.', listing_removed: 'A moderator removed your listing.', 'support-response': 'A support agent replied to your support request.' };
   if (template === 'grievance-received') return `We received your grievance. Reference: ${String(payload.reference ?? '')}. Tracking secret: ${String(payload.trackingSecret ?? '')}. Keep the secret private.`;
   if (template === 'grievance-response') return `There is an update on grievance ${String(payload.reference ?? '')}. Use your reference and tracking secret to view it.`;
+  if (template === 'grievance-new-internal') return `A new grievance requires review. Reference: ${String(payload.reference ?? '')}. Category: ${String(payload.category ?? '')}. Action target: ${String(payload.actionDueAt ?? '')}. Open the private queue: ${String(payload.adminUrl ?? '')}.`;
+  if (template === 'grievance-follow-up-internal') return `A reporter added information to grievance ${String(payload.reference ?? '')}. Open the private queue: ${String(payload.adminUrl ?? '')}.`;
+  if (template === 'grievance-appeal-internal') return `An appeal was submitted for grievance ${String(payload.reference ?? '')}. New action target: ${String(payload.actionDueAt ?? '')}. Open the private queue: ${String(payload.adminUrl ?? '')}.`;
+  if (template === 'grievance-deadline-internal') return `Grievance ${String(payload.reference ?? '')} is ${String(payload.stage ?? '')}. Category: ${String(payload.category ?? '')}. Action target: ${String(payload.actionDueAt ?? '')}. Open the private queue: ${String(payload.adminUrl ?? '')}.`;
   if (template === 'policy-reminder') return 'Please review the current Terms, Privacy Notice, Community Rules, and Seller Policy. Continued use is subject to these rules.';
   return bodies[template] ?? 'There is an important update on your account.';
 }

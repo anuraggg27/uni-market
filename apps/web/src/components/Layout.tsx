@@ -85,18 +85,11 @@ export function Layout() {
           <div className="site-footer-utility">
             <span>© {new Date().getFullYear()} Uni Market</span>
             <nav aria-label="Footer utility">
-              <Link to="/grievance">Grievance officer</Link>
+              <Link to="/grievance">Report a grievance</Link>
               <Link to="/marketplace-disclosure">Marketplace disclosure</Link>
               <Link to="/privacy">Privacy</Link>
             </nav>
           </div>
-
-          <p className="site-footer-disclaimer">
-            Uni Market is an independent marketplace. It is not affiliated with,
-            endorsed by, sponsored by, or operated by any university, college, or
-            educational institution. Institution names and email domains are used
-            only to verify eligibility.
-          </p>
 
           <Link className="site-footer-wordmark" to="/" aria-label="Uni Market home">
             <span>Uni</span><span>Market</span>

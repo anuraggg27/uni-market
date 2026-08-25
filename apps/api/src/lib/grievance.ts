@@ -1,4 +1,4 @@
-import { keyedHash, randomToken } from './crypto.js';
+import { keyedHash, randomToken, safeEqual } from './crypto.js';
 
 export type GrievanceCategory =
   | 'GENERAL'
@@ -33,5 +33,5 @@ export function grievanceTracking(secret: string) {
 }
 
 export function verifyTracking(publicReference: string, trackingSecret: string, expected: string, secret: string): boolean {
-  return keyedHash(`${publicReference}:${trackingSecret}`, secret) === expected;
+  return safeEqual(keyedHash(`${publicReference}:${trackingSecret}`, secret), expected);
 }

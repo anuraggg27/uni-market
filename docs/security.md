@@ -32,9 +32,9 @@ Staff moderation records actor, effective role, target, old/new state, internal/
 
 ## Privacy, grievance and retention
 
-Student email, public-grievance contact details and direct-email outbox payloads are encrypted. Public grievances use a one-time tracking secret; staff responses exclude tracking hashes and encrypted contact fields. Priority safety categories receive shorter action targets and appear as alarms in the role-scoped staff queue.
+Student email, public-grievance contact details, complaint text, follow-ups, decisions, staff case notes and direct-email outbox payloads are encrypted. Public grievances use a high-entropy private tracking secret; staff responses exclude tracking hashes and encrypted contact fields. Opening full case details is audited. Priority safety categories receive shorter action targets and appear as alarms in the role-scoped staff queue.
 
-Account closure immediately revokes sessions and hides listings. The daily retention worker supports audited dry-run and enforcement modes, respects active legal holds, anonymises eligible closed accounts after 180 days, clears abandoned uploads and removed images on schedule, and periodically queues policy reminders. Production should begin in dry-run and move to enforcement only after reviewing counts and backups.
+Account closure immediately revokes sessions and hides listings. The daily retention worker supports audited dry-run and enforcement modes, respects active legal holds, anonymises eligible closed accounts after 180 days, erases closed grievance content after the configured grievance-retention period, clears abandoned uploads and removed images on schedule, and periodically queues policy reminders. Production should begin in dry-run and move to enforcement only after reviewing counts and backups.
 
 ## Rate limiting and Turnstile
 
@@ -53,6 +53,8 @@ Recommended Cloudflare WAF rate-limit rules, in addition to application controls
 | `POST /api/conversations/*/messages` | Block after 120/user/minute |
 | `POST /api/transactions` | Block after 20/user/hour |
 | `POST /api/reports` | Challenge after 3/user/hour; block duplicate bursts |
+| `POST /api/grievances` | Challenge repeated submissions; block after 5/IP/hour |
+| `POST /api/grievances/track` and case updates | Block credential-guessing or update bursts while preserving legitimate reporter access |
 | `POST /api/support` | Block after 10/user/hour |
 
 Tune with observed legitimate traffic and key authenticated limits on a trusted user identifier at the edge when available.
@@ -63,4 +65,5 @@ Tune with observed legitimate traffic and key authenticated limits on a trusted 
 - Run migrations on a Neon branch and back up before production changes.
 - Rotate R2/SMTP/OTP credentials on suspected exposure.
 - Monitor authentication/OTP failures, outbox failures, moderation actions and 429 rates.
+- Keep the production log bounds enabled: the app container retains at most three 10 MiB files, while the Uni Market Caddy access log retains one active 10 MiB file and at most three compressed rotations for no longer than seven days. Check root-disk usage during each deployment.
 - Run `npm audit --omit=dev`; triage any production vulnerability before release.

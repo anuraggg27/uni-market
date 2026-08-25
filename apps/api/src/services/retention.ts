@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import type { AppConfig } from '../config.js';
 import type { Database } from '../db/client.js';
-import { emailOutbox, legalHolds, listingImages, listings, messages, notifications, oauthAccounts, phoneVerifications, policyAcceptances, retentionRuns, sessions, studentEmailVerifications, users } from '../db/schema.js';
+import { emailOutbox, legalHolds, listingImages, listings, messages, notifications, oauthAccounts, phoneVerifications, policyAcceptances, reportEvents, reports, retentionRuns, sessions, studentEmailVerifications, users } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
 import type { StorageService } from './storage.js';
 
@@ -33,22 +33,29 @@ export class RetentionWorker {
       const oneHundredEightyDaysAgo = new Date(now.getTime() - 180 * 24 * 60 * 60_000);
       const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60_000);
       const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60_000);
-      const [purgeUsers, pendingImages, removedImages, activeHolds, policyReminderUsers] = await Promise.all([
+      const [purgeUsers, pendingImages, removedImages, activeHolds, policyReminderUsers, expiredGrievances] = await Promise.all([
         this.db.select().from(users).where(and(isNotNull(users.purgeAfter), lte(users.purgeAfter, now))),
         this.db.select().from(listingImages).where(and(isNull(listingImages.finalizedAt), isNull(listingImages.deletedAt), lte(listingImages.createdAt, oneHourAgo))),
         this.db.select({ image: listingImages, listing: listings }).from(listingImages).innerJoin(listings, eq(listings.id, listingImages.listingId)).where(and(isNotNull(listingImages.objectKey), isNull(listingImages.deletedAt), or(and(isNotNull(listings.deletedAt), lte(listings.deletedAt, oneHundredEightyDaysAgo)), and(eq(listings.moderationState, 'REMOVED'), lte(listings.updatedAt, oneHundredEightyDaysAgo))))),
         this.db.select().from(legalHolds).where(isNull(legalHolds.releasedAt)),
         this.db.select({ id: users.id }).from(users).where(and(eq(users.onboardingComplete, true), isNull(users.closedAt), isNull(users.deletedAt), or(isNull(users.policyReminderSentAt), lte(users.policyReminderSentAt, ninetyDaysAgo)))),
+        this.db.select({ id: reports.id }).from(reports).where(and(isNotNull(reports.purgeAfter), lte(reports.purgeAfter, now))),
       ]);
       const held = new Set(activeHolds.map((hold) => `${hold.targetType}:${hold.targetId}`));
       const eligibleUsers = purgeUsers.filter((user) => !held.has(`USER:${user.id}`));
       const eligibleRemovedImages = removedImages.filter(({ image, listing }) => !held.has(`LISTING:${listing.id}`) && !held.has(`USER:${image.ownerId}`));
-      const counts = { users: eligibleUsers.length, pendingImages: pendingImages.length, removedImages: eligibleRemovedImages.length, policyReminders: policyReminderUsers.length };
+      const eligibleGrievances = expiredGrievances.filter((report) => !held.has(`REPORT:${report.id}`));
+      const counts = { users: eligibleUsers.length, pendingImages: pendingImages.length, removedImages: eligibleRemovedImages.length, grievances: eligibleGrievances.length, policyReminders: policyReminderUsers.length };
       if (this.config.RETENTION_MODE === 'enforce') {
         await Promise.all([...pendingImages, ...eligibleRemovedImages.map(({ image }) => image)].flatMap((image) => [image.tempKey, image.objectKey].filter((key): key is string => Boolean(key)).map((key) => this.storage.delete(key))));
         await this.db.transaction(async (tx) => {
           if (pendingImages.length) await tx.update(listingImages).set({ deletedAt: now, tempKey: null }).where(inArray(listingImages.id, pendingImages.map(({ id }) => id)));
           if (eligibleRemovedImages.length) await tx.update(listingImages).set({ deletedAt: now, objectKey: null }).where(inArray(listingImages.id, eligibleRemovedImages.map(({ image }) => image.id)));
+          if (eligibleGrievances.length) {
+            const reportIds = eligibleGrievances.map(({ id }) => id);
+            await tx.delete(reportEvents).where(inArray(reportEvents.reportId, reportIds));
+            await tx.update(reports).set({ reporterId: null, reporterEmailCiphertext: null, targetId: null, targetUrl: null, targetUrlCiphertext: null, details: null, detailsCiphertext: null, assignedTo: null, publicResponse: null, publicResponseCiphertext: null, purgeAfter: null, updatedAt: now }).where(inArray(reports.id, reportIds));
+          }
           for (const user of eligibleUsers) {
             await tx.delete(oauthAccounts).where(eq(oauthAccounts.userId, user.id));
             await tx.delete(sessions).where(eq(sessions.userId, user.id));

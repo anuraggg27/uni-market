@@ -6,7 +6,7 @@ All JSON responses use `{ "data": ... }`. Errors use `{ "error": { "code", "mess
 
 - Auth/profile: `POST /api/auth/google`, `POST /api/auth/google/step-up`, `POST /api/auth/logout`, `GET /api/auth/csrf`, `GET|PATCH /api/auth/me`.
 - Eligibility: `POST /api/onboarding/complete`, `GET /api/student-email/config`, `POST /api/student-email/check-availability`, and `POST /api/student-email/verify-provider`. In production, the browser requests and verifies student-email OTPs with the MSG91 widget and the API validates MSG91's access token before recording the exact returned email identifier. The legacy `student-email/send|verify` endpoints work only in explicit local development mode and never queue SMTP mail. Protected marketplace actions require verified phone, current academic-email verification, 18+ attestation, and current policy acceptance.
-- Public compliance: `GET /api/compliance`; `POST /api/grievances`, `POST /api/grievances/track`, reporter follow-up and appeal endpoints.
+- Public compliance: `GET /api/compliance`; `POST /api/grievances`; `POST /api/grievances/track`; `POST /api/grievances/:reference/messages`; and `POST /api/grievances/:reference/appeal`. Public case access requires the reference and private tracking secret.
 - Privacy: `GET /api/account/export`, `POST /api/account/revoke-sessions`, `DELETE /api/account`.
 - Phone: `GET /api/phone/config`, `POST /api/phone/check-availability`, and `POST /api/phone/verify-provider`; local development also exposes `POST /api/phone/send|verify`.
 - Catalog/listings: `GET /api/categories`, `GET|POST /api/listings`, `GET /api/listings/:id`, `GET /api/my-listings`, `PATCH /api/listings/:id`, `POST /api/listings/:id/submit|withdraw|duplicate`.

@@ -8,7 +8,7 @@
 
 > This is a product and engineering compliance assessment, not a legal opinion. Indian counsel should validate the legal classifications, public policies, retention schedule, grievance appointments, and regulated-goods catalogue before launch.
 
-> **Implementation update — 25 August 2026:** The engineering remediations approved from this baseline are implemented in the working tree. This document preserves the original findings for traceability; descriptions of a control as “missing” refer to the pre-remediation baseline. The remaining production launch gates are operator appointments and real contact details, counsel approval, verified academic-domain entries, service-provider review evidence, operational staffing/exercises, and a reviewed transition from retention dry-run to enforcement. See `docs/compliance-operations.md`.
+> **Implementation update — 26 August 2026:** Most engineering remediations from this baseline are implemented in the working tree. At the owner's direction, the public application intentionally omits the legal operator name, operator address, fixed jurisdiction city, and named Grievance Officer; policy versions are retained as internal consent evidence but not repeated in the legal-page UI. These are accepted launch risks rather than completed remediations. This document preserves the original findings for traceability. See `docs/compliance-operations.md`.
 
 ## 1. Executive decision
 

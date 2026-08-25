@@ -34,7 +34,6 @@ import {
   EmptyState,
   ErrorState,
   Loading,
-  SafetyReminder,
   StatusBadge,
 } from "../components/UI";
 
@@ -224,9 +223,6 @@ export function HomePage() {
             </div>
           </section>
         ) : null}
-        <section className="section">
-          <SafetyReminder />
-        </section>
       </div>
     </>
   );
@@ -369,15 +365,11 @@ export function BrowsePage() {
     <div className="page !pt-10 sm:!pt-12">
       <div className="mb-7 flex flex-col gap-4 sm:mb-9 md:flex-row md:items-end md:justify-between">
         <div>
-          <p className="eyebrow !mb-2">Marketplace</p>
           <h1 className="font-bold text-ink">Browse products</h1>
           <p className="mt-2 text-[15px] font-normal text-muted">
             Find great items listed by students around you.
           </p>
         </div>
-        <p className="m-0 max-w-sm text-[13px] leading-relaxed text-muted md:text-right">
-          Only manually approved listings appear here.
-        </p>
       </div>
 
       <form
@@ -666,12 +658,6 @@ export function BrowsePage() {
           </div>
         ) : null}
       </form>
-      <aside className="browse-ranking-note">
-        <SlidersHorizontal aria-hidden="true" />
-        <p><strong>How results are ordered</strong><span>Newest uses approval time, price uses the listed amount, and popular uses views and favourites. No paid placement or university preference.</span></p>
-        <Link to="/marketplace-disclosure">Learn more</Link>
-      </aside>
-
       {listings.isLoading ? (
         <Loading variant="browse" label="Loading products" />
       ) : listings.isError ? (
@@ -1162,9 +1148,6 @@ export function ListingPage() {
             </form>
           ) : null}
 
-          <div className="mt-6">
-            <SafetyReminder />
-          </div>
         </aside>
         {specifications.length ? (
           <section
@@ -1393,7 +1376,6 @@ export function LeaderboardPage() {
     <div className="page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">Community reputation</p>
           <h1>Top sellers</h1>
         </div>
         <div className="tabs">
@@ -1524,16 +1506,10 @@ export function LoginPage() {
         {clientId ? (
           <div id="google-button" />
         ) : (
-          <div className="safety">
-            <ShieldCheck />
-            <div>
-              <strong>Google sign-in needs configuration</strong>
-              <p>
-                Set <code>VITE_GOOGLE_CLIENT_ID</code> for this environment.
-                Browsing remains available without an account.
-              </p>
-            </div>
-          </div>
+          <p className="field-error" role="alert">
+            Google sign-in needs configuration. Set <code>VITE_GOOGLE_CLIENT_ID</code>
+            for this environment. Browsing remains available without an account.
+          </p>
         )}
         {error ? (
           <p className="field-error" role="alert">

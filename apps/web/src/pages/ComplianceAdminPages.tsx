@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -33,39 +33,51 @@ function DataState({ query, emptyTitle, children }: { query: any; emptyTitle: st
 }
 
 export function AdminGrievances() {
-  const client = useQueryClient();
   const query = useQuery({ queryKey: ["admin-grievances"], queryFn: () => api<any[]>("/api/admin/grievances"), refetchInterval: 30_000 });
-  const acknowledge = useMutation({ mutationFn: (id: string) => api(`/api/admin/grievances/${id}/acknowledge`, { method: "POST" }), onSuccess: () => void client.invalidateQueries({ queryKey: ["admin-grievances"] }) });
-  const resolve = useMutation({ mutationFn: ({ id, body }: { id: string; body: unknown }) => api(`/api/admin/grievances/${id}/resolve`, { method: "POST", ...jsonBody(body) }), onSuccess: () => void client.invalidateQueries({ queryKey: ["admin-grievances"] }) });
 
   return <div className="compliance-admin-page">
-    <header className="admin-compliance-heading"><div><p className="eyebrow">Trust & safety</p><h2>Grievance Queue</h2><p>Cases are ordered by their action deadline and refreshed every 30 seconds.</p></div><span className="admin-live-indicator"><span aria-hidden="true" /> Live queue</span></header>
+    <header className="admin-compliance-heading"><div><h2>Grievance Queue</h2><p>Cases are ordered by their action deadline and refreshed every 30 seconds.</p></div><span className="admin-live-indicator"><span aria-hidden="true" /> Live queue</span></header>
     <DataState query={query} emptyTitle="No open grievances">{(rows) => <div className="grievance-queue">
-      {rows.map((row: any) => <article className={`grievance-case-card ${row.overdue ? "is-overdue" : ""}`} key={row.id}>
-        <header className="grievance-case-header">
-          <div><div className="grievance-case-badges"><StatusBadge value={row.overdue ? "OVERDUE" : row.priority} /><StatusBadge value={row.category} /></div><h3><code>{row.publicReference}</code></h3></div>
-          <div className="grievance-case-deadline"><Clock3 aria-hidden="true" /><span>Action target<strong>{formatDateTime(row.actionDueAt)}</strong></span></div>
-        </header>
-        <div className="grievance-case-body">
-          <div><span className="admin-data-label">Complaint</span><strong>{humanise(row.reason)}</strong><p>{row.details}</p></div>
-          <div><span className="admin-data-label">Reported location</span><a href={row.targetUrl} target="_blank" rel="noreferrer">Open target <ExternalLink aria-hidden="true" /></a><p className="grievance-target-url">{row.targetUrl}</p></div>
-        </div>
-        <div className="grievance-assignment">
-          {row.acknowledgedAt ? <span><ShieldCheck aria-hidden="true" /> Acknowledged {formatDateTime(row.acknowledgedAt)}</span> : <><span><AlertTriangle aria-hidden="true" /> Awaiting staff acknowledgement</span><button type="button" className="button secondary" onClick={() => acknowledge.mutate(row.id)} disabled={acknowledge.isPending}>{acknowledge.isPending ? "Assigning…" : "Acknowledge & Assign to Me"}</button></>}
-        </div>
-        <details className="admin-review-editor">
-          <summary>Record a Decision <ChevronDown aria-hidden="true" /></summary>
-          <form onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); resolve.mutate({ id: row.id, body: { outcome: form.get("outcome"), publicResponse: form.get("publicResponse"), internalReason: form.get("internalReason") } }); }}>
-            <label className="field"><span>Outcome</span><select name="outcome"><option value="RESOLVED">Resolve case</option><option value="DISMISSED">Dismiss complaint</option></select></label>
-            <label className="field"><span>Response to reporter</span><textarea name="publicResponse" required minLength={3} placeholder="Explain the decision and action taken…" /></label>
-            <label className="field"><span>Internal decision record</span><textarea name="internalReason" required minLength={3} placeholder="Record the evidence and policy basis…" /></label>
-            <SubmitButton pending={resolve.isPending}>Save Decision</SubmitButton>
-          </form>
-        </details>
-      </article>)}
+      {rows.map((row: any) => <GrievanceCaseCard row={row} key={row.id} />)}
     </div>}</DataState>
-    {acknowledge.error ? <p className="field-error" role="alert">{acknowledge.error.message}</p> : null}{resolve.error ? <p className="field-error" role="alert">{resolve.error.message}</p> : null}
   </div>;
+}
+
+function GrievanceCaseCard({ row }: { row: any }) {
+  const [expanded, setExpanded] = useState(false);
+  const client = useQueryClient();
+  const detail = useQuery({ queryKey: ["admin-grievance", row.id], queryFn: () => api<any>(`/api/admin/grievances/${row.id}`), enabled: expanded, staleTime: 30_000 });
+  const refresh = () => {
+    void client.invalidateQueries({ queryKey: ["admin-grievances"] });
+    void client.invalidateQueries({ queryKey: ["admin-grievance", row.id] });
+  };
+  const acknowledge = useMutation({ mutationFn: () => api(`/api/admin/grievances/${row.id}/acknowledge`, { method: "POST" }), onSuccess: refresh });
+  const sendUpdate = useMutation({ mutationFn: (body: unknown) => api(`/api/admin/grievances/${row.id}/messages`, { method: "POST", ...jsonBody(body) }), onSuccess: refresh });
+  const resolve = useMutation({ mutationFn: (body: unknown) => api(`/api/admin/grievances/${row.id}/resolve`, { method: "POST", ...jsonBody(body) }), onSuccess: refresh });
+  const mutationError = acknowledge.error ?? sendUpdate.error ?? resolve.error;
+
+  return <article className={`grievance-case-card ${row.overdue ? "is-overdue" : ""}`}>
+    <header className="grievance-case-header">
+      <div><div className="grievance-case-badges"><StatusBadge value={row.overdue ? "OVERDUE" : row.priority} /><StatusBadge value={row.category} />{row.appealedAt ? <StatusBadge value="APPEALED" /> : null}</div><h3><code>{row.publicReference}</code></h3><p>{humanise(row.reason)}</p></div>
+      <div className="grievance-case-deadline"><Clock3 aria-hidden="true" /><span>Action target<strong>{formatDateTime(row.actionDueAt)}</strong></span></div>
+    </header>
+    <div className="grievance-assignment">
+      {row.acknowledgedAt ? <span><ShieldCheck aria-hidden="true" /> Acknowledged {formatDateTime(row.acknowledgedAt)}</span> : <><span><AlertTriangle aria-hidden="true" /> Awaiting staff acknowledgement</span><button type="button" className="button secondary" onClick={() => acknowledge.mutate()} disabled={acknowledge.isPending}>{acknowledge.isPending ? "Assigning…" : "Acknowledge & Assign to Me"}</button></>}
+    </div>
+    <button className="grievance-case-toggle" type="button" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>{expanded ? "Hide Case" : "Open Case"}<ChevronDown aria-hidden="true" /></button>
+    {expanded ? <div className="grievance-case-detail">
+      {detail.isLoading ? <Loading variant="list" /> : detail.isError ? <ErrorState error={detail.error} retry={() => void detail.refetch()} /> : detail.data ? <>
+        <div className="grievance-case-body">
+          <div><span className="admin-data-label">Complaint</span><strong>{humanise(detail.data.reason)}</strong><p>{detail.data.details}</p></div>
+          <div><span className="admin-data-label">Reported location</span><a href={detail.data.targetUrl} target="_blank" rel="noreferrer">Open target <ExternalLink aria-hidden="true" /></a><p className="grievance-target-url">{detail.data.targetUrl}</p></div>
+        </div>
+        <section className="grievance-event-log"><h4>Case History</h4>{detail.data.events?.length ? <ol>{detail.data.events.map((event: any) => <li key={event.id}><div><strong>{humanise(event.type)}</strong><time dateTime={event.createdAt}>{formatDateTime(event.createdAt)}</time></div>{event.publicMessage ? <p>{event.publicMessage}</p> : null}{event.internalMessage ? <small>Internal: {event.internalMessage}</small> : null}</li>)}</ol> : <p>No case events recorded.</p>}</section>
+        <details className="admin-review-editor"><summary>Send an Update <ChevronDown aria-hidden="true" /></summary><form onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); sendUpdate.mutate({ publicMessage: form.get("publicMessage"), internalReason: form.get("internalReason") }); }}><label className="field"><span>Update for reporter</span><textarea name="publicMessage" required minLength={3} placeholder="Share a factual progress update…" /></label><label className="field"><span>Internal reason</span><textarea name="internalReason" required minLength={3} placeholder="Record why this update was sent…" /></label><SubmitButton pending={sendUpdate.isPending}>Send Update</SubmitButton></form></details>
+        <details className="admin-review-editor"><summary>Record a Decision <ChevronDown aria-hidden="true" /></summary><form onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); resolve.mutate({ outcome: form.get("outcome"), publicResponse: form.get("publicResponse"), internalReason: form.get("internalReason") }); }}><label className="field"><span>Outcome</span><select name="outcome"><option value="RESOLVED">Resolve case</option><option value="DISMISSED">Dismiss complaint</option></select></label><label className="field"><span>Response to reporter</span><textarea name="publicResponse" required minLength={3} placeholder="Explain the decision and action taken…" /></label><label className="field"><span>Internal decision record</span><textarea name="internalReason" required minLength={3} placeholder="Record the evidence and policy basis…" /></label><SubmitButton pending={resolve.isPending}>Save Decision</SubmitButton></form></details>
+      </> : null}
+      {mutationError ? <p className="field-error" role="alert">{mutationError.message}</p> : null}
+    </div> : null}
+  </article>;
 }
 
 export function AdminCompliance() {
@@ -85,9 +97,9 @@ export function AdminCompliance() {
 
   if (!canManageDomains) return <ErrorState error={new Error("This section is available to support and super administrators.")} />;
   return <div className="compliance-admin-page">
-    <header className="admin-compliance-heading"><div><p className="eyebrow">Governance</p><h2>Compliance Registers</h2><p>Operational records for eligibility, providers, retention holds, and staff access.</p></div></header>
+    <header className="admin-compliance-heading"><div><h2>Compliance Registers</h2><p>Operational records for eligibility, providers, retention holds, and staff access.</p></div></header>
 
-    {superAdmin && readiness.data ? <section className={`readiness-banner ${readiness.data.ready ? "is-ready" : ""}`}><span className="readiness-icon">{readiness.data.ready ? <ShieldCheck aria-hidden="true" /> : <AlertTriangle aria-hidden="true" />}</span><div><p className="eyebrow">Release readiness</p><h3>{readiness.data.ready ? "Core registers are ready" : "Review required before release"}</h3><p>{readiness.data.academicDomains} active academic domains · {readiness.data.incompleteProviders.length ? `${readiness.data.incompleteProviders.length} provider reviews incomplete` : "All provider reviews complete"}</p></div><StatusBadge value={readiness.data.ready ? "READY" : "NOT_READY"} /></section> : null}
+    {superAdmin && readiness.data ? <section className={`readiness-banner ${readiness.data.ready ? "is-ready" : ""}`}><span className="readiness-icon">{readiness.data.ready ? <ShieldCheck aria-hidden="true" /> : <AlertTriangle aria-hidden="true" />}</span><div><h3>{readiness.data.ready ? "Core registers are ready" : "Review required before release"}</h3><p>{readiness.data.academicDomains} active academic domains · {readiness.data.incompleteProviders.length ? `${readiness.data.incompleteProviders.length} provider reviews incomplete` : "All provider reviews complete"}</p></div><StatusBadge value={readiness.data.ready ? "READY" : "NOT_READY"} /></section> : null}
 
     <section className="compliance-register-section">
       <header><span className="register-icon"><Globe2 aria-hidden="true" /></span><div><h3>Academic Domains</h3><p>Only domains verified against an official institution source belong here.</p></div></header>

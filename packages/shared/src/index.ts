@@ -61,7 +61,6 @@ export const reviewSchema = z.object({
   tags: z.array(z.enum(['PRODUCT_AS_DESCRIBED', 'RESPONSIVE', 'SMOOTH_TRANSACTION', 'SAFE_MEETUP', 'LATE_MEETUP', 'INCORRECT_DESCRIPTION', 'BUYER_NO_SHOW', 'SELLER_NO_SHOW'])).max(4).default([])
 });
 
-export const safetyReminder = 'Inspect the product before paying, meet in a safe public location and never share an OTP or sensitive financial information.';
 
 export type ListingInput = z.infer<typeof listingInputSchema>;
 export type Role = typeof roles[number];

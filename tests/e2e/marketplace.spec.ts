@@ -453,7 +453,35 @@ test("E2E-05 support request receives an agent response and resolves", async ({
   await support.close();
 });
 
-test("E2E-06 important marketplace screens remain usable at mobile, tablet and desktop widths", async ({
+test("E2E-06 public grievance submission returns private tracking access", async ({
+  browser,
+}) => {
+  const guest = await browser.newContext();
+  const page = await guest.newPage();
+  await page.goto("/grievance");
+  await page.getByLabel("Your email").fill("grievance-reporter@example.com");
+  await page.getByLabel("Issue category").selectOption("OTHER");
+  await page
+    .getByLabel("Uni Market link to the listing, profile, message, or content (optional)")
+    .fill(`${page.url().split("/grievance")[0]}/listing/reported-content`);
+  await page
+    .getByLabel("What happened?")
+    .fill("This report verifies the complete public grievance and private tracking flow.");
+  await page.getByRole("button", { name: "Submit Grievance" }).click();
+  await expect(page.getByRole("heading", { name: "Keep these details safe" })).toBeVisible();
+
+  const reference = (await page.locator("dd code").nth(0).textContent())!;
+  const trackingSecret = (await page.locator("dd code").nth(1).textContent())!;
+  await page.getByRole("link", { name: "Track This Case" }).click();
+  await page.getByLabel("Reference").fill(reference);
+  await page.getByLabel("Tracking secret").fill(trackingSecret);
+  await page.getByRole("button", { name: "View Case Status" }).click();
+  await expect(page.getByRole("heading", { name: "Open" })).toBeVisible();
+  await expect(page.getByText("Your grievance was received and queued for review.")).toBeVisible();
+  await guest.close();
+});
+
+test("E2E-07 important marketplace screens remain usable at mobile, tablet and desktop widths", async ({
   browser,
 }) => {
   test.setTimeout(90_000);
@@ -472,7 +500,9 @@ test("E2E-06 important marketplace screens remain usable at mobile, tablet and d
       "/leaderboard",
       "/login",
       "/terms",
+      "/privacy",
       "/seller-policy",
+      "/marketplace-disclosure",
     ]) {
       await page.goto(path);
       if (path === "/") {
@@ -482,6 +512,26 @@ test("E2E-06 important marketplace screens remain usable at mobile, tablet and d
             (input) => getComputedStyle(input, "::placeholder").fontSize,
           );
         expect(searchFontSize).toBe(viewport.width < 640 ? "14px" : "16px");
+      }
+      if (path === "/terms") {
+        await expect(page.getByRole("heading", { name: "Independent platform" })).toBeVisible();
+        await expect(page.getByText("Policy version")).toHaveCount(0);
+        await expect(page.getByText("Platform operator")).toHaveCount(0);
+      }
+      if (path === "/seller-policy") {
+        await expect(page.getByText(/not affiliated with, endorsed by/)).toHaveCount(0);
+      }
+      if (path === "/privacy") {
+        await expect(page.getByRole("link", { name: "privacy@uni.rocks" })).toBeVisible();
+        await expect(page.getByRole("heading", { name: "Sharing" })).toBeVisible();
+        await expect(page.getByText("Sharing & processors")).toHaveCount(0);
+      }
+      if (path === "/marketplace-disclosure") {
+        await expect(page.getByRole("heading", { name: "Service providers" })).toHaveCount(0);
+      }
+      if (path === "/browse") {
+        await expect(page.getByText("Only manually approved listings appear here.")).toHaveCount(0);
+        await expect(page.getByText("How results are ordered")).toHaveCount(0);
       }
       const overflow = await page.evaluate(
         () =>

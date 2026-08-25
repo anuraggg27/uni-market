@@ -287,8 +287,10 @@ export const reports = pgTable('reports', {
   targetType: text('target_type').notNull(),
   targetId: uuid('target_id'),
   targetUrl: text('target_url'),
+  targetUrlCiphertext: text('target_url_ciphertext'),
   reason: text('reason').notNull(),
   details: text('details'),
+  detailsCiphertext: text('details_ciphertext'),
   conversationContextStart: timestamp('conversation_context_start', { withTimezone: true }),
   conversationContextEnd: timestamp('conversation_context_end', { withTimezone: true }),
   status: reportStatusEnum('status').default('OPEN').notNull(),
@@ -297,8 +299,10 @@ export const reports = pgTable('reports', {
   actionDueAt: timestamp('action_due_at', { withTimezone: true }).notNull(),
   acknowledgedAt: timestamp('acknowledged_at', { withTimezone: true }),
   publicResponse: text('public_response'),
+  publicResponseCiphertext: text('public_response_ciphertext'),
   appealedAt: timestamp('appealed_at', { withTimezone: true }),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  purgeAfter: timestamp('purge_after', { withTimezone: true }),
   ...timestamps
 }, (table) => [
   index('reports_queue_idx').on(table.status, table.actionDueAt),
@@ -311,7 +315,9 @@ export const reportEvents = pgTable('report_events', {
   actorUserId: uuid('actor_user_id').references(() => users.id),
   eventType: text('event_type').notNull(),
   publicMessage: text('public_message'),
+  publicMessageCiphertext: text('public_message_ciphertext'),
   internalMessage: text('internal_message'),
+  internalMessageCiphertext: text('internal_message_ciphertext'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
 }, (table) => [index('report_events_case_idx').on(table.reportId, table.createdAt)]);
 

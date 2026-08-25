@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { AlertCircle, Inbox, LoaderCircle, ShieldCheck } from "lucide-react";
-import { safetyReminder } from "@campus-market/shared";
+import { AlertCircle, Inbox, LoaderCircle } from "lucide-react";
 import { ApiError } from "../api";
 export { Loading } from "./LoadingSkeletons";
 export function ErrorState({
@@ -44,17 +43,6 @@ export function EmptyState({
       <p>{body}</p>
       {action}
     </div>
-  );
-}
-export function SafetyReminder({ compact = false }: { compact?: boolean }) {
-  return (
-    <aside className={`safety ${compact ? "compact" : ""}`}>
-      <ShieldCheck aria-hidden="true" />
-      <div>
-        <strong>Meet safely</strong>
-        <p>{safetyReminder}</p>
-      </div>
-    </aside>
   );
 }
 export function SubmitButton({

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm';
 import { idSchema, reviewSchema } from '@campus-market/shared';
 import { z } from 'zod';
 import type { Database } from '../db/client.js';
@@ -116,7 +116,7 @@ export function reputationRouter(db: Database): Router {
   router.get('/leaderboard', asyncRoute(async (req, res) => {
     const scope = req.query.scope === 'monthly' ? 'monthly' : 'all-time';
     const since = new Date(); since.setUTCDate(1); since.setUTCHours(0, 0, 0, 0);
-    const rows = await db.select({ id: users.id, displayName: users.displayName, avatarUrl: users.avatarUrl, completedSales: sql<number>`count(distinct ${transactions.id})`, averageRating: sql<number>`coalesce(avg(distinct ${reviews.rating}), 0)`, reviewCount: sql<number>`count(distinct ${reviews.id})`, cancellations: sql<number>`count(distinct case when ${transactions.status} in ('CANCELLED_BY_BUYER','CANCELLED_BY_SELLER') then ${transactions.id} end)` }).from(users).innerJoin(transactions, eq(transactions.sellerId, users.id)).leftJoin(reviews, and(eq(reviews.revieweeId, users.id), isNull(reviews.hiddenAt), isNull(reviews.deletedAt))).where(and(eq(transactions.status, 'COMPLETED'), isNull(users.suspendedAt), eq(users.fraudInvestigation, false), ...(scope === 'monthly' ? [sql`${transactions.completedAt} >= ${since}`] : []))).groupBy(users.id).having(sql`count(distinct ${transactions.id}) >= 2`).orderBy(desc(sql`count(distinct ${transactions.id})`), desc(sql`coalesce(avg(distinct ${reviews.rating}), 0)`), desc(sql`count(distinct ${reviews.id})`)).limit(50);
+    const rows = await db.select({ id: users.id, displayName: users.displayName, avatarUrl: users.avatarUrl, completedSales: sql<number>`count(distinct ${transactions.id})`, averageRating: sql<number>`coalesce(avg(distinct ${reviews.rating}), 0)`, reviewCount: sql<number>`count(distinct ${reviews.id})` }).from(users).innerJoin(transactions, eq(transactions.sellerId, users.id)).leftJoin(reviews, and(eq(reviews.revieweeId, users.id), isNull(reviews.hiddenAt), isNull(reviews.deletedAt))).where(and(eq(transactions.status, 'COMPLETED'), isNull(users.suspendedAt), eq(users.fraudInvestigation, false), ...(scope === 'monthly' ? [gte(transactions.completedAt, since)] : []))).groupBy(users.id).having(sql`count(distinct ${transactions.id}) >= 2`).orderBy(desc(sql`count(distinct ${transactions.id})`), desc(sql`coalesce(avg(distinct ${reviews.rating}), 0)`), desc(sql`count(distinct ${reviews.id})`)).limit(50);
     res.json({ data: rows.map((row, index) => ({ ...row, rank: index + 1 })) });
   }));
   return router;

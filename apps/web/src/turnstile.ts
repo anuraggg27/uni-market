@@ -49,6 +49,7 @@ export async function solveTurnstile(): Promise<string> {
     guidance.textContent =
       "We noticed repeated requests. Complete this check to continue.";
     const widget = document.createElement("div");
+    widget.dataset.action = "turnstile-spin-v1";
     const cancel = document.createElement("button");
     cancel.className = "button secondary";
     cancel.type = "button";
@@ -74,6 +75,7 @@ export async function solveTurnstile(): Promise<string> {
     widgetId = window.turnstile!.render(widget, {
       sitekey,
       theme: "light",
+      action: "turnstile-spin-v1",
       callback: (token: string) => {
         cleanup();
         resolve(token);
