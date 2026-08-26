@@ -2367,10 +2367,22 @@ export function SettingsPage() {
   const otpLength = verificationConfig.data?.otpLength ?? 4;
   const studentOtpLength = studentVerificationConfig.data?.otpLength ?? 6;
   const eligibilityItems = [
-    { label: "Age & policies", detail: "18+ declaration and current policies", complete: Boolean(user?.eligibility?.adultAttested) },
-    { label: "Mobile number", detail: "Verified Indian mobile number", complete: Boolean(user?.eligibility?.phoneVerified) },
-    { label: "Student email", detail: "Verified academic email address", complete: Boolean(user?.eligibility?.studentEmailVerified) },
+    { label: "Age & policies", detail: "18+ declaration and current policies", complete: Boolean(user?.eligibility?.adultAttested && user?.eligibility?.policiesAccepted), targetId: "age-policies-settings" },
+    { label: "Mobile number", detail: "Verified Indian mobile number", complete: Boolean(user?.eligibility?.phoneVerified), targetId: "phone-verification-settings", verification: "phone" as const },
+    { label: "Student email", detail: "Verified academic email address", complete: Boolean(user?.eligibility?.studentEmailVerified), targetId: "student-email-settings", verification: "student" as const },
   ];
+  function scrollToEligibility(targetId: string, verification?: "phone" | "student") {
+    if (verification) setActiveVerification(verification);
+    window.requestAnimationFrame(() => {
+      const target = document.getElementById(targetId);
+      if (!target) return;
+      target.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "center",
+      });
+      target.focus({ preventScroll: true });
+    });
+  }
   return (
     <div className="page settings-page">
       <header className="settings-masthead">
@@ -2384,13 +2396,18 @@ export function SettingsPage() {
           <StatusBadge value={user?.marketplaceEligible ? "VERIFIED" : "INCOMPLETE"} />
         </div>
         <div className="eligibility-checks">
-          {eligibilityItems.map((item) => <div className={item.complete ? "is-complete" : ""} key={item.label}>{item.complete ? <CheckCircle2 aria-hidden="true" /> : <Circle aria-hidden="true" />}<div><strong>{item.label}</strong><span>{item.detail}</span></div></div>)}
+          {eligibilityItems.map((item) => <button type="button" className={item.complete ? "is-complete" : ""} key={item.label} aria-controls={item.targetId} onClick={() => scrollToEligibility(item.targetId, item.verification)}>{item.complete ? <CheckCircle2 aria-hidden="true" /> : <Circle aria-hidden="true" />}<span><strong>{item.label}</strong><span>{item.detail}</span></span><ChevronRight className="eligibility-check-chevron" aria-hidden="true" /></button>)}
         </div>
         <p className="eligibility-guidance">{user?.marketplaceEligible ? "You can list, message, and transact." : "Complete all 3 checks to use marketplace features. Your Google sign-in and student email can be different."}</p>
       </section>
 
       <div className="settings-grid">
-        <section className="settings-card" aria-labelledby="phone-verification-title">
+        <section id="age-policies-settings" className="settings-card settings-card-wide" aria-labelledby="age-policies-title" tabIndex={-1}>
+          <header><span className="settings-card-icon"><ShieldCheck aria-hidden="true" /></span><div><h2 id="age-policies-title">Age & Policies</h2><p>Your marketplace eligibility declarations.</p></div></header>
+          {user?.eligibility?.adultAttested && user?.eligibility?.policiesAccepted ? <div className="verification-complete"><CheckCircle2 aria-hidden="true" /><div><strong>Your requirements are complete</strong><span>Your 18+ declaration and current policy acceptance are recorded.</span></div></div> : <div className="settings-card-form"><p className="verification-setup-note">Your age declaration or policy acceptance needs attention.</p><Link className="button secondary" to="/onboarding">Review Requirements</Link></div>}
+        </section>
+
+        <section id="phone-verification-settings" className="settings-card" aria-labelledby="phone-verification-title" tabIndex={-1}>
           <header><span className="settings-card-icon"><Smartphone aria-hidden="true" /></span><div><h2 id="phone-verification-title">Mobile Number</h2><p>Kept private and used for account trust.</p></div></header>
           {user?.phoneVerifiedAt ? <div className="verification-complete"><CheckCircle2 aria-hidden="true" /><div><strong>Your phone is verified</strong><span>Your Indian mobile number is confirmed.</span></div></div> : <div className="settings-card-form" onFocusCapture={() => setActiveVerification("phone")}>
             <label className="field"><span>Indian mobile number</span><input name="phone" type="tel" value={phone} onChange={(event) => { setPhone(event.target.value); if (codeSent) { setCodeSent(false); setCode(""); setRequestId(undefined); setResendCooldown(0); } }} placeholder="e.g. 98765 43210…" inputMode="tel" autoComplete="tel" disabled={send.isPending || verify.isPending} /></label>
@@ -2401,8 +2418,8 @@ export function SettingsPage() {
           </div>}
         </section>
 
-        <section className="settings-card" aria-label="Academic verification controls">
-          <header><span className="settings-card-icon"><MailCheck aria-hidden="true" /></span><div><h2>Student Email</h2><p>Verified separately from your Google sign-in.</p></div></header>
+        <section id="student-email-settings" className="settings-card" aria-labelledby="student-email-title" tabIndex={-1}>
+          <header><span className="settings-card-icon"><MailCheck aria-hidden="true" /></span><div><h2 id="student-email-title">Student Email</h2><p>Verified separately from your Google sign-in.</p></div></header>
           {user?.studentEmailVerifiedAt ? <div className="verification-complete"><CheckCircle2 aria-hidden="true" /><div><strong>{user.studentEmailMasked} is verified</strong><span>Valid until {user.studentEmailExpiresAt ? accountDateFormatter.format(new Date(user.studentEmailExpiresAt)) : "12 months after verification"}.</span></div></div> : <div className="settings-card-form" onFocusCapture={() => setActiveVerification("student")}>
             {academicDomains.isPending ? <Loading label="Loading student email domain" /> : selectedAcademicDomain ? <>
               <label className="field"><span>Student email</span><div className="student-email-address"><input aria-label="Student email" name="studentEmailLocalPart" type="text" value={studentEmailLocalPart} onChange={(event) => { setStudentEmailLocalPart(event.target.value.replace(/@.*$/, "")); setStudentCodeSent(false); setStudentCode(""); setStudentRequestId(undefined); setStudentResendCooldown(0); }} autoComplete="username" spellCheck={false} placeholder="your.name" /><span aria-hidden="true">@{selectedAcademicDomain.domain}</span></div></label>
