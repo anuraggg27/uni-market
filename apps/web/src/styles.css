@@ -186,9 +186,7 @@ button:disabled {
 @media (prefers-reduced-motion: reduce) {
   .home-search-placeholder-current,
   .home-search-placeholder-next {
-    animation: none !important;
-    filter: none;
-    will-change: auto;
+    animation-duration: 1100ms !important;
   }
 }
 
