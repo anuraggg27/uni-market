@@ -36,22 +36,40 @@ export function authRouter(db: Database, config: AppConfig, verifier: GoogleVeri
   };
 
   router.post('/google', asyncRoute(async (req, res) => {
-    const { credential } = z.object({ credential: z.string().min(20).max(10_000) }).parse(req.body);
+    const { credential, reactivate } = z.object({
+      credential: z.string().min(20).max(10_000),
+      reactivate: z.boolean().default(false),
+    }).parse(req.body);
     const identity = await verifier.verify(credential);
     if (!identity.emailVerified) throw new AppError(401, 'EMAIL_NOT_VERIFIED', 'Use a verified Google account');
     const now = new Date();
-    const user = await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const existingAccount = (await tx.select({ userId: oauthAccounts.userId }).from(oauthAccounts).where(and(eq(oauthAccounts.provider, 'google'), eq(oauthAccounts.providerSubject, identity.sub))).limit(1))[0];
       if (existingAccount) {
-        const existing = (await tx.update(users).set({ email: identity.email.toLowerCase(), avatarUrl: identity.picture ?? null, lastActiveAt: now, updatedAt: now }).where(eq(users.id, existingAccount.userId)).returning())[0]!;
+        const current = (await tx.select().from(users).where(eq(users.id, existingAccount.userId)).limit(1))[0];
+        if (!current) throw new AppError(404, 'ACCOUNT_NOT_FOUND', 'This account is no longer available');
+        if (current.closedAt && !reactivate) {
+          throw new AppError(409, 'ACCOUNT_PENDING_DELETION', 'This account is closed and queued for deletion', {
+            purgeAfter: current.purgeAfter?.toISOString() ?? null,
+          });
+        }
+        if (current.deletedAt && !current.closedAt) throw new AppError(410, 'ACCOUNT_DELETED', 'This account has already been deleted');
+        const existing = (await tx.update(users).set({
+          email: identity.email.toLowerCase(),
+          avatarUrl: identity.picture ?? null,
+          lastActiveAt: now,
+          ...(current.closedAt && reactivate ? { closedAt: null, deletedAt: null, purgeAfter: null } : {}),
+          updatedAt: now,
+        }).where(eq(users.id, existingAccount.userId)).returning())[0]!;
         await tx.update(oauthAccounts).set({ emailAtLogin: identity.email.toLowerCase() }).where(and(eq(oauthAccounts.provider, 'google'), eq(oauthAccounts.providerSubject, identity.sub)));
-        return existing;
+        return { user: existing, reactivated: Boolean(current.closedAt && reactivate) };
       }
       const created = (await tx.insert(users).values({ email: identity.email.toLowerCase(), displayName: identity.name, avatarUrl: identity.picture ?? null }).returning())[0]!;
       await tx.insert(oauthAccounts).values({ userId: created.id, providerSubject: identity.sub, emailAtLogin: identity.email.toLowerCase() });
       await tx.insert(userRoles).values({ userId: created.id, role: 'USER' });
-      return created;
+      return { user: created, reactivated: false };
     });
+    const { user } = result;
     const bootstrap = new Set(config.BOOTSTRAP_ADMIN_EMAILS.split(',').map((value) => value.trim().toLowerCase()).filter(Boolean));
     if (bootstrap.has(user.email.toLowerCase())) await db.insert(userRoles).values({ userId: user.id, role: 'SUPER_ADMIN' }).onConflictDoNothing();
     if (req.cookies?.campus_session) await db.update(sessions).set({ revokedAt: now }).where(eq(sessions.tokenHash, sha256(`${req.cookies.campus_session}:${config.SESSION_SECRET}`)));
@@ -60,7 +78,7 @@ export function authRouter(db: Database, config: AppConfig, verifier: GoogleVeri
     const raw = randomToken();
     await db.insert(sessions).values({ userId: user.id, tokenHash: sha256(`${raw}:${config.SESSION_SECRET}`), expiresAt: new Date(now.getTime() + (isStaff ? 8 : 30 * 24) * 60 * 60_000), staffVerifiedAt: isStaff ? now : null, userAgent: req.header('user-agent')?.slice(0, 500), ipHash: sha256(req.ip) });
     res.cookie('campus_session', raw, sessionCookie(config));
-    res.status(200).json({ data: { onboardingRequired: !user.onboardingComplete } });
+    res.status(200).json({ data: { onboardingRequired: !user.onboardingComplete, reactivated: result.reactivated } });
   }));
 
   router.post('/google/step-up', requireAuth, asyncRoute(async (req, res) => {

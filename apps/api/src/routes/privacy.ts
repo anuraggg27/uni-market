@@ -69,7 +69,7 @@ export function privacyRouter(db: Database, config: AppConfig): Router {
     const now = new Date();
     const purgeAfter = new Date(now.getTime() + 180 * 24 * 60 * 60_000);
     await db.transaction(async (tx) => {
-      await tx.update(users).set({ closedAt: now, deletedAt: now, purgeAfter, onboardingComplete: false, updatedAt: now }).where(eq(users.id, req.auth!.userId));
+      await tx.update(users).set({ closedAt: now, deletedAt: now, purgeAfter, updatedAt: now }).where(eq(users.id, req.auth!.userId));
       await tx.update(sessions).set({ revokedAt: now }).where(eq(sessions.userId, req.auth!.userId));
       await tx.update(phoneVerifications).set({ invalidatedAt: now }).where(eq(phoneVerifications.userId, req.auth!.userId));
       await tx.update(studentEmailVerifications).set({ invalidatedAt: now }).where(eq(studentEmailVerifications.userId, req.auth!.userId));

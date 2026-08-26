@@ -207,13 +207,31 @@ describe('India compliance controls', () => {
     expect(denied.body.error.code).toBe('PROHIBITED_LISTING');
   });
 
-  it('closes an account immediately and schedules retention cleanup', async () => {
+  it('queues a closed account for deletion and requires explicit Google reactivation', async () => {
+    const credential = 'privacy-controls'.padEnd(24, 'x');
     const auth = await login(ctx.app, 'privacy-controls');
     await verifyPhone(auth);
     await auth.agent.delete('/api/account').set(auth.headers).send({ confirmation: 'DELETE MY ACCOUNT' }).expect(204);
     await auth.agent.get('/api/auth/session').expect(200).then((response) => expect(response.body.data).toBeNull());
-    const row = (await ctx.db.select().from(schema.users))[0]!;
-    expect(row.closedAt).toBeTruthy();
-    expect(row.purgeAfter).toBeTruthy();
+    const closed = (await ctx.db.select().from(schema.users))[0]!;
+    expect(closed.closedAt).toBeTruthy();
+    expect(closed.deletedAt).toBeTruthy();
+    expect(closed.purgeAfter).toBeTruthy();
+    expect(closed.onboardingComplete).toBe(true);
+
+    const denied = await request(ctx.app).post('/api/auth/google').send({ credential }).expect(409);
+    expect(denied.body.error.code).toBe('ACCOUNT_PENDING_DELETION');
+    expect(denied.body.error.message).toBe('This account is closed and queued for deletion');
+    expect(denied.body.error.details.purgeAfter).toBe(closed.purgeAfter?.toISOString());
+    expect(denied.headers['set-cookie']).toBeUndefined();
+
+    const reactivatedAgent = request.agent(ctx.app);
+    const reactivated = await reactivatedAgent.post('/api/auth/google').send({ credential, reactivate: true }).expect(200);
+    expect(reactivated.body.data).toEqual({ onboardingRequired: false, reactivated: true });
+    await reactivatedAgent.get('/api/auth/session').expect(200).then((response) => expect(response.body.data?.id).toBe(auth.user.id));
+    const reopened = (await ctx.db.select().from(schema.users))[0]!;
+    expect(reopened.closedAt).toBeNull();
+    expect(reopened.deletedAt).toBeNull();
+    expect(reopened.purgeAfter).toBeNull();
   });
 });

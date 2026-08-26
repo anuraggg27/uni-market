@@ -2282,7 +2282,10 @@ export function SettingsPage() {
     onSuccess: () => {
       clearCsrf();
       clearSession();
-      navigate("/");
+      navigate("/login", {
+        replace: true,
+        state: { accountClosureQueued: true },
+      });
     },
   });
   const logout = useMutation({

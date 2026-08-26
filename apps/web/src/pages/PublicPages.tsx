@@ -24,7 +24,7 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { api, jsonBody } from "../api";
+import { api, ApiError, jsonBody } from "../api";
 import { reportReasons } from "@campus-market/shared";
 import { useAuth } from "../auth";
 import { postLoginDestination } from "../auth-routing";
@@ -48,6 +48,9 @@ const HOME_SEARCH_PLACEHOLDER_WORDS = [
 ] as const;
 const HOME_SEARCH_PLACEHOLDER_HOLD_MS = 2400;
 const HOME_SEARCH_PLACEHOLDER_TRANSITION_MS = 1100;
+const loginDateFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+});
 
 function useListings(search: string) {
   return useQuery({
@@ -1455,10 +1458,21 @@ export function LoginPage() {
   const navigate = useNavigate();
   const { user, refresh } = useAuth();
   const [error, setError] = useState("");
+  const [pendingDeletion, setPendingDeletion] = useState<{
+    credential: string;
+    purgeAfter: string | null;
+  } | null>(null);
+  const [reactivating, setReactivating] = useState(false);
+  const routeState = location.state as {
+    from?: string;
+    accountClosureQueued?: boolean;
+  } | null;
+  const requestedPath = routeState?.from;
+  const accountClosureQueued = routeState?.accountClosureQueued === true;
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
   useEffect(() => {
     if (user) {
-      navigate(postLoginDestination(user, (location.state as any)?.from), {
+      navigate(postLoginDestination(user, requestedPath), {
         replace: true,
       });
       return;
@@ -1476,14 +1490,24 @@ export function LoginPage() {
         ux_mode: "popup",
         auto_select: false,
         callback: async ({ credential }: { credential: string }) => {
+          setError("");
+          setPendingDeletion(null);
           try {
             await api("/api/auth/google", {
               method: "POST",
               ...jsonBody({ credential }),
             });
             await refresh();
-          } catch (e: any) {
-            setError(e.message);
+          } catch (cause: unknown) {
+            if (cause instanceof ApiError && cause.code === "ACCOUNT_PENDING_DELETION") {
+              const details = cause.details as { purgeAfter?: unknown } | undefined;
+              setPendingDeletion({
+                credential,
+                purgeAfter: typeof details?.purgeAfter === "string" ? details.purgeAfter : null,
+              });
+              return;
+            }
+            setError(cause instanceof Error ? cause.message : "Sign-in could not be completed");
           }
         },
       });
@@ -1496,13 +1520,61 @@ export function LoginPage() {
     };
     document.head.appendChild(script);
     return () => script.remove();
-  }, [clientId, location.state, navigate, refresh, user]);
+  }, [clientId, navigate, refresh, requestedPath, user]);
+
+  async function reactivateAccount() {
+    if (!pendingDeletion || reactivating) return;
+    setReactivating(true);
+    setError("");
+    try {
+      await api("/api/auth/google", {
+        method: "POST",
+        ...jsonBody({ credential: pendingDeletion.credential, reactivate: true }),
+      });
+      await refresh();
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : "Your account could not be reactivated");
+    } finally {
+      setReactivating(false);
+    }
+  }
+
+  const scheduledDeletionDate = (() => {
+    if (!pendingDeletion?.purgeAfter) return null;
+    const date = new Date(pendingDeletion.purgeAfter);
+    return Number.isNaN(date.getTime()) ? null : loginDateFormatter.format(date);
+  })();
   return (
     <div className="page narrow">
       <div className="panel stack-lg">
         <div>
           <h1>Sign in to Uni Market</h1>
         </div>
+        {accountClosureQueued && !pendingDeletion ? (
+          <div className="account-state-notice" role="status">
+            <strong>Your account has been added to the deletion queue</strong>
+            <p>You have been signed out. Sign in with the same Google account if you want to reactivate it before deletion.</p>
+          </div>
+        ) : null}
+        {pendingDeletion ? (
+          <div className="account-state-notice" role="alert">
+            <strong>Your account is pending deletion</strong>
+            <p>
+              {scheduledDeletionDate
+                ? `It is scheduled for deletion or anonymisation on ${scheduledDeletionDate}.`
+                : "It is currently queued for deletion or anonymisation."}{" "}
+              Reactivate it to cancel the deletion request and continue signing in.
+            </p>
+            <button
+              type="button"
+              className="button primary"
+              onClick={() => void reactivateAccount()}
+              disabled={reactivating}
+            >
+              {reactivating ? "Reactivating…" : "Reactivate account"}
+            </button>
+          </div>
+        ) : null}
         {clientId ? (
           <div id="google-button" />
         ) : (

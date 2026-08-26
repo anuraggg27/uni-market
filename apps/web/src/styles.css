@@ -1723,6 +1723,23 @@ html.dark .confirm-warning {
   display: grid;
   gap: 28px;
 }
+.account-state-notice {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  padding: 15px 16px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  background: var(--color-surface-muted);
+}
+.account-state-notice p {
+  margin: 0;
+  color: var(--color-muted);
+  line-height: 1.55;
+}
+.account-state-notice .button {
+  margin-top: 4px;
+}
 .row {
   display: flex;
   align-items: center;
