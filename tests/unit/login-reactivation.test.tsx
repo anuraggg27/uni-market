@@ -88,6 +88,10 @@ describe("LoginPage account reactivation", () => {
     expect(script).not.toBeNull();
     fireEvent.load(script!);
     expect(googleCallback).toBeTypeOf("function");
+    expect((window as any).google.accounts.id.renderButton).toHaveBeenCalledWith(
+      expect.any(HTMLElement),
+      expect.objectContaining({ theme: "filled_black", size: "large", shape: "pill", text: "continue_with" }),
+    );
 
     await act(async () => {
       await googleCallback?.({ credential: "closed-account-google-credential" });

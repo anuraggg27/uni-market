@@ -1740,6 +1740,48 @@ html.dark .confirm-warning {
 .account-state-notice .button {
   margin-top: 4px;
 }
+.login-page {
+  display: grid;
+  min-height: min(680px, calc(100vh - 180px));
+  place-items: center;
+}
+.login-card {
+  display: grid;
+  width: min(100%, 470px);
+  gap: 24px;
+  padding: clamp(26px, 5vw, 42px);
+  border: 1px solid var(--color-line);
+  border-radius: 24px;
+  background: var(--color-surface);
+  box-shadow: 0 24px 70px color-mix(in srgb, var(--color-carbon) 10%, transparent);
+}
+.login-card-heading h1 {
+  margin: 0;
+  font-size: clamp(1.65rem, 5vw, 2.15rem);
+  letter-spacing: -0.04em;
+}
+.login-card-heading p {
+  margin: 8px 0 0;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+.google-signin-shell,
+#google-button {
+  width: 100%;
+  max-width: 400px;
+}
+#google-button {
+  min-height: 44px;
+  overflow: hidden;
+  border-radius: 999px;
+}
+.login-guest-link {
+  justify-self: center;
+  color: var(--color-muted);
+  font-size: 0.84rem;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
 .row {
   display: flex;
   align-items: center;
@@ -1753,6 +1795,52 @@ html.dark .confirm-warning {
   display: grid;
   gap: 20px;
   padding: clamp(20px, 2.4vw, 28px);
+}
+.transactions-page .page-header p {
+  max-width: 620px;
+  margin: 8px 0 0;
+  color: var(--color-muted);
+}
+.transaction-filters {
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  padding: 4px;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+}
+.transaction-filters button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--color-muted);
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.transaction-filters button.is-active {
+  color: var(--color-ink);
+  background: var(--color-surface);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--color-carbon) 10%, transparent);
+}
+.transaction-filters button span {
+  display: grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-line) 55%, transparent);
+  font-size: 0.7rem;
+}
+.transaction-list {
+  display: grid;
+  gap: 16px;
 }
 .transaction-card-header {
   display: flex;
@@ -1769,10 +1857,32 @@ html.dark .confirm-warning {
   font-weight: 500;
   line-height: 1.35;
 }
+.transaction-card-copy h2 a:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .transaction-card-copy p {
   margin: 4px 0 0;
   color: var(--color-muted);
   line-height: 1.4;
+}
+.transaction-card-copy .transaction-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 0.75rem;
+}
+.transaction-card-meta span + span::before {
+  margin-right: 14px;
+  color: var(--color-line);
+  content: "•";
+}
+.transaction-card-copy .transaction-status-copy {
+  margin-top: 10px;
+  color: var(--color-ink);
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 .transaction-card-header .status {
   flex-shrink: 0;
@@ -1838,6 +1948,15 @@ html.dark .confirm-warning {
   align-items: end;
 }
 @media (max-width: 600px) {
+  .transaction-filters {
+    display: flex;
+    width: 100%;
+  }
+  .transaction-filters button {
+    flex: 1;
+    justify-content: center;
+    padding-inline: 9px;
+  }
   .transaction-card {
     gap: 18px;
     padding: 18px;
@@ -2142,6 +2261,84 @@ html.dark .confirm-warning {
   border: 1px solid var(--color-line);
   border-radius: 16px;
   background: var(--color-surface);
+}
+.email-preferences-card {
+  scroll-margin-top: 96px;
+}
+.email-preferences-card:focus {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+}
+.email-preferences-card > header {
+  justify-content: flex-start;
+}
+.email-preference-list {
+  display: grid;
+}
+.email-preference-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 0;
+}
+.email-preference-row + .email-preference-row {
+  border-top: 1px solid var(--color-line);
+}
+.email-preference-row strong {
+  display: block;
+  font-size: 0.86rem;
+}
+.email-preference-row p,
+.essential-email-note {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.email-preference-master {
+  margin-top: 4px;
+}
+.email-preference-master strong {
+  font-size: 0.95rem;
+}
+.preference-switch {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.preference-switch span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--color-carbon) 20%, transparent);
+  transition: transform 160ms ease;
+}
+.preference-switch[aria-checked="true"] {
+  border-color: var(--color-brand);
+  background: var(--color-brand);
+}
+.preference-switch[aria-checked="true"] span {
+  transform: translateX(20px);
+}
+.essential-email-note {
+  padding-top: 16px;
+  border-top: 1px solid var(--color-line);
+}
+.settings-save-status {
+  margin: 10px 0 0;
+  color: var(--color-muted);
+  font-size: 0.75rem;
 }
 .settings-card {
   padding: clamp(20px, 3vw, 26px);

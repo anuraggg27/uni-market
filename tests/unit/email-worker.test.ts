@@ -18,6 +18,13 @@ type EmailJob = {
   job: { id: string; template: string; attempts: number };
   recipient: string;
   displayName: string;
+  preferences?: {
+    enabled: boolean;
+    listingUpdates: boolean;
+    transactionUpdates: boolean;
+    messageUpdates: boolean;
+    policyReminders: boolean;
+  };
 };
 
 function fakeDatabase(jobs: EmailJob[]) {
@@ -26,7 +33,8 @@ function fakeDatabase(jobs: EmailJob[]) {
   const limit = vi.fn(() => ({ for: forUpdate }));
   const orderBy = vi.fn(() => ({ limit }));
   const where = vi.fn(() => ({ orderBy }));
-  const leftJoin = vi.fn(() => ({ where }));
+  const secondLeftJoin = vi.fn(() => ({ where }));
+  const leftJoin = vi.fn(() => ({ leftJoin: secondLeftJoin }));
   const from = vi.fn(() => ({ leftJoin }));
   const select = vi.fn(() => ({ from }));
   const update = vi.fn(() => ({
@@ -94,8 +102,9 @@ describe("EmailWorker", () => {
       expect.objectContaining({
         from: '"Uni Market Test" <market@example.test>',
         to: "student@example.edu",
-        subject: "Your listing was approved",
-        text: expect.stringContaining("Student,\n\nYour listing passed manual review"),
+        subject: "Your listing was approved: your listing",
+        text: expect.stringContaining("Hi Student,\n\nYour listing is live"),
+        html: expect.stringContaining("Your listing is live"),
       }),
     );
     expect(forUpdate).toHaveBeenCalledWith("update", {
@@ -198,6 +207,32 @@ describe("EmailWorker", () => {
       expect(sendMail).not.toHaveBeenCalled();
       const job = (await ctx.db.select().from(schema.emailOutbox))[0]!;
       expect(job.attempts).toBe(0);
+      expect(job.sentAt).toBeNull();
+    } finally {
+      await ctx.client.close();
+    }
+  });
+
+  it("suppresses an optional email when the recipient disabled its category", async () => {
+    const ctx = await setup();
+    try {
+      const recipient = (
+        await ctx.db.insert(schema.users).values({ email: "email-opt-out@example.edu", displayName: "Opted Out" }).returning()
+      )[0]!;
+      await ctx.db.insert(schema.emailPreferences).values({ userId: recipient.id, listingUpdates: false });
+      await ctx.db.insert(schema.emailOutbox).values({
+        recipientUserId: recipient.id,
+        template: "listing_approved",
+        payload: { listingId: crypto.randomUUID(), listingTitle: "Desk lamp" },
+        dedupeKey: "suppressed-listing-update",
+      });
+
+      await new EmailWorker(ctx.db, smtpConfig()).runOnce();
+
+      expect(sendMail).not.toHaveBeenCalled();
+      const job = (await ctx.db.select().from(schema.emailOutbox))[0]!;
+      expect(job.suppressedAt).toBeInstanceOf(Date);
+      expect(job.suppressionReason).toBe("preference:listingUpdates");
       expect(job.sentAt).toBeNull();
     } finally {
       await ctx.client.close();

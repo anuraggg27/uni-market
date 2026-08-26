@@ -47,6 +47,7 @@ import {
 import { encryptText, sha256 } from "../lib/crypto.js";
 import { grievanceClock, grievanceTracking } from "../lib/grievance.js";
 import { AppError, asyncRoute } from "../lib/errors.js";
+import { queueUserEmail } from "../services/email-preferences.js";
 
 const reportSchema = z.object({
   targetType: z.enum([
@@ -823,10 +824,10 @@ export function adminRouter(db: Database, config: AppConfig): Router {
               : input.userVisibleReason!,
           href: `/listing/${id}`,
         });
-        await tx.insert(emailOutbox).values({
+        await queueUserEmail(tx, {
           recipientUserId: current.sellerId,
           template: type.toLowerCase(),
-          payload: { listingId: id, reason: input.userVisibleReason },
+          payload: { listingId: id, listingTitle: current.title, reason: input.userVisibleReason },
           dedupeKey: `${type}:${id}:${Date.now()}`,
         });
         return row;
@@ -1296,7 +1297,7 @@ export function adminRouter(db: Database, config: AppConfig): Router {
             body: "There is a new reply on your support request",
             href: `/support/${id}`,
           });
-          await tx.insert(emailOutbox).values({
+          await queueUserEmail(tx, {
             recipientUserId: ticket.userId,
             template: "support-response",
             payload: { ticketId: id },

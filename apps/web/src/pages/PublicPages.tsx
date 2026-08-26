@@ -28,6 +28,11 @@ import { api, ApiError, jsonBody } from "../api";
 import { reportReasons } from "@campus-market/shared";
 import { useAuth } from "../auth";
 import { postLoginDestination } from "../auth-routing";
+import {
+  consumePendingPurchase,
+  pendingPurchase,
+  savePendingPurchase,
+} from "../purchase-intent";
 import { ProductCard } from "../components/ProductCard";
 import { ReportButton } from "../components/ReportButton";
 import {
@@ -701,6 +706,7 @@ export function ListingPage() {
   const { listingId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const client = useQueryClient();
   const categories = useCategories();
   const [activeImage, setActiveImage] = useState(0);
@@ -759,8 +765,31 @@ export function ListingPage() {
         method: "POST",
         ...jsonBody({ listingId }),
       }),
-    onSuccess: () => navigate("/transactions"),
+    onSuccess: () => navigate("/transactions?view=buying"),
   });
+  function beginPurchase() {
+    if (!listingId) return;
+    if (!user) {
+      savePendingPurchase(listingId);
+      navigate("/login", { state: { from: `${location.pathname}${location.search}` } });
+      return;
+    }
+    if (!user.marketplaceEligible) {
+      savePendingPurchase(listingId);
+      navigate("/settings?verify=eligibility");
+      return;
+    }
+    buy.mutate();
+  }
+  useEffect(() => {
+    const intent = pendingPurchase();
+    if (!listingId || !user || buy.isPending || intent?.listingId !== listingId) return;
+    if (!user.marketplaceEligible) {
+      navigate("/settings?verify=eligibility", { replace: true });
+      return;
+    }
+    if (consumePendingPurchase(listingId)) buy.mutate();
+  }, [buy, listingId, navigate, user]);
   const report = useMutation({
     mutationFn: (data: { reason: string; details: string }) =>
       api("/api/reports", {
@@ -1051,7 +1080,7 @@ export function ListingPage() {
                 <button
                   type="button"
                   className="inline-flex h-12 w-full items-center justify-center rounded-full !bg-brand px-7 text-[15px] font-medium !text-on-brand transition-colors hover:!bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={() => buy.mutate()}
+                  onClick={beginPurchase}
                   disabled={buy.isPending || item.lifecycleState !== "ACTIVE"}
                 >
                   Buy
@@ -1482,6 +1511,7 @@ export function LoginPage() {
     script.src = "https://accounts.google.com/gsi/client";
     script.async = true;
     script.defer = true;
+    let resizeObserver: ResizeObserver | undefined;
     script.onload = () => {
       const el = document.getElementById("google-button");
       if (!el) return;
@@ -1511,15 +1541,32 @@ export function LoginPage() {
           }
         },
       });
-      window.google?.accounts.id.renderButton(el, {
-        theme: "outline",
-        size: "large",
-        width: 320,
-        text: "continue_with",
-      });
+      let renderedWidth = 0;
+      const renderGoogleButton = () => {
+        const width = Math.max(200, Math.min(400, Math.floor(el.getBoundingClientRect().width || 320)));
+        if (width === renderedWidth) return;
+        renderedWidth = width;
+        el.replaceChildren();
+        window.google?.accounts.id.renderButton(el, {
+          theme: "filled_black",
+          size: "large",
+          shape: "pill",
+          width,
+          text: "continue_with",
+          logo_alignment: "left",
+        });
+      };
+      renderGoogleButton();
+      if (typeof ResizeObserver !== "undefined") {
+        resizeObserver = new ResizeObserver(renderGoogleButton);
+        resizeObserver.observe(el);
+      }
     };
     document.head.appendChild(script);
-    return () => script.remove();
+    return () => {
+      resizeObserver?.disconnect();
+      script.remove();
+    };
   }, [clientId, navigate, refresh, requestedPath, user]);
 
   async function reactivateAccount() {
@@ -1545,10 +1592,11 @@ export function LoginPage() {
     return Number.isNaN(date.getTime()) ? null : loginDateFormatter.format(date);
   })();
   return (
-    <div className="page narrow">
-      <div className="panel stack-lg">
-        <div>
+    <div className="page login-page">
+      <section className="login-card">
+        <div className="login-card-heading">
           <h1>Sign in to Uni Market</h1>
+          <p>Use your Google account to continue.</p>
         </div>
         {accountClosureQueued && !pendingDeletion ? (
           <div className="account-state-notice" role="status">
@@ -1576,7 +1624,9 @@ export function LoginPage() {
           </div>
         ) : null}
         {clientId ? (
-          <div id="google-button" />
+          <div className="google-signin-shell">
+            <div id="google-button" />
+          </div>
         ) : (
           <p className="field-error" role="alert">
             Google sign-in needs configuration. Set <code>VITE_GOOGLE_CLIENT_ID</code>
@@ -1588,8 +1638,8 @@ export function LoginPage() {
             {error}
           </p>
         ) : null}
-        <Link to="/browse">Continue browsing as a guest</Link>
-      </div>
+        <Link className="login-guest-link" to="/browse">Continue browsing</Link>
+      </section>
     </div>
   );
 }

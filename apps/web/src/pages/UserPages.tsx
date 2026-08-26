@@ -7,6 +7,7 @@ import {
   Link,
   useNavigate,
   useParams,
+  useSearchParams,
 } from "react-router-dom";
 import { currentPolicyVersion, listingInputSchema, type ListingInput } from "@campus-market/shared";
 import { z } from "zod";
@@ -22,6 +23,7 @@ import {
   ImagePlus,
   KeyRound,
   LogOut,
+  Mail,
   MailCheck,
   MoreHorizontal,
   SendHorizontal,
@@ -34,6 +36,7 @@ import {
 import { api, clearCsrf, jsonBody } from "../api";
 import { useAuth } from "../auth";
 import { shouldFollowNewMessage } from "../chat-scroll";
+import { pendingPurchase } from "../purchase-intent";
 import {
   initializeMsg91,
   msg91AccessToken,
@@ -1522,15 +1525,46 @@ type TransactionRecord = {
   id: string;
   listingId: string;
   listingTitle: string;
+  listingPrice: string;
   role: "BUYER" | "SELLER";
   status: string;
+  createdAt: string;
+  updatedAt: string;
   exchangeCode?: string;
   exchangeCodeLocked?: boolean;
 };
 
+type TransactionView = "all" | "buying" | "selling";
+const emptyTransactions: TransactionRecord[] = [];
+
+const transactionDateFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+});
+
+function transactionStatusText(transaction: TransactionRecord): string {
+  const buyer = transaction.role === "BUYER";
+  const labels: Record<string, string> = {
+    REQUESTED: buyer ? "Waiting for the seller to respond" : "A buyer is waiting for your response",
+    ACCEPTED: buyer ? "The seller accepted your request" : "You accepted this request",
+    RESERVED: buyer ? "Reserved for you — arrange the exchange" : "Reserved for this buyer",
+    HANDED_OVER: buyer ? "Confirm that you received the item" : "Waiting for the buyer to confirm receipt",
+    COMPLETED: buyer ? "Purchase completed" : "Sale completed",
+    CANCELLED_BY_BUYER: buyer ? "You cancelled this request" : "The buyer cancelled this request",
+    CANCELLED_BY_SELLER: buyer ? "The seller cancelled this request" : "You cancelled this request",
+    DISPUTED: "This transaction is under review",
+  };
+  return labels[transaction.status] ?? transaction.status.replaceAll("_", " ").toLocaleLowerCase();
+}
+
 export function TransactionsPage() {
   const client = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [exchangeCodeEntries, setExchangeCodeEntries] = useState<Record<string, string>>({});
+  const view: TransactionView = searchParams.get("view") === "buying"
+    ? "buying"
+    : searchParams.get("view") === "selling"
+      ? "selling"
+      : "all";
   const query = useQuery({
     queryKey: ["transactions"],
     queryFn: () => api<TransactionRecord[]>("/api/transactions"),
@@ -1578,32 +1612,55 @@ export function TransactionsPage() {
     onSuccess: () =>
       void client.invalidateQueries({ queryKey: ["transactions"] }),
   });
+  const transactions = query.data ?? emptyTransactions;
+  const transactionCounts = useMemo(() => transactions.reduce((counts, transaction) => {
+    counts.all += 1;
+    counts[transaction.role === "BUYER" ? "buying" : "selling"] += 1;
+    return counts;
+  }, { all: 0, buying: 0, selling: 0 }), [transactions]);
+  const visibleTransactions = useMemo(() => view === "all"
+    ? transactions
+    : transactions.filter((transaction) => transaction.role === (view === "buying" ? "BUYER" : "SELLER")), [transactions, view]);
+  function selectView(nextView: TransactionView) {
+    const next = new URLSearchParams(searchParams);
+    if (nextView === "all") next.delete("view");
+    else next.set("view", nextView);
+    setSearchParams(next, { replace: true });
+  }
   return (
-    <div className="page">
+    <div className="page transactions-page">
       <div className="page-header">
         <div>
           <h1>Transactions</h1>
+          <p>Track the items you want to buy and the requests on your listings.</p>
         </div>
+      </div>
+      <div className="transaction-filters" role="tablist" aria-label="Transaction view">
+        {(["all", "buying", "selling"] as const).map((filter) => (
+          <button type="button" role="tab" aria-selected={view === filter} className={view === filter ? "is-active" : ""} key={filter} onClick={() => selectView(filter)}>
+            {filter === "all" ? "All" : filter === "buying" ? "Buying" : "Selling"}
+            <span>{transactionCounts[filter]}</span>
+          </button>
+        ))}
       </div>
       {query.isLoading ? (
         <Loading label="Loading transactions" />
       ) : query.isError ? (
         <ErrorState error={query.error} />
-      ) : !query.data?.length ? (
+      ) : !visibleTransactions.length ? (
         <EmptyState
-          title="No purchase requests"
-          body="Request to buy an active listing to begin a transaction."
+          title={view === "selling" ? "No selling requests" : view === "buying" ? "No buying requests" : "No transactions yet"}
+          body={view === "selling" ? "Requests from buyers will appear here." : "Request to buy an active listing to begin a transaction."}
         />
       ) : (
-        <div className="stack section">
-          {query.data.map((tx) => (
-            <article className="panel transaction-card" key={tx.id}>
+        <div className="transaction-list section">
+          {visibleTransactions.map((tx) => (
+            <article className="panel transaction-card" id={`transaction-${tx.id}`} key={tx.id}>
               <div className="transaction-card-header">
                 <div className="transaction-card-copy">
-                  <h2>{tx.listingTitle}</h2>
-                  <p>
-                    {tx.role === "BUYER" ? "You are buying" : "You are selling"}
-                  </p>
+                  <h2><Link to={`/listing/${tx.listingId}`}>{tx.listingTitle}</Link></h2>
+                  <p className="transaction-card-meta"><span>{tx.listingPrice}</span><span>{tx.role === "BUYER" ? "Buying" : "Selling"}</span><span>Requested {transactionDateFormatter.format(new Date(tx.createdAt))}</span></p>
+                  <p className="transaction-status-copy">{transactionStatusText(tx)}</p>
                 </div>
                 <StatusBadge value={tx.status} />
               </div>
@@ -1664,6 +1721,7 @@ export function TransactionsPage() {
                 </form>
               ) : null}
               <div className="transaction-card-actions">
+                <Link className="button secondary" to={`/listing/${tx.listingId}`}>View listing</Link>
                 {tx.role === "SELLER" && tx.status === "REQUESTED" ? (
                   <button
                     className="button primary"
@@ -2203,9 +2261,76 @@ export function SupportDetailPage() {
   );
 }
 
+type EmailPreferenceValues = {
+  enabled: boolean;
+  listingUpdates: boolean;
+  transactionUpdates: boolean;
+  messageUpdates: boolean;
+  policyReminders: boolean;
+  updatedAt: string | null;
+};
+
+const emailPreferenceRows = [
+  { key: "listingUpdates", label: "Listing updates", description: "Approvals, changes requested, removals, and other moderation results." },
+  { key: "transactionUpdates", label: "Buying and selling", description: "Purchase requests, acceptances, cancellations, and completed exchanges." },
+  { key: "messageUpdates", label: "New conversations", description: "An email when someone starts a conversation about one of your listings." },
+  { key: "policyReminders", label: "Policy reminders", description: "Occasional reminders when marketplace policies need your attention." },
+] as const;
+
+function EmailPreferencesCard() {
+  const client = useQueryClient();
+  const query = useQuery({
+    queryKey: ["email-preferences"],
+    queryFn: () => api<EmailPreferenceValues>("/api/email-preferences"),
+  });
+  const update = useMutation({
+    mutationFn: ({ key, value }: { key: keyof Omit<EmailPreferenceValues, "updatedAt">; value: boolean }) =>
+      api<EmailPreferenceValues>("/api/email-preferences", { method: "PATCH", ...jsonBody({ [key]: value }) }),
+    onMutate: async ({ key, value }) => {
+      await client.cancelQueries({ queryKey: ["email-preferences"] });
+      const previous = client.getQueryData<EmailPreferenceValues>(["email-preferences"]);
+      if (previous) client.setQueryData<EmailPreferenceValues>(["email-preferences"], { ...previous, [key]: value });
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) client.setQueryData(["email-preferences"], context.previous);
+    },
+    onSuccess: (preferences) => client.setQueryData(["email-preferences"], preferences),
+    onSettled: () => void client.invalidateQueries({ queryKey: ["email-preferences"] }),
+  });
+  const preferences = query.data;
+  return (
+    <section id="email-notifications-settings" className="settings-wide-card email-preferences-card" aria-labelledby="email-preferences-title" tabIndex={-1}>
+      <header>
+        <span className="settings-card-icon"><Mail aria-hidden="true" /></span>
+        <div><h2 id="email-preferences-title">Email Notifications</h2><p>Choose which marketplace updates arrive in your inbox.</p></div>
+      </header>
+      {query.isLoading ? <Loading label="Loading email preferences" /> : query.isError ? <ErrorState error={query.error} /> : preferences ? (
+        <div className="email-preference-list">
+          <div className="email-preference-row email-preference-master">
+            <div><strong>Marketplace emails</strong><p>Pause or resume every optional email below.</p></div>
+            <button type="button" className="preference-switch" role="switch" aria-checked={preferences.enabled} aria-label="Marketplace emails" disabled={update.isPending} onClick={() => update.mutate({ key: "enabled", value: !preferences.enabled })}><span /></button>
+          </div>
+          {emailPreferenceRows.map((row) => (
+            <div className="email-preference-row" key={row.key}>
+              <div><strong>{row.label}</strong><p>{row.description}</p></div>
+              <button type="button" className="preference-switch" role="switch" aria-checked={preferences[row.key]} aria-label={row.label} disabled={update.isPending || !preferences.enabled} onClick={() => update.mutate({ key: row.key, value: !preferences[row.key] })}><span /></button>
+            </div>
+          ))}
+          <p className="essential-email-note">Verification codes, account security, support replies, and grievance updates remain enabled because they are required to provide those services.</p>
+          {update.isPending ? <p className="settings-save-status" role="status">Saving…</p> : null}
+          {update.error ? <p className="field-error" role="alert">{update.error.message}</p> : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export function SettingsPage() {
   const { user, refresh, clearSession } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const focusedSection = useRef<string | null>(null);
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [codeSent, setCodeSent] = useState(false);
@@ -2425,6 +2550,21 @@ export function SettingsPage() {
     }
   }, [user?.phoneVerifiedAt, user?.studentEmailVerifiedAt]);
   useEffect(() => {
+    if (!user?.marketplaceEligible) return;
+    const intent = pendingPurchase();
+    if (intent) navigate(intent.returnTo, { replace: true });
+  }, [navigate, user?.marketplaceEligible]);
+  useEffect(() => {
+    const section = searchParams.get("section");
+    if (section !== "email" || focusedSection.current === section) return;
+    focusedSection.current = section;
+    window.requestAnimationFrame(() => {
+      const target = document.getElementById("email-notifications-settings");
+      target?.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+      target?.focus({ preventScroll: true });
+    });
+  }, [searchParams]);
+  useEffect(() => {
     const provider = activeVerification === "phone"
       ? verificationConfig.data
       : studentVerificationConfig.data;
@@ -2471,7 +2611,7 @@ export function SettingsPage() {
   return (
     <div className="page settings-page">
       <header className="settings-masthead">
-        <div><h1>Settings</h1><p>Manage verification, privacy, and account security.</p></div>
+        <div><h1>Settings</h1><p>Manage verification, email, privacy, and account security.</p></div>
         <Link className="button secondary" to="/profile">Edit Profile</Link>
       </header>
 
@@ -2516,6 +2656,8 @@ export function SettingsPage() {
           </div>}
         </section>
       </div>
+
+      <EmailPreferencesCard />
 
       <section className="settings-wide-card" aria-labelledby="privacy-controls-title">
         <header><div><h2 id="privacy-controls-title">Privacy & Security</h2><p>Export your information or sign out every active device.</p></div></header>

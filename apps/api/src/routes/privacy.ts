@@ -3,17 +3,48 @@ import { and, eq, inArray, ne, or } from 'drizzle-orm';
 import { z } from 'zod';
 import type { AppConfig } from '../config.js';
 import type { Database } from '../db/client.js';
-import { listingImages, listings, messages, notifications, phoneVerifications, policyAcceptances, reports, reviews, sessions, studentEmailVerifications, supportMessages, supportTickets, transactions, users } from '../db/schema.js';
+import { emailPreferences, listingImages, listings, messages, notifications, phoneVerifications, policyAcceptances, reports, reviews, sessions, studentEmailVerifications, supportMessages, supportTickets, transactions, users } from '../db/schema.js';
 import { decryptText } from '../lib/crypto.js';
 import { AppError, asyncRoute } from '../lib/errors.js';
 import { requireAuth } from '../middleware/auth.js';
+import { defaultEmailPreferences, resolvedEmailPreferences } from '../services/email-preferences.js';
+
+const emailPreferencesSchema = z.object({
+  enabled: z.boolean().optional(),
+  listingUpdates: z.boolean().optional(),
+  transactionUpdates: z.boolean().optional(),
+  messageUpdates: z.boolean().optional(),
+  policyReminders: z.boolean().optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, 'Change at least one email preference');
 
 export function privacyRouter(db: Database, config: AppConfig): Router {
   const router = Router();
 
+  router.get('/email-preferences', requireAuth, asyncRoute(async (req, res) => {
+    const stored = (await db.select().from(emailPreferences).where(eq(emailPreferences.userId, req.auth!.userId)).limit(1))[0];
+    res.setHeader('cache-control', 'no-store');
+    res.json({ data: { ...resolvedEmailPreferences(stored), updatedAt: stored?.updatedAt ?? null } });
+  }));
+
+  router.patch('/email-preferences', requireAuth, asyncRoute(async (req, res) => {
+    const input = emailPreferencesSchema.parse(req.body);
+    const now = new Date();
+    const stored = (await db.insert(emailPreferences).values({
+      userId: req.auth!.userId,
+      ...defaultEmailPreferences,
+      ...input,
+      updatedAt: now,
+    }).onConflictDoUpdate({
+      target: emailPreferences.userId,
+      set: { ...input, updatedAt: now },
+    }).returning())[0]!;
+    res.setHeader('cache-control', 'no-store');
+    res.json({ data: { ...resolvedEmailPreferences(stored), updatedAt: stored.updatedAt } });
+  }));
+
   router.get('/account/export', requireAuth, asyncRoute(async (req, res) => {
     const userId = req.auth!.userId;
-    const [userRows, acceptanceRows, listingRows, imageRows, ownMessages, transactionRows, authoredReviews, receivedReviews, reportRows, ticketRows, notificationRows] = await Promise.all([
+    const [userRows, acceptanceRows, listingRows, imageRows, ownMessages, transactionRows, authoredReviews, receivedReviews, reportRows, ticketRows, notificationRows, emailPreferenceRows] = await Promise.all([
       db.select().from(users).where(eq(users.id, userId)).limit(1),
       db.select().from(policyAcceptances).where(eq(policyAcceptances.userId, userId)),
       db.select().from(listings).where(eq(listings.sellerId, userId)),
@@ -25,6 +56,7 @@ export function privacyRouter(db: Database, config: AppConfig): Router {
       db.select({ id: reports.id, publicReference: reports.publicReference, category: reports.category, targetType: reports.targetType, targetId: reports.targetId, targetUrl: reports.targetUrl, reason: reports.reason, details: reports.details, status: reports.status, publicResponse: reports.publicResponse, createdAt: reports.createdAt, resolvedAt: reports.resolvedAt }).from(reports).where(eq(reports.reporterId, userId)),
       db.select().from(supportTickets).where(eq(supportTickets.userId, userId)),
       db.select().from(notifications).where(eq(notifications.userId, userId)),
+      db.select().from(emailPreferences).where(eq(emailPreferences.userId, userId)).limit(1),
     ]);
     const user = userRows[0];
     if (!user) throw new AppError(404, 'USER_NOT_FOUND', 'Account not found');
@@ -58,6 +90,7 @@ export function privacyRouter(db: Database, config: AppConfig): Router {
       supportTickets: ticketRows,
       supportMessages: publicSupportMessages.map(({ senderId, ...message }) => ({ ...message, sender: senderId === userId ? 'YOU' : 'SUPPORT' })),
       notifications: notificationRows,
+      emailPreferences: resolvedEmailPreferences(emailPreferenceRows[0]),
     };
     res.setHeader('cache-control', 'no-store');
     res.setHeader('content-disposition', `attachment; filename="uni-market-data-${new Date().toISOString().slice(0, 10)}.json"`);

@@ -5,11 +5,12 @@ import { Server } from 'socket.io';
 import { messageSchema } from '@campus-market/shared';
 import type { AppConfig } from './config.js';
 import type { Database } from './db/client.js';
-import { academicDomains, blocks, conversations, emailOutbox, messageRiskEvents, messages, notifications, policyAcceptances, sessions, users } from './db/schema.js';
+import { academicDomains, blocks, conversations, messageRiskEvents, messages, notifications, policyAcceptances, sessions, users } from './db/schema.js';
 import { sha256 } from './lib/crypto.js';
 import { logger } from './lib/logger.js';
 import { currentPolicyVersion, requiredOnboardingPolicies } from '@campus-market/shared';
 import { createScamConfirmation, scamRiskCodes, verifyScamConfirmation } from './services/scam-risk.js';
+import { queueUserEmail } from './services/email-preferences.js';
 
 export function attachSocket(server: HttpServer, db: Database, config: AppConfig): Server {
   const io = new Server(server, { cors: { origin: config.CLIENT_URL, credentials: true }, maxHttpBufferSize: 20_000, transports: ['websocket', 'polling'] });
@@ -66,7 +67,7 @@ export function attachSocket(server: HttpServer, db: Database, config: AppConfig
           if (riskCodes.length) await tx.insert(messageRiskEvents).values({ messageId: message.id, userId, riskCodes, acknowledgedAt: new Date() });
           await tx.update(conversations).set({ lastMessageAt: new Date() }).where(eq(conversations.id, conversation.id));
           await tx.insert(notifications).values({ userId: otherId, type: 'NEW_MESSAGE', title: 'New message', body: 'You have a new marketplace message', href: `/chats/${conversation.id}` });
-          if (!conversation.firstMessageEmailQueuedAt) { await tx.update(conversations).set({ firstMessageEmailQueuedAt: new Date() }).where(and(eq(conversations.id, conversation.id), isNull(conversations.firstMessageEmailQueuedAt))); await tx.insert(emailOutbox).values({ recipientUserId: otherId, template: 'first-conversation-message', payload: { conversationId: conversation.id }, dedupeKey: `first-conversation-message:${conversation.id}` }).onConflictDoNothing(); }
+          if (!conversation.firstMessageEmailQueuedAt) { await tx.update(conversations).set({ firstMessageEmailQueuedAt: new Date() }).where(and(eq(conversations.id, conversation.id), isNull(conversations.firstMessageEmailQueuedAt))); await queueUserEmail(tx, { recipientUserId: otherId, template: 'first-conversation-message', payload: { conversationId: conversation.id }, dedupeKey: `first-conversation-message:${conversation.id}` }); }
           return message;
         });
         io.to(`conversation:${conversation.id}`)

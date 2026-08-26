@@ -41,7 +41,7 @@ export function useAuth() { return useContext(AuthContext); }
 export function RequireAuth({ children, phone = false, roles }: { children: ReactNode; phone?: boolean; roles?: string[] }) {
   const { user, loading } = useAuth(); const location = useLocation();
   if (loading) return <RouteLoading />;
-  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+  if (!user) return <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}` }} />;
   if (!user.onboardingComplete && location.pathname !== '/onboarding') return <Navigate to="/onboarding" replace />;
   if (phone && !user.marketplaceEligible) return <Navigate to="/settings?verify=eligibility" replace />;
   if (roles && !roles.some((role) => user.roles.includes(role))) return <Navigate to="/" replace />;

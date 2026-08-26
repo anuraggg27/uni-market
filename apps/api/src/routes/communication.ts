@@ -7,7 +7,6 @@ import type { AppConfig } from "../config.js";
 import {
   blocks,
   conversations,
-  emailOutbox,
   favourites,
   listingImages,
   listings,
@@ -20,6 +19,7 @@ import { requireAuth, requireVerified } from "../middleware/auth.js";
 import { AppError, asyncRoute } from "../lib/errors.js";
 import type { StorageService } from "../services/storage.js";
 import { createScamConfirmation, scamRiskCodes, verifyScamConfirmation } from "../services/scam-risk.js";
+import { queueUserEmail } from "../services/email-preferences.js";
 
 async function assertConversationMember(
   db: Database,
@@ -424,15 +424,12 @@ export function communicationRouter(
                 isNull(conversations.firstMessageEmailQueuedAt),
               ),
             );
-          await tx
-            .insert(emailOutbox)
-            .values({
-              recipientUserId: otherId,
-              template: "first-conversation-message",
-              payload: { conversationId: id },
-              dedupeKey: `first-conversation-message:${id}`,
-            })
-            .onConflictDoNothing();
+          await queueUserEmail(tx, {
+            recipientUserId: otherId,
+            template: "first-conversation-message",
+            payload: { conversationId: id },
+            dedupeKey: `first-conversation-message:${id}`,
+          });
         }
         return message;
       });

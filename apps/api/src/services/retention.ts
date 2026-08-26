@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNotNull, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import type { AppConfig } from '../config.js';
 import type { Database } from '../db/client.js';
-import { emailOutbox, legalHolds, listingImages, listings, messages, notifications, oauthAccounts, phoneVerifications, policyAcceptances, reportEvents, reports, retentionRuns, sessions, studentEmailVerifications, users } from '../db/schema.js';
+import { emailOutbox, emailPreferences, legalHolds, listingImages, listings, messages, notifications, oauthAccounts, phoneVerifications, policyAcceptances, reportEvents, reports, retentionRuns, sessions, studentEmailVerifications, users } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
 import type { StorageService } from './storage.js';
 
@@ -38,7 +38,7 @@ export class RetentionWorker {
         this.db.select().from(listingImages).where(and(isNull(listingImages.finalizedAt), isNull(listingImages.deletedAt), lte(listingImages.createdAt, oneHourAgo))),
         this.db.select({ image: listingImages, listing: listings }).from(listingImages).innerJoin(listings, eq(listings.id, listingImages.listingId)).where(and(isNotNull(listingImages.objectKey), isNull(listingImages.deletedAt), or(and(isNotNull(listings.deletedAt), lte(listings.deletedAt, oneHundredEightyDaysAgo)), and(eq(listings.moderationState, 'REMOVED'), lte(listings.updatedAt, oneHundredEightyDaysAgo))))),
         this.db.select().from(legalHolds).where(isNull(legalHolds.releasedAt)),
-        this.db.select({ id: users.id }).from(users).where(and(eq(users.onboardingComplete, true), isNull(users.closedAt), isNull(users.deletedAt), or(isNull(users.policyReminderSentAt), lte(users.policyReminderSentAt, ninetyDaysAgo)))),
+        this.db.select({ id: users.id }).from(users).leftJoin(emailPreferences, eq(emailPreferences.userId, users.id)).where(and(eq(users.onboardingComplete, true), isNull(users.closedAt), isNull(users.deletedAt), or(isNull(users.policyReminderSentAt), lte(users.policyReminderSentAt, ninetyDaysAgo)), or(isNull(emailPreferences.userId), and(eq(emailPreferences.enabled, true), eq(emailPreferences.policyReminders, true))))),
         this.db.select({ id: reports.id }).from(reports).where(and(isNotNull(reports.purgeAfter), lte(reports.purgeAfter, now))),
       ]);
       const held = new Set(activeHolds.map((hold) => `${hold.targetType}:${hold.targetId}`));
@@ -70,7 +70,7 @@ export class RetentionWorker {
           await tx.delete(sessions).where(or(lt(sessions.expiresAt, oneYearAgo), and(isNotNull(sessions.revokedAt), lt(sessions.revokedAt, oneYearAgo))));
           await tx.delete(phoneVerifications).where(lt(phoneVerifications.createdAt, oneYearAgo));
           await tx.delete(studentEmailVerifications).where(lt(studentEmailVerifications.createdAt, oneYearAgo));
-          await tx.delete(emailOutbox).where(and(lt(emailOutbox.createdAt, oneYearAgo), or(isNotNull(emailOutbox.sentAt), isNotNull(emailOutbox.failedAt))));
+          await tx.delete(emailOutbox).where(and(lt(emailOutbox.createdAt, oneYearAgo), or(isNotNull(emailOutbox.sentAt), isNotNull(emailOutbox.failedAt), isNotNull(emailOutbox.suppressedAt))));
           if (policyReminderUsers.length) {
             const quarter = `${now.getUTCFullYear()}-Q${Math.floor(now.getUTCMonth() / 3) + 1}`;
             await tx.insert(emailOutbox).values(policyReminderUsers.map(({ id }) => ({ recipientUserId: id, template: 'policy-reminder', payload: {}, dedupeKey: `policy-reminder:${id}:${quarter}` }))).onConflictDoNothing();

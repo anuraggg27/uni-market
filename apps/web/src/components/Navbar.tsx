@@ -6,6 +6,7 @@ import {
   LogIn,
   LogOut,
   MenuIcon,
+  ReceiptText,
   Settings,
   Store,
   UserRound,
@@ -216,6 +217,14 @@ function ProfileMenu({ compact = false }: { compact?: boolean }) {
             {user ? (
               <>
                 <Link
+                  to="/transactions"
+                  className={itemClass}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  <ReceiptText className="size-4 text-muted" aria-hidden="true" />
+                  Transactions
+                </Link>
+                <Link
                   to="/settings"
                   className={itemClass}
                   onClick={() => setMenuOpen(false)}
@@ -390,6 +399,21 @@ export const Navbar = () => {
                     className={navigationMenuTriggerStyle()}
                   >
                     <NavLink
+                      to="/transactions"
+                      className="navbar-primary-link !font-medium !text-muted hover:!text-ink dark:hover:!text-ink"
+                    >
+                      Transactions
+                    </NavLink>
+                  </NavigationMenuLink>
+                </NavigationMenuItem>
+
+                {/* My listings Link */}
+                <NavigationMenuItem>
+                  <NavigationMenuLink
+                    asChild
+                    className={navigationMenuTriggerStyle()}
+                  >
+                    <NavLink
                       to="/my-listings"
                       className="navbar-primary-link !font-medium !text-muted hover:!text-ink dark:hover:!text-ink"
                     >
@@ -503,6 +527,13 @@ export const Navbar = () => {
                       className="text-[15px] font-normal text-muted hover:text-ink transition-colors py-1"
                     >
                       Chats
+                    </Link>
+                    <Link
+                      to="/transactions"
+                      onClick={() => setOpen(false)}
+                      className="text-[15px] font-normal text-muted hover:text-ink transition-colors py-1"
+                    >
+                      Transactions
                     </Link>
                     <Link
                       to="/my-listings"

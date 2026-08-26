@@ -8,6 +8,7 @@ import { listings, notifications, reviews, transactions, users } from '../db/sch
 import { requireVerified } from '../middleware/auth.js';
 import { keyedHash, safeEqual } from '../lib/crypto.js';
 import { AppError, asyncRoute } from '../lib/errors.js';
+import { queueUserEmail } from '../services/email-preferences.js';
 
 type TransactionRow = typeof transactions.$inferSelect;
 
@@ -18,7 +19,13 @@ function deriveExchangeCode(transaction: Pick<TransactionRow, 'id' | 'buyerId' |
   return (BigInt(`0x${digest.slice(0, 16)}`) % 1_000_000n).toString().padStart(6, '0');
 }
 
-function publicTransaction(transaction: TransactionRow, userId: string, config: AppConfig, listingTitle?: string) {
+function listingPriceLabel(listing: Pick<typeof listings.$inferSelect, 'priceType' | 'exactPrice' | 'minimumPrice' | 'maximumPrice'>): string {
+  if (listing.priceType === 'FREE') return 'Free';
+  if (listing.priceType === 'RANGE') return `₹${listing.minimumPrice?.toLocaleString('en-IN')}–₹${listing.maximumPrice?.toLocaleString('en-IN')}`;
+  return `₹${listing.exactPrice?.toLocaleString('en-IN')}`;
+}
+
+function publicTransaction(transaction: TransactionRow, userId: string, config: AppConfig, listingSummary?: { title: string; priceLabel: string }) {
   const role = transaction.buyerId === userId ? 'BUYER' : 'SELLER';
   return {
     id: transaction.id,
@@ -31,7 +38,7 @@ function publicTransaction(transaction: TransactionRow, userId: string, config: 
     disputeReason: transaction.disputeReason,
     createdAt: transaction.createdAt,
     updatedAt: transaction.updatedAt,
-    ...(listingTitle === undefined ? {} : { listingTitle }),
+    ...(listingSummary === undefined ? {} : { listingTitle: listingSummary.title, listingPrice: listingSummary.priceLabel }),
     role,
     ...(transaction.status === 'RESERVED' ? { exchangeCodeLocked: Boolean(transaction.exchangeCodeLockedAt) } : {}),
     ...(role === 'BUYER' && transaction.status === 'RESERVED' ? { exchangeCode: deriveExchangeCode(transaction, config.SESSION_SECRET) } : {}),
@@ -42,8 +49,8 @@ export function transactionsRouter(db: Database, config: AppConfig): Router {
   const router = Router();
 
   router.get('/transactions', requireVerified, asyncRoute(async (req, res) => {
-    const rows = await db.select({ transaction: transactions, listingTitle: listings.title }).from(transactions).innerJoin(listings, eq(listings.id, transactions.listingId)).where(or(eq(transactions.buyerId, req.auth!.userId), eq(transactions.sellerId, req.auth!.userId))).orderBy(desc(transactions.updatedAt));
-    res.json({ data: rows.map((row) => publicTransaction(row.transaction, req.auth!.userId, config, row.listingTitle)) });
+    const rows = await db.select({ transaction: transactions, listing: { title: listings.title, priceType: listings.priceType, exactPrice: listings.exactPrice, minimumPrice: listings.minimumPrice, maximumPrice: listings.maximumPrice } }).from(transactions).innerJoin(listings, eq(listings.id, transactions.listingId)).where(or(eq(transactions.buyerId, req.auth!.userId), eq(transactions.sellerId, req.auth!.userId))).orderBy(desc(transactions.updatedAt));
+    res.json({ data: rows.map((row) => publicTransaction(row.transaction, req.auth!.userId, config, { title: row.listing.title, priceLabel: listingPriceLabel(row.listing) })) });
   }));
 
   router.post('/transactions', requireVerified, asyncRoute(async (req, res) => {
@@ -53,8 +60,12 @@ export function transactionsRouter(db: Database, config: AppConfig): Router {
     if (listing.sellerId === req.auth!.userId) throw new AppError(400, 'SELF_PURCHASE', 'You cannot buy your own listing');
     const existing = (await db.select().from(transactions).where(and(eq(transactions.listingId, listingId), eq(transactions.buyerId, req.auth!.userId), inArray(transactions.status, ['REQUESTED', 'ACCEPTED', 'RESERVED', 'HANDED_OVER']))).limit(1))[0];
     if (existing) { res.json({ data: publicTransaction(existing, req.auth!.userId, config) }); return; }
-    const transaction = (await db.insert(transactions).values({ listingId, buyerId: req.auth!.userId, sellerId: listing.sellerId }).returning())[0]!;
-    await db.insert(notifications).values({ userId: listing.sellerId, type: 'PURCHASE_REQUEST', title: 'Purchase request', body: 'A buyer requested to purchase your listing', href: '/transactions' });
+    const transaction = await db.transaction(async (tx) => {
+      const created = (await tx.insert(transactions).values({ listingId, buyerId: req.auth!.userId, sellerId: listing.sellerId }).returning())[0]!;
+      await tx.insert(notifications).values({ userId: listing.sellerId, type: 'PURCHASE_REQUEST', title: 'Purchase request', body: `A buyer requested to purchase ${listing.title}`, href: '/transactions?view=selling' });
+      await queueUserEmail(tx, { recipientUserId: listing.sellerId, template: 'purchase-request', payload: { transactionId: created.id, listingId, listingTitle: listing.title }, dedupeKey: `purchase-request:${created.id}` });
+      return created;
+    });
     res.status(201).json({ data: publicTransaction(transaction, req.auth!.userId, config) });
   }));
 
@@ -68,6 +79,7 @@ export function transactionsRouter(db: Database, config: AppConfig): Router {
       const now = new Date();
       const updated = (await tx.update(transactions).set({ status: 'RESERVED', exchangeCodeAttempts: 0, exchangeCodeIssuedAt: now, exchangeCodeLockedAt: null, exchangeCodeUsedAt: null, updatedAt: now }).where(and(eq(transactions.id, id), eq(transactions.status, 'REQUESTED'))).returning())[0]!;
       await tx.insert(notifications).values([{ userId: transaction.buyerId, type: 'REQUEST_ACCEPTED', title: 'Request accepted', body: 'The seller accepted your request. Your exchange code is ready in Transactions.', href: '/transactions' }, { userId: transaction.buyerId, type: 'LISTING_RESERVED', title: 'Listing reserved', body: 'This listing is now reserved for you', href: `/listing/${transaction.listingId}` }]);
+      await queueUserEmail(tx, { recipientUserId: transaction.buyerId, template: 'purchase-accepted', payload: { transactionId: updated.id, listingId: reserved.id, listingTitle: reserved.title }, dedupeKey: `purchase-accepted:${updated.id}` });
       return updated;
     });
     res.json({ data: publicTransaction(result, req.auth!.userId, config) });
@@ -105,12 +117,16 @@ export function transactionsRouter(db: Database, config: AppConfig): Router {
       const now = new Date();
       const updated = (await tx.update(transactions).set({ status: 'COMPLETED', completedAt: now, exchangeCodeUsedAt: now, updatedAt: now }).where(and(eq(transactions.id, id), eq(transactions.sellerId, req.auth!.userId), eq(transactions.status, 'RESERVED'), eq(transactions.exchangeCodeVersion, existing.exchangeCodeVersion), isNull(transactions.exchangeCodeLockedAt))).returning())[0];
       if (!updated) throw new AppError(409, 'EXCHANGE_CODE_CHANGED', 'Ask the buyer for their current exchange code');
-      const sold = (await tx.update(listings).set({ lifecycleState: 'SOLD', soldAt: now, updatedAt: now }).where(and(eq(listings.id, updated.listingId), eq(listings.lifecycleState, 'RESERVED'), eq(listings.reservedBuyerId, updated.buyerId))).returning({ id: listings.id }))[0];
+      const sold = (await tx.update(listings).set({ lifecycleState: 'SOLD', soldAt: now, updatedAt: now }).where(and(eq(listings.id, updated.listingId), eq(listings.lifecycleState, 'RESERVED'), eq(listings.reservedBuyerId, updated.buyerId))).returning({ id: listings.id, title: listings.title }))[0];
       if (!sold) throw new AppError(409, 'LISTING_STATE_CHANGED', 'This listing can no longer be completed');
       await tx.update(users).set({ completedSales: sql`${users.completedSales} + 1`, updatedAt: now }).where(eq(users.id, updated.sellerId));
       await tx.insert(notifications).values([
         { userId: updated.buyerId, type: 'TRANSACTION_COMPLETED', title: 'Exchange complete', body: 'Your exchange was completed. You can now leave a review.', href: '/transactions' },
         { userId: updated.sellerId, type: 'TRANSACTION_COMPLETED', title: 'Sale complete', body: 'The exchange code was accepted and your sale was completed.', href: '/transactions' },
+      ]);
+      await Promise.all([
+        queueUserEmail(tx, { recipientUserId: updated.buyerId, template: 'transaction-completed-buyer', payload: { transactionId: updated.id, listingId: sold.id, listingTitle: sold.title }, dedupeKey: `transaction-completed-buyer:${updated.id}` }),
+        queueUserEmail(tx, { recipientUserId: updated.sellerId, template: 'transaction-completed-seller', payload: { transactionId: updated.id, listingId: sold.id, listingTitle: sold.title }, dedupeKey: `transaction-completed-seller:${updated.id}` }),
       ]);
       return updated;
     });
@@ -136,10 +152,14 @@ export function transactionsRouter(db: Database, config: AppConfig): Router {
     const completed = await db.transaction(async (tx) => {
       const updated = (await tx.update(transactions).set({ status: 'COMPLETED', completedAt: new Date(), updatedAt: new Date() }).where(and(eq(transactions.id, id), eq(transactions.status, 'HANDED_OVER'))).returning())[0];
       if (!updated) throw new AppError(409, 'INVALID_TRANSACTION_STATE', 'This transaction was already updated');
-      const sold = (await tx.update(listings).set({ lifecycleState: 'SOLD', soldAt: new Date(), updatedAt: new Date() }).where(and(eq(listings.id, updated.listingId), eq(listings.lifecycleState, 'RESERVED'), eq(listings.reservedBuyerId, updated.buyerId))).returning({ id: listings.id }))[0];
+      const sold = (await tx.update(listings).set({ lifecycleState: 'SOLD', soldAt: new Date(), updatedAt: new Date() }).where(and(eq(listings.id, updated.listingId), eq(listings.lifecycleState, 'RESERVED'), eq(listings.reservedBuyerId, updated.buyerId))).returning({ id: listings.id, title: listings.title }))[0];
       if (!sold) throw new AppError(409, 'LISTING_STATE_CHANGED', 'This listing can no longer be completed');
       await tx.update(users).set({ completedSales: sql`${users.completedSales} + 1`, updatedAt: new Date() }).where(eq(users.id, updated.sellerId));
       await tx.insert(notifications).values({ userId: updated.sellerId, type: 'TRANSACTION_COMPLETED', title: 'Transaction complete', body: 'The buyer confirmed receipt', href: '/transactions' });
+      await Promise.all([
+        queueUserEmail(tx, { recipientUserId: updated.buyerId, template: 'transaction-completed-buyer', payload: { transactionId: updated.id, listingId: sold.id, listingTitle: sold.title }, dedupeKey: `transaction-completed-buyer:${updated.id}` }),
+        queueUserEmail(tx, { recipientUserId: updated.sellerId, template: 'transaction-completed-seller', payload: { transactionId: updated.id, listingId: sold.id, listingTitle: sold.title }, dedupeKey: `transaction-completed-seller:${updated.id}` }),
+      ]);
       return updated;
     });
     res.json({ data: publicTransaction(completed, req.auth!.userId, config) });
@@ -147,13 +167,17 @@ export function transactionsRouter(db: Database, config: AppConfig): Router {
 
   router.post('/transactions/:id/cancel', requireVerified, asyncRoute(async (req, res) => {
     const id = idSchema.parse(req.params.id);
-    const transaction = (await db.select().from(transactions).where(eq(transactions.id, id)).limit(1))[0];
+    const row = (await db.select({ transaction: transactions, listingTitle: listings.title }).from(transactions).innerJoin(listings, eq(listings.id, transactions.listingId)).where(eq(transactions.id, id)).limit(1))[0];
+    const transaction = row?.transaction;
     if (!transaction || ![transaction.buyerId, transaction.sellerId].includes(req.auth!.userId)) throw new AppError(403, 'TRANSACTION_FORBIDDEN', 'You cannot cancel this transaction');
     if (!['REQUESTED', 'ACCEPTED', 'RESERVED'].includes(transaction.status)) throw new AppError(409, 'INVALID_TRANSACTION_STATE', 'This transaction can no longer be cancelled');
-    const status = req.auth!.userId === transaction.buyerId ? 'CANCELLED_BY_BUYER' : 'CANCELLED_BY_SELLER';
+    const cancelledByBuyer = req.auth!.userId === transaction.buyerId;
+    const status = cancelledByBuyer ? 'CANCELLED_BY_BUYER' : 'CANCELLED_BY_SELLER';
     const updated = await db.transaction(async (tx) => {
       const changed = (await tx.update(transactions).set({ status, cancelledAt: new Date(), updatedAt: new Date() }).where(and(eq(transactions.id, id), inArray(transactions.status, ['REQUESTED', 'ACCEPTED', 'RESERVED']))).returning())[0]!;
       if (transaction.status === 'RESERVED') await tx.update(listings).set({ lifecycleState: 'ACTIVE', reservedBuyerId: null, updatedAt: new Date() }).where(and(eq(listings.id, transaction.listingId), eq(listings.reservedBuyerId, transaction.buyerId)));
+      const recipientUserId = cancelledByBuyer ? transaction.sellerId : transaction.buyerId;
+      await queueUserEmail(tx, { recipientUserId, template: 'transaction-cancelled', payload: { transactionId: changed.id, listingId: changed.listingId, listingTitle: row.listingTitle, cancelledBy: cancelledByBuyer ? 'The buyer' : 'The seller', recipientRole: cancelledByBuyer ? 'SELLER' : 'BUYER' }, dedupeKey: `transaction-cancelled:${changed.id}:${status}` });
       return changed;
     });
     res.json({ data: publicTransaction(updated, req.auth!.userId, config) });

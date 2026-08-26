@@ -370,9 +370,9 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
   expect(exchangeCode).toMatch(/^\d{6}$/);
   await sellerPage.getByLabel("Buyer's 6-digit exchange code").fill(exchangeCode!);
   await sellerPage.getByRole("button", { name: "Complete sale" }).click();
-  await expect(sellerPage.getByText("COMPLETED")).toBeVisible();
+  await expect(sellerPage.getByText("COMPLETED", { exact: true })).toBeVisible();
   await buyerPage.reload();
-  await expect(buyerPage.getByText("COMPLETED")).toBeVisible();
+  await expect(buyerPage.getByText("COMPLETED", { exact: true })).toBeVisible();
   await buyerPage
     .getByLabel("Short review")
     .fill("Exactly as described and easy meetup.");
@@ -426,6 +426,43 @@ test("E2E-04 report, removal, seller notification and audit trail", async ({
   await reporter.close();
   await mod.close();
   await guest.close();
+});
+
+test("guest Buy resumes once after sign-in and exposes buyer history and email settings", async ({ browser }) => {
+  const seller = await browser.newContext();
+  const sellerAuth = await signIn(seller, "resume-seller");
+  const listing = await createListing(sellerAuth, "Resume purchase desk lamp");
+  const moderator = await browser.newContext();
+  await approve(moderator, listing.id);
+
+  const buyer = await browser.newContext();
+  const page = await buyer.newPage();
+  await page.goto(`/listing/${listing.id}`);
+  await page.getByRole("button", { name: "Buy", exact: true }).click();
+  await expect(page).toHaveURL(/\/login$/);
+
+  await signIn(buyer, "resume-buyer");
+  await page.goto(`/listing/${listing.id}`);
+  await expect(page).toHaveURL(/\/transactions\?view=buying$/);
+  await expect(page.getByRole("link", { name: "Resume purchase desk lamp" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "View listing" })).toHaveAttribute("href", `/listing/${listing.id}`);
+  await expect(page.getByText("Waiting for the seller to respond")).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator(".mobile-nav").getByRole("link", { name: "Transactions" })).toBeVisible();
+  await expect(page.locator(".mobile-nav").getByRole("link", { name: "Profile" })).toHaveCount(0);
+
+  await page.goto("/settings?section=email");
+  const marketplaceEmails = page.getByRole("switch", { name: "Marketplace emails" });
+  await expect(marketplaceEmails).toHaveAttribute("aria-checked", "true");
+  await marketplaceEmails.click();
+  await expect(marketplaceEmails).toHaveAttribute("aria-checked", "false");
+  await page.reload();
+  await expect(page.getByRole("switch", { name: "Marketplace emails" })).toHaveAttribute("aria-checked", "false");
+
+  await seller.close();
+  await moderator.close();
+  await buyer.close();
 });
 
 test("E2E-05 support request receives an agent response and resolves", async ({

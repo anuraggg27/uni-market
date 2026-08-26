@@ -49,6 +49,16 @@ export const users = pgTable('users', {
   index('users_purge_idx').on(table.purgeAfter)
 ]);
 
+export const emailPreferences = pgTable('email_preferences', {
+  userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+  enabled: boolean('enabled').default(true).notNull(),
+  listingUpdates: boolean('listing_updates').default(true).notNull(),
+  transactionUpdates: boolean('transaction_updates').default(true).notNull(),
+  messageUpdates: boolean('message_updates').default(true).notNull(),
+  policyReminders: boolean('policy_reminders').default(true).notNull(),
+  ...timestamps
+});
+
 export const oauthAccounts = pgTable('oauth_accounts', {
   id: uuid('id').defaultRandom().primaryKey(),
   userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
@@ -390,9 +400,11 @@ export const emailOutbox = pgTable('email_outbox', {
   availableAt: timestamp('available_at', { withTimezone: true }).defaultNow().notNull(),
   sentAt: timestamp('sent_at', { withTimezone: true }),
   failedAt: timestamp('failed_at', { withTimezone: true }),
+  suppressedAt: timestamp('suppressed_at', { withTimezone: true }),
+  suppressionReason: text('suppression_reason'),
   lastError: text('last_error'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
-}, (table) => [index('email_outbox_pending_idx').on(table.sentAt, table.availableAt)]);
+}, (table) => [index('email_outbox_pending_idx').on(table.sentAt, table.failedAt, table.suppressedAt, table.availableAt)]);
 
 export const prohibitedTerms = pgTable('prohibited_terms', {
   id: uuid('id').defaultRandom().primaryKey(),
