@@ -50,6 +50,13 @@
       "when": 1787758183047,
       "tag": "0006_greedy_madripoor",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787771370715,
+      "tag": "0007_purge_ai_demo_catalog",
+      "breakpoints": true
     }
   ]
 }
