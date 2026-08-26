@@ -300,6 +300,7 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
     sellerPage.getByRole("heading", { name: "No conversations" }),
   ).toBeVisible();
   await buyerPage.goto(`/listing/${listing.id}`);
+  await expect(buyerPage.getByRole("button", { name: "Buy", exact: true })).toHaveCount(0);
   await buyerPage.getByRole("button", { name: "Save", exact: true }).click();
   await expect(
     buyerPage.getByRole("button", { name: "Unsave item" }),
@@ -361,14 +362,14 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
         document.documentElement.clientWidth,
     ),
   ).toBe(false);
-  await buyerPage.goto(`/listing/${listing.id}`);
-  await buyerPage.getByRole("button", { name: "Buy", exact: true }).click();
-  await sellerPage.goto("/transactions");
+  await buyerPage.getByRole("button", { name: "Request reservation" }).click();
+  await expect(buyerPage.getByRole("link", { name: "Reservation requested" })).toBeVisible();
+  await sellerPage.goto("/requests?view=received");
   await sellerPage.getByRole("button", { name: "Accept and reserve" }).click();
-  await buyerPage.goto("/transactions");
+  await buyerPage.goto("/requests?view=sent");
   const exchangeCode = (await buyerPage.locator(".exchange-code-value").textContent())?.trim();
   expect(exchangeCode).toMatch(/^\d{6}$/);
-  await sellerPage.getByLabel("Buyer's 6-digit exchange code").fill(exchangeCode!);
+  await sellerPage.getByLabel("6-digit exchange code").fill(exchangeCode!);
   await sellerPage.getByRole("button", { name: "Complete sale" }).click();
   await expect(sellerPage.getByText("COMPLETED", { exact: true })).toBeVisible();
   await buyerPage.reload();
@@ -428,28 +429,38 @@ test("E2E-04 report, removal, seller notification and audit trail", async ({
   await guest.close();
 });
 
-test("guest Buy resumes once after sign-in and exposes buyer history and email settings", async ({ browser }) => {
+test("guest Contact seller resumes into chat and exposes request history and email settings", async ({ browser }) => {
   const seller = await browser.newContext();
   const sellerAuth = await signIn(seller, "resume-seller");
-  const listing = await createListing(sellerAuth, "Resume purchase desk lamp");
+  const listing = await createListing(sellerAuth, "Resume conversation desk lamp");
   const moderator = await browser.newContext();
   await approve(moderator, listing.id);
 
   const buyer = await browser.newContext();
   const page = await buyer.newPage();
   await page.goto(`/listing/${listing.id}`);
-  await page.getByRole("button", { name: "Buy", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Buy", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Contact seller" }).click();
   await expect(page).toHaveURL(/\/login$/);
 
   await signIn(buyer, "resume-buyer");
   await page.goto(`/listing/${listing.id}`);
-  await expect(page).toHaveURL(/\/transactions\?view=buying$/);
-  await expect(page.getByRole("link", { name: "Resume purchase desk lamp" })).toBeVisible();
+  await expect(page).toHaveURL(/\/chats\//);
+  await expect(page.getByRole("button", { name: "Message seller first" })).toBeDisabled();
+  await page.getByLabel("Message").fill("Is this desk lamp still available?");
+  await page.getByRole("button", { name: "Send" }).click();
+  await page.getByRole("button", { name: "Request reservation" }).click();
+  await expect(page.getByRole("link", { name: "Reservation requested" })).toBeVisible();
+
+  await page.goto("/requests?view=sent");
+  await expect(page.getByRole("link", { name: "Resume conversation desk lamp" })).toBeVisible();
   await expect(page.getByRole("link", { name: "View listing" })).toHaveAttribute("href", `/listing/${listing.id}`);
   await expect(page.getByText("Waiting for the seller to respond")).toBeVisible();
+  await page.goto(`/transactions?view=buying#transaction-test`);
+  await expect(page).toHaveURL(/\/requests\?view=sent#transaction-test$/);
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator(".mobile-nav").getByRole("link", { name: "Transactions" })).toBeVisible();
+  await expect(page.locator(".mobile-nav").getByRole("link", { name: "Requests" })).toBeVisible();
   await expect(page.locator(".mobile-nav").getByRole("link", { name: "Profile" })).toHaveCount(0);
 
   await page.goto("/settings?section=email");

@@ -10,7 +10,7 @@ const mobileLinks = [
   { to: '/browse', label: 'Browse', icon: Search },
   { to: '/sell', label: 'Sell', icon: ListPlus },
   { to: '/chats', label: 'Chats', icon: MessageCircle },
-  { to: '/transactions', label: 'Transactions', icon: ReceiptText },
+  { to: '/requests', label: 'Requests', icon: ReceiptText },
 ];
 
 export function Layout() {
@@ -57,7 +57,7 @@ export function Layout() {
                 <Link to="/sell">Sell</Link>
                 <Link to="/saved">Saved</Link>
                 <Link to="/my-listings">My listings</Link>
-                <Link to="/transactions">Transactions</Link>
+                <Link to="/requests">Requests</Link>
               </div>
               <div>
                 <h2>Community</h2>

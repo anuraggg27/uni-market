@@ -18,9 +18,9 @@ describe("email templates", () => {
       config,
     });
 
-    expect(rendered.subject).toBe("New request for Study table");
+    expect(rendered.subject).toBe("New reservation request: Study table");
     expect(rendered.text).toContain("Hi Seller,");
-    expect(rendered.text).toContain("https://uni.rocks/transactions?view=selling");
+    expect(rendered.text).toContain("https://uni.rocks/requests?view=received");
     expect(rendered.html).toContain("<span style=\"color:#8a4f68;\">Uni</span> Market");
     expect(rendered.html).toContain("Manage email notifications");
     expect(rendered.html).toContain("https://uni.rocks/settings?section=email");

@@ -141,7 +141,7 @@ export function PrivacyPage() {
 export function CommunityRulesPage() {
   return <LegalPage title="Community Rules" summary="Simple standards for honest listings, respectful conversation, and safer exchanges.">{() => <>
     <h2>Be honest & respectful</h2><p>Do not impersonate another person, misrepresent affiliation, manipulate reviews, spam, harass, threaten, discriminate, dox, or publish another person’s intimate or private information. Do not evade a suspension or coordinate deceptive accounts.</p>
-    <h2>Keep transactions safe</h2><p>Never request or share an OTP, password, recovery code, card PIN, or remote-access credentials. Do not demand advance fees or use fabricated payment screenshots. Inspect the item before paying and meet in a well-lit public place.</p>
+    <h2>Keep exchanges safe</h2><p>Never request or share an OTP, password, recovery code, card PIN, or remote-access credentials. Do not demand advance fees or use fabricated payment screenshots. Inspect the item before paying and meet in a well-lit public place.</p>
     <h2>Report urgent harm</h2><p>Use the <Link to="/grievance">safety reporting form</Link> for child-safety material, non-consensual intimate imagery, sexual impersonation, credible threats, doxxing, or identity impersonation. If anyone is in immediate danger, contact local emergency services or law enforcement first.</p>
   </>}</LegalPage>;
 }
@@ -170,8 +170,8 @@ export function SellerPolicyPage() {
 }
 
 export function MarketplaceDisclosurePage() {
-  return <LegalPage title="How the Marketplace Works" summary="A plain-language explanation of transactions, ranking, and responsibility.">{(data) => <>
-    <h2>Direct transactions</h2><p>{data.transactionModel}</p>
+  return <LegalPage title="How the Marketplace Works" summary="A plain-language explanation of exchanges, ranking, and responsibility.">{(data) => <>
+    <h2>Direct exchanges</h2><p>{data.transactionModel}</p>
     <h2>How listings are ranked</h2><p>{data.ranking}</p>
     <h2>Who is responsible</h2><p>Each listing identifies its user seller. Uni Market connects users; it is not the seller and does not collect transaction payment.</p>
   </>}</LegalPage>;

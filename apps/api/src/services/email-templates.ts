@@ -56,8 +56,8 @@ function templateContent(template: string, payload: Record<string, unknown>, con
   const reason = value(payload, 'reason');
   const actor = value(payload, 'cancelledBy') || 'The other person';
   const listingHref = listingId ? appUrl(config, `/listing/${listingId}`) : appUrl(config, '/my-listings');
-  const buyingHref = appUrl(config, `/transactions?view=buying${transactionId ? `#transaction-${transactionId}` : ''}`);
-  const sellingHref = appUrl(config, `/transactions?view=selling${transactionId ? `#transaction-${transactionId}` : ''}`);
+  const sentRequestHref = appUrl(config, `/requests?view=sent${transactionId ? `#transaction-${transactionId}` : ''}`);
+  const receivedRequestHref = appUrl(config, `/requests?view=received${transactionId ? `#transaction-${transactionId}` : ''}`);
 
   switch (template) {
     case 'first-conversation-message':
@@ -69,15 +69,15 @@ function templateContent(template: string, payload: Record<string, unknown>, con
     case 'listing_removed':
       return { subject: `Your listing was removed: ${listingName(payload)}`, heading: 'Your listing was removed', intro: `${listingName(payload)} is no longer visible on Uni Market.`, ...(reason ? { details: [`Reason: ${reason}`] } : {}), cta: { label: 'View details', href: listingHref } };
     case 'purchase-request':
-      return { subject: `New request for ${listingName(payload)}`, heading: 'Someone wants to buy your item', intro: `A buyer sent a purchase request for ${listingName(payload)}.`, cta: { label: 'Review request', href: sellingHref } };
+      return { subject: `New reservation request: ${listingName(payload)}`, heading: 'Someone requested a reservation', intro: `A student asked you to reserve ${listingName(payload)}.`, cta: { label: 'Review request', href: receivedRequestHref } };
     case 'purchase-accepted':
-      return { subject: `Your request was accepted: ${listingName(payload)}`, heading: 'The seller accepted your request', intro: `${listingName(payload)} is reserved for you. Open Transactions to see your exchange code and next steps.`, cta: { label: 'View purchase', href: buyingHref } };
+      return { subject: `Reserved for you: ${listingName(payload)}`, heading: 'The listing is reserved for you', intro: `${listingName(payload)} is reserved for you. Open Requests to see your exchange code and next steps.`, cta: { label: 'View request', href: sentRequestHref } };
     case 'transaction-completed-buyer':
-      return { subject: `Purchase completed: ${listingName(payload)}`, heading: 'Your exchange is complete', intro: `The exchange for ${listingName(payload)} has been completed. You can now leave a verified review.`, cta: { label: 'View transaction', href: buyingHref } };
+      return { subject: `Exchange completed: ${listingName(payload)}`, heading: 'Your exchange is complete', intro: `The exchange for ${listingName(payload)} has been completed. You can now leave a verified review.`, cta: { label: 'View request', href: sentRequestHref } };
     case 'transaction-completed-seller':
-      return { subject: `Sale completed: ${listingName(payload)}`, heading: 'Your sale is complete', intro: `The exchange for ${listingName(payload)} has been completed and counted in your sales.`, cta: { label: 'View transaction', href: sellingHref } };
+      return { subject: `Exchange completed: ${listingName(payload)}`, heading: 'The exchange is complete', intro: `The exchange for ${listingName(payload)} has been completed and counted in your sales.`, cta: { label: 'View request', href: receivedRequestHref } };
     case 'transaction-cancelled':
-      return { subject: `Purchase request cancelled: ${listingName(payload)}`, heading: 'This request was cancelled', intro: `${actor} cancelled the transaction for ${listingName(payload)}.`, cta: { label: 'View transactions', href: value(payload, 'recipientRole') === 'SELLER' ? sellingHref : buyingHref } };
+      return { subject: `Reservation request cancelled: ${listingName(payload)}`, heading: 'This request was cancelled', intro: `${actor} cancelled the reservation request for ${listingName(payload)}.`, cta: { label: 'View requests', href: value(payload, 'recipientRole') === 'SELLER' ? receivedRequestHref : sentRequestHref } };
     case 'support-response':
       return { subject: 'Support replied to your request', heading: 'You have a new support reply', intro: 'A support agent replied to your request.', cta: { label: 'Read reply', href: ticketId ? appUrl(config, `/support/${ticketId}`) : appUrl(config, '/support') } };
     case 'grievance-received':

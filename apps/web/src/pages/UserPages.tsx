@@ -36,7 +36,7 @@ import {
 import { api, clearCsrf, jsonBody } from "../api";
 import { useAuth } from "../auth";
 import { shouldFollowNewMessage } from "../chat-scroll";
-import { pendingPurchase } from "../purchase-intent";
+import { pendingContact } from "../contact-intent";
 import {
   initializeMsg91,
   msg91AccessToken,
@@ -903,12 +903,32 @@ type ChatConversation = {
   listingId: string;
   listingTitle: string;
   lifecycleState: string;
+  buyerId: string;
+  sellerId: string;
   otherUserId: string;
   otherName: string;
   unread: number;
   coverImageUrl: string | null;
   lastMessageAt: string;
 };
+
+type TransactionRecord = {
+  id: string;
+  listingId: string;
+  listingTitle: string;
+  listingPrice: string;
+  buyerId: string;
+  sellerId: string;
+  role: "BUYER" | "SELLER";
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  exchangeCode?: string;
+  exchangeCodeLocked?: boolean;
+};
+
+const emptyTransactions: TransactionRecord[] = [];
+const activeRequestStatuses = new Set(["REQUESTED", "ACCEPTED", "RESERVED", "HANDED_OVER"]);
 
 type ChatMessage = {
   id: string;
@@ -945,9 +965,23 @@ export function ChatsPage() {
     queryFn: () => api<ChatConversation[]>("/api/conversations"),
     refetchInterval: realtimeState === "connected" ? false : 5_000,
   });
+  const requests = useQuery({
+    queryKey: ["transactions"],
+    queryFn: () => api<TransactionRecord[]>("/api/transactions"),
+    enabled: Boolean(user?.marketplaceEligible),
+  });
   const selectedConversation = conversations.data?.find(
     (conversation) => conversation.id === conversationId,
   );
+  const selectedRequest = useMemo(() => {
+    if (!selectedConversation) return undefined;
+    const matching = (requests.data ?? emptyTransactions).filter((request) =>
+      request.listingId === selectedConversation.listingId
+      && request.buyerId === selectedConversation.buyerId
+      && request.sellerId === selectedConversation.sellerId
+    );
+    return matching.find((request) => activeRequestStatuses.has(request.status)) ?? matching[0];
+  }, [requests.data, selectedConversation]);
 
   useEffect(() => {
     activeConversation.current = conversationId;
@@ -1089,6 +1123,7 @@ export function ChatsPage() {
           <ChatPanel
             id={conversationId}
             conversation={selectedConversation}
+            reservationRequest={selectedRequest}
             realtimeState={realtimeState}
           />
         ) : (
@@ -1106,10 +1141,12 @@ export function ChatsPage() {
 function ChatPanel({
   id,
   conversation,
+  reservationRequest,
   realtimeState,
 }: {
   id: string;
   conversation: ChatConversation | undefined;
+  reservationRequest: TransactionRecord | undefined;
   realtimeState: RealtimeState;
 }) {
   const { user } = useAuth();
@@ -1130,6 +1167,12 @@ function ChatPanel({
   const block = useMutation({
     mutationFn: () =>
       api(`/api/blocks/${conversation?.otherUserId}`, { method: "POST" }),
+  });
+  const requestReservation = useMutation({
+    mutationFn: () =>
+      api<TransactionRecord>(`/api/conversations/${id}/reservation-requests`, { method: "POST" }),
+    onSuccess: () =>
+      void client.invalidateQueries({ queryKey: ["transactions"] }),
   });
 
   const receiveMessage = useCallback((message: ChatMessage) => {
@@ -1188,6 +1231,15 @@ function ChatPanel({
     });
   }, [optimistic, query.data]);
   const messageGroups = useMemo(() => groupChatMessages(all), [all]);
+  const buyerHasMessaged = Boolean(conversation && all.some((message) =>
+    message.senderId === conversation.buyerId && !message.pending && !message.failed
+  ));
+  const isConversationBuyer = user?.id === conversation?.buyerId;
+  const requestIsActive = Boolean(reservationRequest && activeRequestStatuses.has(reservationRequest.status));
+  const requestView = isConversationBuyer ? "sent" : "received";
+  const requestHref = reservationRequest
+    ? `/requests?view=${requestView}#transaction-${reservationRequest.id}`
+    : "/requests";
 
   useEffect(() => {
     if (!query.isSuccess) return;
@@ -1321,6 +1373,47 @@ function ChatPanel({
             <span>Loading listing…</span>
           )}
         </div>
+        {conversation ? (
+          <div className="chat-reservation-control">
+            {isConversationBuyer ? (
+              requestIsActive ? (
+                <Link className="button small secondary" to={requestHref}>
+                  {reservationRequest?.status === "REQUESTED"
+                    ? "Reservation requested"
+                    : reservationRequest?.status === "RESERVED"
+                      ? "View exchange code"
+                      : "View request"}
+                </Link>
+              ) : reservationRequest?.status === "COMPLETED" ? (
+                <Link className="chat-reservation-state" to={requestHref}>Exchange completed</Link>
+              ) : conversation.lifecycleState === "ACTIVE" ? (
+                <button
+                  className="button small secondary"
+                  type="button"
+                  disabled={!buyerHasMessaged || requestReservation.isPending}
+                  onClick={() => requestReservation.mutate()}
+                  title={buyerHasMessaged ? "Ask the seller to reserve this listing for you" : "Send the seller a message first"}
+                >
+                  {requestReservation.isPending
+                    ? "Requesting…"
+                    : buyerHasMessaged
+                      ? "Request reservation"
+                      : "Message seller first"}
+                </button>
+              ) : (
+                <span className="chat-reservation-state">Unavailable</span>
+              )
+            ) : reservationRequest?.status === "REQUESTED" ? (
+              <Link className="button small primary" to={requestHref}>Review request</Link>
+            ) : reservationRequest?.status === "RESERVED" ? (
+              <Link className="button small secondary" to={requestHref}>Complete exchange</Link>
+            ) : reservationRequest?.status === "COMPLETED" ? (
+              <Link className="chat-reservation-state" to={requestHref}>Exchange completed</Link>
+            ) : conversation.lifecycleState !== "ACTIVE" ? (
+              <span className="chat-reservation-state">Unavailable</span>
+            ) : null}
+          </div>
+        ) : null}
         <details className="chat-actions">
           <summary aria-label="Conversation actions">
             <MoreHorizontal aria-hidden="true" />
@@ -1346,6 +1439,9 @@ function ChatPanel({
             ) : null}
           </div>
         </details>
+        {requestReservation.error ? (
+          <p className="field-error chat-reservation-error" role="alert">{requestReservation.error.message}</p>
+        ) : null}
       </header>
       <div className="messages-wrap">
         <div
@@ -1521,21 +1617,7 @@ function ChatPanel({
   );
 }
 
-type TransactionRecord = {
-  id: string;
-  listingId: string;
-  listingTitle: string;
-  listingPrice: string;
-  role: "BUYER" | "SELLER";
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-  exchangeCode?: string;
-  exchangeCodeLocked?: boolean;
-};
-
-type TransactionView = "all" | "buying" | "selling";
-const emptyTransactions: TransactionRecord[] = [];
+type TransactionView = "all" | "sent" | "received";
 
 const transactionDateFormatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
@@ -1548,7 +1630,7 @@ function transactionStatusText(transaction: TransactionRecord): string {
     ACCEPTED: buyer ? "The seller accepted your request" : "You accepted this request",
     RESERVED: buyer ? "Reserved for you — arrange the exchange" : "Reserved for this buyer",
     HANDED_OVER: buyer ? "Confirm that you received the item" : "Waiting for the buyer to confirm receipt",
-    COMPLETED: buyer ? "Purchase completed" : "Sale completed",
+    COMPLETED: "Exchange completed",
     CANCELLED_BY_BUYER: buyer ? "You cancelled this request" : "The buyer cancelled this request",
     CANCELLED_BY_SELLER: buyer ? "The seller cancelled this request" : "You cancelled this request",
     DISPUTED: "This transaction is under review",
@@ -1556,14 +1638,15 @@ function transactionStatusText(transaction: TransactionRecord): string {
   return labels[transaction.status] ?? transaction.status.replaceAll("_", " ").toLocaleLowerCase();
 }
 
-export function TransactionsPage() {
+export function RequestsPage() {
   const client = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [exchangeCodeEntries, setExchangeCodeEntries] = useState<Record<string, string>>({});
-  const view: TransactionView = searchParams.get("view") === "buying"
-    ? "buying"
-    : searchParams.get("view") === "selling"
-      ? "selling"
+  const requestedView = searchParams.get("view");
+  const view: TransactionView = requestedView === "sent" || requestedView === "buying"
+    ? "sent"
+    : requestedView === "received" || requestedView === "selling"
+      ? "received"
       : "all";
   const query = useQuery({
     queryKey: ["transactions"],
@@ -1572,8 +1655,10 @@ export function TransactionsPage() {
   const action = useMutation({
     mutationFn: ({ id, action }: { id: string; action: string }) =>
       api(`/api/transactions/${id}/${action}`, { method: "POST" }),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["transactions"] }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ["transactions"] });
+      void client.invalidateQueries({ queryKey: ["conversations"] });
+    },
   });
   const review = useMutation({
     mutationFn: ({
@@ -1603,8 +1688,10 @@ export function TransactionsPage() {
         return next;
       });
     },
-    onSettled: () =>
-      void client.invalidateQueries({ queryKey: ["transactions"] }),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: ["transactions"] });
+      void client.invalidateQueries({ queryKey: ["conversations"] });
+    },
   });
   const rotateExchangeCode = useMutation({
     mutationFn: (id: string) =>
@@ -1615,12 +1702,12 @@ export function TransactionsPage() {
   const transactions = query.data ?? emptyTransactions;
   const transactionCounts = useMemo(() => transactions.reduce((counts, transaction) => {
     counts.all += 1;
-    counts[transaction.role === "BUYER" ? "buying" : "selling"] += 1;
+    counts[transaction.role === "BUYER" ? "sent" : "received"] += 1;
     return counts;
-  }, { all: 0, buying: 0, selling: 0 }), [transactions]);
+  }, { all: 0, sent: 0, received: 0 }), [transactions]);
   const visibleTransactions = useMemo(() => view === "all"
     ? transactions
-    : transactions.filter((transaction) => transaction.role === (view === "buying" ? "BUYER" : "SELLER")), [transactions, view]);
+    : transactions.filter((transaction) => transaction.role === (view === "sent" ? "BUYER" : "SELLER")), [transactions, view]);
   function selectView(nextView: TransactionView) {
     const next = new URLSearchParams(searchParams);
     if (nextView === "all") next.delete("view");
@@ -1631,26 +1718,26 @@ export function TransactionsPage() {
     <div className="page transactions-page">
       <div className="page-header">
         <div>
-          <h1>Transactions</h1>
-          <p>Track the items you want to buy and the requests on your listings.</p>
+          <h1>Requests</h1>
+          <p>Track reservation requests you sent and received.</p>
         </div>
       </div>
-      <div className="transaction-filters" role="tablist" aria-label="Transaction view">
-        {(["all", "buying", "selling"] as const).map((filter) => (
+      <div className="transaction-filters" role="tablist" aria-label="Request view">
+        {(["all", "sent", "received"] as const).map((filter) => (
           <button type="button" role="tab" aria-selected={view === filter} className={view === filter ? "is-active" : ""} key={filter} onClick={() => selectView(filter)}>
-            {filter === "all" ? "All" : filter === "buying" ? "Buying" : "Selling"}
+            {filter === "all" ? "All" : filter === "sent" ? "Sent" : "Received"}
             <span>{transactionCounts[filter]}</span>
           </button>
         ))}
       </div>
       {query.isLoading ? (
-        <Loading label="Loading transactions" />
+        <Loading label="Loading requests" />
       ) : query.isError ? (
         <ErrorState error={query.error} />
       ) : !visibleTransactions.length ? (
         <EmptyState
-          title={view === "selling" ? "No selling requests" : view === "buying" ? "No buying requests" : "No transactions yet"}
-          body={view === "selling" ? "Requests from buyers will appear here." : "Request to buy an active listing to begin a transaction."}
+          title={view === "received" ? "No received requests" : view === "sent" ? "No sent requests" : "No requests yet"}
+          body={view === "received" ? "Reservation requests from interested students will appear here." : "Start a conversation, send a message, and then request a reservation."}
         />
       ) : (
         <div className="transaction-list section">
@@ -1659,7 +1746,7 @@ export function TransactionsPage() {
               <div className="transaction-card-header">
                 <div className="transaction-card-copy">
                   <h2><Link to={`/listing/${tx.listingId}`}>{tx.listingTitle}</Link></h2>
-                  <p className="transaction-card-meta"><span>{tx.listingPrice}</span><span>{tx.role === "BUYER" ? "Buying" : "Selling"}</span><span>Requested {transactionDateFormatter.format(new Date(tx.createdAt))}</span></p>
+                  <p className="transaction-card-meta"><span>{tx.listingPrice}</span><span>{tx.role === "BUYER" ? "Sent" : "Received"}</span><span>Requested {transactionDateFormatter.format(new Date(tx.createdAt))}</span></p>
                   <p className="transaction-status-copy">{transactionStatusText(tx)}</p>
                 </div>
                 <StatusBadge value={tx.status} />
@@ -1692,7 +1779,7 @@ export function TransactionsPage() {
                   }}
                 >
                   <label className="field" htmlFor={`exchange-code-${tx.id}`}>
-                    <span>Buyer&apos;s 6-digit exchange code</span>
+                    <span>6-digit exchange code</span>
                     <input
                       id={`exchange-code-${tx.id}`}
                       inputMode="numeric"
@@ -2272,7 +2359,7 @@ type EmailPreferenceValues = {
 
 const emailPreferenceRows = [
   { key: "listingUpdates", label: "Listing updates", description: "Approvals, changes requested, removals, and other moderation results." },
-  { key: "transactionUpdates", label: "Buying and selling", description: "Purchase requests, acceptances, cancellations, and completed exchanges." },
+  { key: "transactionUpdates", label: "Requests and exchanges", description: "Reservation requests, confirmations, cancellations, and completed exchanges." },
   { key: "messageUpdates", label: "New conversations", description: "An email when someone starts a conversation about one of your listings." },
   { key: "policyReminders", label: "Policy reminders", description: "Occasional reminders when marketplace policies need your attention." },
 ] as const;
@@ -2551,7 +2638,7 @@ export function SettingsPage() {
   }, [user?.phoneVerifiedAt, user?.studentEmailVerifiedAt]);
   useEffect(() => {
     if (!user?.marketplaceEligible) return;
-    const intent = pendingPurchase();
+    const intent = pendingContact();
     if (intent) navigate(intent.returnTo, { replace: true });
   }, [navigate, user?.marketplaceEligible]);
   useEffect(() => {

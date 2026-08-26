@@ -29,10 +29,10 @@ import { reportReasons } from "@campus-market/shared";
 import { useAuth } from "../auth";
 import { postLoginDestination } from "../auth-routing";
 import {
-  consumePendingPurchase,
-  pendingPurchase,
-  savePendingPurchase,
-} from "../purchase-intent";
+  consumePendingContact,
+  pendingContact,
+  savePendingContact,
+} from "../contact-intent";
 import { ProductCard } from "../components/ProductCard";
 import { ReportButton } from "../components/ReportButton";
 import {
@@ -759,37 +759,29 @@ export function ListingPage() {
       }),
     onSuccess: (conversation) => navigate(`/chats/${conversation.id}`),
   });
-  const buy = useMutation({
-    mutationFn: () =>
-      api<any>("/api/transactions", {
-        method: "POST",
-        ...jsonBody({ listingId }),
-      }),
-    onSuccess: () => navigate("/transactions?view=buying"),
-  });
-  function beginPurchase() {
+  function beginContact() {
     if (!listingId) return;
     if (!user) {
-      savePendingPurchase(listingId);
+      savePendingContact(listingId);
       navigate("/login", { state: { from: `${location.pathname}${location.search}` } });
       return;
     }
     if (!user.marketplaceEligible) {
-      savePendingPurchase(listingId);
+      savePendingContact(listingId);
       navigate("/settings?verify=eligibility");
       return;
     }
-    buy.mutate();
+    contact.mutate();
   }
   useEffect(() => {
-    const intent = pendingPurchase();
-    if (!listingId || !user || buy.isPending || intent?.listingId !== listingId) return;
+    const intent = pendingContact();
+    if (!listingId || !user || contact.isPending || intent?.listingId !== listingId) return;
     if (!user.marketplaceEligible) {
       navigate("/settings?verify=eligibility", { replace: true });
       return;
     }
-    if (consumePendingPurchase(listingId)) buy.mutate();
-  }, [buy, listingId, navigate, user]);
+    if (consumePendingContact(listingId)) contact.mutate();
+  }, [contact, listingId, navigate, user]);
   const report = useMutation({
     mutationFn: (data: { reason: string; details: string }) =>
       api("/api/reports", {
@@ -1079,20 +1071,12 @@ export function ListingPage() {
               <div className="space-y-3">
                 <button
                   type="button"
-                  className="inline-flex h-12 w-full items-center justify-center rounded-full !bg-brand px-7 text-[15px] font-medium !text-on-brand transition-colors hover:!bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
-                  onClick={beginPurchase}
-                  disabled={buy.isPending || item.lifecycleState !== "ACTIVE"}
-                >
-                  Buy
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-full border border-line bg-surface px-5 text-[14px] font-medium text-ink transition-colors hover:border-sandalwood hover:bg-surface-muted disabled:opacity-50"
-                  onClick={() => contact.mutate()}
-                  disabled={contact.isPending}
+                  className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full !bg-brand px-7 text-[15px] font-medium !text-on-brand transition-colors hover:!bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={beginContact}
+                  disabled={contact.isPending || item.lifecycleState !== "ACTIVE"}
                 >
                   <MessageCircle className="size-4" aria-hidden="true" />
-                  Contact seller
+                  {item.lifecycleState === "ACTIVE" ? "Contact seller" : "Unavailable"}
                 </button>
                 <div className="grid grid-cols-2 gap-2.5">
                   <button
@@ -1124,7 +1108,7 @@ export function ListingPage() {
                     Report
                   </button>
                 </div>
-                {[contact, buy, save].map((mutation, index) =>
+                {[contact, save].map((mutation, index) =>
                   mutation.error ? (
                     <p className="field-error" key={index}>
                       {mutation.error.message}
@@ -1390,7 +1374,7 @@ export function SellerPage() {
         ) : (
           <EmptyState
             title="No reviews yet"
-            body="Reviews appear after completed transactions."
+            body="Reviews appear after completed exchanges."
           />
         )}
       </section>
@@ -1426,7 +1410,7 @@ export function LeaderboardPage() {
         </div>
       </div>
       <p className="lede">
-        Rankings use completed, verified transactions only. Sellers need at
+        Rankings use completed, verified exchanges only. Sellers need at
         least two sales to appear.
       </p>
       {query.isLoading ? (
@@ -1436,7 +1420,7 @@ export function LeaderboardPage() {
       ) : !query.data?.length ? (
         <EmptyState
           title="No rankings yet"
-          body="The leaderboard will appear after eligible sellers complete transactions."
+          body="The leaderboard will appear after eligible sellers complete exchanges."
         />
       ) : (
         <div className="table-scroll">

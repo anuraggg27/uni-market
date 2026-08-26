@@ -4699,7 +4699,7 @@ html.dark [data-site-header] :where(
   z-index: 3;
   min-height: 74px;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
@@ -4755,6 +4755,29 @@ html.dark [data-site-header] :where(
 .chat-context a:hover {
   color: var(--color-brand-dark);
   text-decoration: underline;
+}
+.chat-reservation-control {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+.chat-reservation-control .button,
+.chat-reservation-state {
+  white-space: nowrap;
+}
+.chat-reservation-state {
+  color: var(--color-muted);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+a.chat-reservation-state:hover {
+  color: var(--color-brand-dark);
+  text-decoration: underline;
+}
+.chat-reservation-error {
+  grid-column: 1 / -1;
+  margin: -2px 0 2px;
+  font-size: 0.76rem;
 }
 .chat-actions {
   position: relative;
@@ -6234,10 +6257,30 @@ html.dark .site-footer-wordmark:hover > span:first-child {
   }
   .chat-back {
     display: flex;
+    grid-column: 1;
+    grid-row: 1;
   }
   .chat-listing-image {
+    grid-column: 2;
+    grid-row: 1;
     width: 40px;
     height: 40px;
+  }
+  .chat-context {
+    grid-column: 3;
+    grid-row: 1;
+  }
+  .chat-actions {
+    grid-column: 4;
+    grid-row: 1;
+  }
+  .chat-reservation-control {
+    grid-column: 2 / 5;
+    grid-row: 2;
+    justify-self: end;
+  }
+  .chat-reservation-error {
+    grid-row: 3;
   }
   .chat-actions-menu {
     right: -2px;

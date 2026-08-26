@@ -1,7 +1,8 @@
-const STORAGE_KEY = 'uni-market:pending-purchase:v1';
+const STORAGE_KEY = 'uni-market:pending-contact:v1';
+const LEGACY_PURCHASE_KEY = 'uni-market:pending-purchase:v1';
 const MAX_AGE_MS = 15 * 60_000;
 
-export type PendingPurchaseIntent = {
+export type PendingContactIntent = {
   listingId: string;
   returnTo: string;
   createdAt: number;
@@ -11,35 +12,41 @@ function storage(): Storage | null {
   return typeof window === 'undefined' ? null : window.sessionStorage;
 }
 
-export function savePendingPurchase(listingId: string): PendingPurchaseIntent {
+function clearLegacyPurchase(): void {
+  storage()?.removeItem(LEGACY_PURCHASE_KEY);
+}
+
+export function savePendingContact(listingId: string): PendingContactIntent {
+  clearLegacyPurchase();
   const intent = { listingId, returnTo: `/listing/${listingId}`, createdAt: Date.now() };
   storage()?.setItem(STORAGE_KEY, JSON.stringify(intent));
   return intent;
 }
 
-export function pendingPurchase(): PendingPurchaseIntent | null {
+export function pendingContact(): PendingContactIntent | null {
+  clearLegacyPurchase();
   const raw = storage()?.getItem(STORAGE_KEY);
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as Partial<PendingPurchaseIntent>;
+    const parsed = JSON.parse(raw) as Partial<PendingContactIntent>;
     if (typeof parsed.listingId !== 'string' || typeof parsed.returnTo !== 'string' || typeof parsed.createdAt !== 'number' || Date.now() - parsed.createdAt > MAX_AGE_MS || parsed.createdAt > Date.now() + 60_000) {
-      clearPendingPurchase();
+      clearPendingContact();
       return null;
     }
-    return parsed as PendingPurchaseIntent;
+    return parsed as PendingContactIntent;
   } catch {
-    clearPendingPurchase();
+    clearPendingContact();
     return null;
   }
 }
 
-export function consumePendingPurchase(listingId: string): boolean {
-  const intent = pendingPurchase();
+export function consumePendingContact(listingId: string): boolean {
+  const intent = pendingContact();
   if (!intent || intent.listingId !== listingId) return false;
-  clearPendingPurchase();
+  clearPendingContact();
   return true;
 }
 
-export function clearPendingPurchase(): void {
+export function clearPendingContact(): void {
   storage()?.removeItem(STORAGE_KEY);
 }

@@ -217,12 +217,12 @@ function ProfileMenu({ compact = false }: { compact?: boolean }) {
             {user ? (
               <>
                 <Link
-                  to="/transactions"
+                  to="/requests"
                   className={itemClass}
                   onClick={() => setMenuOpen(false)}
                 >
                   <ReceiptText className="size-4 text-muted" aria-hidden="true" />
-                  Transactions
+                  Requests
                 </Link>
                 <Link
                   to="/settings"
@@ -399,10 +399,10 @@ export const Navbar = () => {
                     className={navigationMenuTriggerStyle()}
                   >
                     <NavLink
-                      to="/transactions"
+                      to="/requests"
                       className="navbar-primary-link !font-medium !text-muted hover:!text-ink dark:hover:!text-ink"
                     >
-                      Transactions
+                      Requests
                     </NavLink>
                   </NavigationMenuLink>
                 </NavigationMenuItem>
@@ -529,11 +529,11 @@ export const Navbar = () => {
                       Chats
                     </Link>
                     <Link
-                      to="/transactions"
+                      to="/requests"
                       onClick={() => setOpen(false)}
                       className="text-[15px] font-normal text-muted hover:text-ink transition-colors py-1"
                     >
-                      Transactions
+                      Requests
                     </Link>
                     <Link
                       to="/my-listings"

@@ -4,7 +4,7 @@ import { idSchema, reviewSchema } from '@campus-market/shared';
 import { z } from 'zod';
 import type { AppConfig } from '../config.js';
 import type { Database } from '../db/client.js';
-import { listings, notifications, reviews, transactions, users } from '../db/schema.js';
+import { blocks, conversations, listings, messages, notifications, reviews, transactions, users } from '../db/schema.js';
 import { requireVerified } from '../middleware/auth.js';
 import { keyedHash, safeEqual } from '../lib/crypto.js';
 import { AppError, asyncRoute } from '../lib/errors.js';
@@ -53,20 +53,40 @@ export function transactionsRouter(db: Database, config: AppConfig): Router {
     res.json({ data: rows.map((row) => publicTransaction(row.transaction, req.auth!.userId, config, { title: row.listing.title, priceLabel: listingPriceLabel(row.listing) })) });
   }));
 
-  router.post('/transactions', requireVerified, asyncRoute(async (req, res) => {
-    const { listingId } = z.object({ listingId: idSchema }).parse(req.body);
-    const listing = (await db.select().from(listings).where(and(eq(listings.id, listingId), eq(listings.moderationState, 'APPROVED'), eq(listings.lifecycleState, 'ACTIVE'), isNull(listings.deletedAt))).limit(1))[0];
-    if (!listing) throw new AppError(409, 'LISTING_NOT_AVAILABLE', 'This listing is not available for purchase');
-    if (listing.sellerId === req.auth!.userId) throw new AppError(400, 'SELF_PURCHASE', 'You cannot buy your own listing');
-    const existing = (await db.select().from(transactions).where(and(eq(transactions.listingId, listingId), eq(transactions.buyerId, req.auth!.userId), inArray(transactions.status, ['REQUESTED', 'ACCEPTED', 'RESERVED', 'HANDED_OVER']))).limit(1))[0];
+  router.post('/conversations/:id/reservation-requests', requireVerified, asyncRoute(async (req, res) => {
+    const conversationId = idSchema.parse(req.params.id);
+    const conversation = (await db.select().from(conversations).where(eq(conversations.id, conversationId)).limit(1))[0];
+    if (!conversation || conversation.buyerId !== req.auth!.userId) {
+      throw new AppError(403, 'RESERVATION_REQUEST_FORBIDDEN', 'Only the interested student in this conversation can request a reservation');
+    }
+
+    const [listing, buyerMessage, blockedRelationship, existingRequest] = await Promise.all([
+      db.select().from(listings).where(and(eq(listings.id, conversation.listingId), isNull(listings.deletedAt))).limit(1),
+      db.select({ id: messages.id }).from(messages).where(and(eq(messages.conversationId, conversation.id), eq(messages.senderId, conversation.buyerId), isNull(messages.deletedAt))).limit(1),
+      db.select({ blockerId: blocks.blockerId }).from(blocks).where(or(
+        and(eq(blocks.blockerId, conversation.buyerId), eq(blocks.blockedId, conversation.sellerId)),
+        and(eq(blocks.blockerId, conversation.sellerId), eq(blocks.blockedId, conversation.buyerId)),
+      )).limit(1),
+      db.select().from(transactions).where(and(eq(transactions.listingId, conversation.listingId), eq(transactions.buyerId, conversation.buyerId), inArray(transactions.status, ['REQUESTED', 'ACCEPTED', 'RESERVED', 'HANDED_OVER']))).limit(1),
+    ]);
+
+    if (blockedRelationship.length) throw new AppError(403, 'USER_BLOCKED', 'A reservation cannot be requested in this conversation');
+    const existing = existingRequest[0];
     if (existing) { res.json({ data: publicTransaction(existing, req.auth!.userId, config) }); return; }
+    if (!buyerMessage.length) throw new AppError(409, 'MESSAGE_REQUIRED', 'Send the seller a message before requesting a reservation');
+    const availableListing = listing[0];
+    if (!availableListing || availableListing.moderationState !== 'APPROVED' || availableListing.lifecycleState !== 'ACTIVE') throw new AppError(409, 'LISTING_NOT_AVAILABLE', 'This listing is not available for reservation');
     const transaction = await db.transaction(async (tx) => {
-      const created = (await tx.insert(transactions).values({ listingId, buyerId: req.auth!.userId, sellerId: listing.sellerId }).returning())[0]!;
-      await tx.insert(notifications).values({ userId: listing.sellerId, type: 'PURCHASE_REQUEST', title: 'Purchase request', body: `A buyer requested to purchase ${listing.title}`, href: '/transactions?view=selling' });
-      await queueUserEmail(tx, { recipientUserId: listing.sellerId, template: 'purchase-request', payload: { transactionId: created.id, listingId, listingTitle: listing.title }, dedupeKey: `purchase-request:${created.id}` });
+      const created = (await tx.insert(transactions).values({ listingId: availableListing.id, buyerId: conversation.buyerId, sellerId: conversation.sellerId }).returning())[0]!;
+      await tx.insert(notifications).values({ userId: conversation.sellerId, type: 'PURCHASE_REQUEST', title: 'Reservation request', body: `A student asked you to reserve ${availableListing.title}`, href: `/requests?view=received#transaction-${created.id}` });
+      await queueUserEmail(tx, { recipientUserId: conversation.sellerId, template: 'purchase-request', payload: { transactionId: created.id, listingId: availableListing.id, listingTitle: availableListing.title }, dedupeKey: `purchase-request:${created.id}` });
       return created;
     });
     res.status(201).json({ data: publicTransaction(transaction, req.auth!.userId, config) });
+  }));
+
+  router.post('/transactions', requireVerified, asyncRoute(async () => {
+    throw new AppError(409, 'CHAT_REQUIRED', 'Start a conversation and send the seller a message before requesting a reservation');
   }));
 
   router.post('/transactions/:id/accept', requireVerified, asyncRoute(async (req, res) => {
@@ -78,7 +98,7 @@ export function transactionsRouter(db: Database, config: AppConfig): Router {
       if (!reserved) throw new AppError(409, 'ALREADY_RESERVED', 'Another request already reserved this listing');
       const now = new Date();
       const updated = (await tx.update(transactions).set({ status: 'RESERVED', exchangeCodeAttempts: 0, exchangeCodeIssuedAt: now, exchangeCodeLockedAt: null, exchangeCodeUsedAt: null, updatedAt: now }).where(and(eq(transactions.id, id), eq(transactions.status, 'REQUESTED'))).returning())[0]!;
-      await tx.insert(notifications).values([{ userId: transaction.buyerId, type: 'REQUEST_ACCEPTED', title: 'Request accepted', body: 'The seller accepted your request. Your exchange code is ready in Transactions.', href: '/transactions' }, { userId: transaction.buyerId, type: 'LISTING_RESERVED', title: 'Listing reserved', body: 'This listing is now reserved for you', href: `/listing/${transaction.listingId}` }]);
+      await tx.insert(notifications).values([{ userId: transaction.buyerId, type: 'REQUEST_ACCEPTED', title: 'Reservation confirmed', body: 'The seller reserved this listing for you. Your exchange code is ready in Requests.', href: `/requests?view=sent#transaction-${updated.id}` }, { userId: transaction.buyerId, type: 'LISTING_RESERVED', title: 'Listing reserved', body: 'This listing is now reserved for you', href: `/listing/${transaction.listingId}` }]);
       await queueUserEmail(tx, { recipientUserId: transaction.buyerId, template: 'purchase-accepted', payload: { transactionId: updated.id, listingId: reserved.id, listingTitle: reserved.title }, dedupeKey: `purchase-accepted:${updated.id}` });
       return updated;
     });
@@ -121,8 +141,8 @@ export function transactionsRouter(db: Database, config: AppConfig): Router {
       if (!sold) throw new AppError(409, 'LISTING_STATE_CHANGED', 'This listing can no longer be completed');
       await tx.update(users).set({ completedSales: sql`${users.completedSales} + 1`, updatedAt: now }).where(eq(users.id, updated.sellerId));
       await tx.insert(notifications).values([
-        { userId: updated.buyerId, type: 'TRANSACTION_COMPLETED', title: 'Exchange complete', body: 'Your exchange was completed. You can now leave a review.', href: '/transactions' },
-        { userId: updated.sellerId, type: 'TRANSACTION_COMPLETED', title: 'Sale complete', body: 'The exchange code was accepted and your sale was completed.', href: '/transactions' },
+        { userId: updated.buyerId, type: 'TRANSACTION_COMPLETED', title: 'Exchange complete', body: 'Your exchange was completed. You can now leave a review.', href: `/requests?view=sent#transaction-${updated.id}` },
+        { userId: updated.sellerId, type: 'TRANSACTION_COMPLETED', title: 'Exchange complete', body: 'The exchange code was accepted and this exchange is complete.', href: `/requests?view=received#transaction-${updated.id}` },
       ]);
       await Promise.all([
         queueUserEmail(tx, { recipientUserId: updated.buyerId, template: 'transaction-completed-buyer', payload: { transactionId: updated.id, listingId: sold.id, listingTitle: sold.title }, dedupeKey: `transaction-completed-buyer:${updated.id}` }),
@@ -155,7 +175,7 @@ export function transactionsRouter(db: Database, config: AppConfig): Router {
       const sold = (await tx.update(listings).set({ lifecycleState: 'SOLD', soldAt: new Date(), updatedAt: new Date() }).where(and(eq(listings.id, updated.listingId), eq(listings.lifecycleState, 'RESERVED'), eq(listings.reservedBuyerId, updated.buyerId))).returning({ id: listings.id, title: listings.title }))[0];
       if (!sold) throw new AppError(409, 'LISTING_STATE_CHANGED', 'This listing can no longer be completed');
       await tx.update(users).set({ completedSales: sql`${users.completedSales} + 1`, updatedAt: new Date() }).where(eq(users.id, updated.sellerId));
-      await tx.insert(notifications).values({ userId: updated.sellerId, type: 'TRANSACTION_COMPLETED', title: 'Transaction complete', body: 'The buyer confirmed receipt', href: '/transactions' });
+      await tx.insert(notifications).values({ userId: updated.sellerId, type: 'TRANSACTION_COMPLETED', title: 'Exchange complete', body: 'The other student confirmed receipt', href: `/requests?view=received#transaction-${updated.id}` });
       await Promise.all([
         queueUserEmail(tx, { recipientUserId: updated.buyerId, template: 'transaction-completed-buyer', payload: { transactionId: updated.id, listingId: sold.id, listingTitle: sold.title }, dedupeKey: `transaction-completed-buyer:${updated.id}` }),
         queueUserEmail(tx, { recipientUserId: updated.sellerId, template: 'transaction-completed-seller', payload: { transactionId: updated.id, listingId: sold.id, listingTitle: sold.title }, dedupeKey: `transaction-completed-seller:${updated.id}` }),
@@ -192,7 +212,7 @@ export function transactionsRouter(db: Database, config: AppConfig): Router {
     if (revieweeId === req.auth!.userId) throw new AppError(400, 'SELF_REVIEW', 'You cannot review yourself');
     try {
       const review = (await db.insert(reviews).values({ transactionId: id, reviewerId: req.auth!.userId, revieweeId, rating: input.rating, text: input.text, tags: input.tags }).returning())[0]!;
-      await db.insert(notifications).values({ userId: revieweeId, type: 'REVIEW_RECEIVED', title: 'New review', body: 'You received a verified transaction review', href: `/seller/${revieweeId}` });
+      await db.insert(notifications).values({ userId: revieweeId, type: 'REVIEW_RECEIVED', title: 'New review', body: 'You received a verified exchange review', href: `/seller/${revieweeId}` });
       res.status(201).json({ data: { ...review, verifiedTransaction: true } });
     } catch (error: any) {
       if (error?.code === '23505' || String(error?.message).includes('review_once_idx') || String(error?.cause?.message).includes('review_once_idx')) throw new AppError(409, 'DUPLICATE_REVIEW', 'You already reviewed this transaction');

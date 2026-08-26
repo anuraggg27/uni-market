@@ -1,5 +1,5 @@
 import { lazy, type ComponentType } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AuthProvider, RequireAuth } from "./auth";
 import { Layout } from "./components/Layout";
 
@@ -38,7 +38,7 @@ const SavedPage = lazyNamed(userPages, "SavedPage");
 const SettingsPage = lazyNamed(userPages, "SettingsPage");
 const SupportDetailPage = lazyNamed(userPages, "SupportDetailPage");
 const SupportPage = lazyNamed(userPages, "SupportPage");
-const TransactionsPage = lazyNamed(userPages, "TransactionsPage");
+const RequestsPage = lazyNamed(userPages, "RequestsPage");
 const AdminCategories = lazyNamed(adminPages, "AdminCategories");
 const AdminCompliance = lazyNamed(complianceAdminPages, "AdminCompliance");
 const AdminDashboard = lazyNamed(adminPages, "AdminDashboard");
@@ -62,6 +62,15 @@ const PrivacyPage = lazyNamed(legalPages, "PrivacyPage");
 const ProhibitedItemsPage = lazyNamed(legalPages, "ProhibitedItemsPage");
 const SellerPolicyPage = lazyNamed(legalPages, "SellerPolicyPage");
 const TermsPage = lazyNamed(legalPages, "TermsPage");
+
+function LegacyTransactionsRedirect() {
+  const location = useLocation();
+  const search = new URLSearchParams(location.search);
+  if (search.get("view") === "buying") search.set("view", "sent");
+  if (search.get("view") === "selling") search.set("view", "received");
+  const query = search.toString();
+  return <Navigate to={{ pathname: "/requests", search: query ? `?${query}` : "", hash: location.hash }} replace />;
+}
 
 export function App() {
   return (
@@ -139,13 +148,14 @@ export function App() {
               }
             />
             <Route
-              path="transactions"
+              path="requests"
               element={
                 <RequireAuth phone>
-                  <TransactionsPage />
+                  <RequestsPage />
                 </RequireAuth>
               }
             />
+            <Route path="transactions" element={<LegacyTransactionsRedirect />} />
             <Route
               path="profile"
               element={
