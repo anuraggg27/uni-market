@@ -159,9 +159,7 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   await page.goto("/onboarding");
   await page.getByLabel("Display name").fill("Journey Seller");
   await page.getByLabel(/I declare that I am at least 18/).check();
-  await page.getByLabel(/I accept the Terms of use/).check();
-  await page.getByLabel(/I have read the Privacy notice/).check();
-  await page.getByLabel(/I accept the Community rules/).check();
+  await page.getByLabel("I accept the platform policies").check();
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page).toHaveURL(/settings/);
   await page.getByLabel("Indian mobile number").fill("9876500001");

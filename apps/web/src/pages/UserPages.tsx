@@ -1690,9 +1690,9 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
               : null,
             ...(onboarding ? {
               adultAttested: f.get("adultAttested") === "on",
-              acceptTerms: f.get("acceptTerms") === "on",
-              acknowledgePrivacy: f.get("acknowledgePrivacy") === "on",
-              acceptCommunityRules: f.get("acceptCommunityRules") === "on",
+              acceptTerms: f.get("policiesAccepted") === "on",
+              acknowledgePrivacy: f.get("policiesAccepted") === "on",
+              acceptCommunityRules: f.get("policiesAccepted") === "on",
               policyVersion: currentPolicyVersion,
             } : {}),
           });
@@ -1731,7 +1731,7 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
         {onboarding ? (
           <fieldset className="eligibility-policy-card">
             <legend>Eligibility and policies</legend>
-            <p className="eligibility-policy-intro">Please confirm each requirement before continuing.</p>
+            <p className="eligibility-policy-intro">Please confirm both requirements before continuing.</p>
             <div className="eligibility-policy-options">
               <div className="eligibility-policy-option">
                 <input id="adultAttested" name="adultAttested" type="checkbox" required aria-describedby="adultAttested-copy" />
@@ -1741,24 +1741,10 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
                 </div>
               </div>
               <div className="eligibility-policy-option">
-                <input id="acceptTerms" name="acceptTerms" type="checkbox" required aria-describedby="acceptTerms-copy" />
+                <input id="policiesAccepted" name="policiesAccepted" type="checkbox" required aria-describedby="policiesAccepted-copy" />
                 <div className="eligibility-policy-copy">
-                  <label htmlFor="acceptTerms">I accept the Terms of use and Seller policy</label>
-                  <p id="acceptTerms-copy">Review the <Link to="/terms" target="_blank" rel="noreferrer">Terms of use</Link> and <Link to="/seller-policy" target="_blank" rel="noreferrer">Seller policy</Link>.</p>
-                </div>
-              </div>
-              <div className="eligibility-policy-option">
-                <input id="acknowledgePrivacy" name="acknowledgePrivacy" type="checkbox" required aria-describedby="acknowledgePrivacy-copy" />
-                <div className="eligibility-policy-copy">
-                  <label htmlFor="acknowledgePrivacy">I have read the Privacy notice</label>
-                  <p id="acknowledgePrivacy-copy">See how we use and retain information in the <Link to="/privacy" target="_blank" rel="noreferrer">Privacy notice</Link>.</p>
-                </div>
-              </div>
-              <div className="eligibility-policy-option">
-                <input id="acceptCommunityRules" name="acceptCommunityRules" type="checkbox" required aria-describedby="acceptCommunityRules-copy" />
-                <div className="eligibility-policy-copy">
-                  <label htmlFor="acceptCommunityRules">I accept the Community rules and prohibited-items rules</label>
-                  <p id="acceptCommunityRules-copy">Review the <Link to="/community-rules" target="_blank" rel="noreferrer">Community rules</Link> and <Link to="/prohibited-items" target="_blank" rel="noreferrer">prohibited-items rules</Link>.</p>
+                  <label htmlFor="policiesAccepted">I accept the platform policies</label>
+                  <p id="policiesAccepted-copy">This includes the <Link to="/terms" target="_blank" rel="noreferrer">Terms of use</Link>, <Link to="/seller-policy" target="_blank" rel="noreferrer">Seller policy</Link>, <Link to="/privacy" target="_blank" rel="noreferrer">Privacy notice</Link>, <Link to="/community-rules" target="_blank" rel="noreferrer">Community rules</Link>, and <Link to="/prohibited-items" target="_blank" rel="noreferrer">prohibited-items rules</Link>.</p>
                 </div>
               </div>
             </div>
