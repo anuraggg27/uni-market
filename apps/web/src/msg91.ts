@@ -33,10 +33,17 @@ declare global {
 }
 
 const SCRIPT_URL = "https://verify.msg91.com/otp-provider.js";
+const CALLBACK_TIMEOUT_MS = 30_000;
 let scriptPromise: Promise<void> | null = null;
 let initializationPromise: Promise<void> | null = null;
 let initializationKey: string | null = null;
 let initializationHost: HTMLElement | null = null;
+
+function clearExposedMethods(): void {
+  delete window.sendOtp;
+  delete window.retryOtp;
+  delete window.verifyOtp;
+}
 
 function loadScript(): Promise<void> {
   if (window.initSendOTP) return Promise.resolve();
@@ -117,6 +124,10 @@ export function initializeMsg91(input: {
       throw new Error("Verification form could not be found");
     }
     captchaHost.replaceChildren();
+    // MSG91 replaces its provider element asynchronously. Without clearing the
+    // old globals, readiness can resolve against the destroyed phone widget
+    // before the student-email widget has exposed its own methods.
+    clearExposedMethods();
     window.initSendOTP({
       ...input,
       exposeMethods: true,
@@ -154,7 +165,27 @@ function callbackResult(
   invoke: (resolve: Msg91Callback, reject: Msg91Callback) => void,
 ): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    invoke(resolve, (error) => reject(providerError(error)));
+    let settled = false;
+    const finish = (callback: (value: unknown) => void, value: unknown) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeout);
+      callback(value);
+    };
+    const timeout = window.setTimeout(() => {
+      finish(
+        reject,
+        new Error("Verification provider did not respond. Please try again."),
+      );
+    }, CALLBACK_TIMEOUT_MS);
+    try {
+      invoke(
+        (value) => finish(resolve, value),
+        (error) => finish(reject, providerError(error)),
+      );
+    } catch (error) {
+      finish(reject, providerError(error));
+    }
   });
 }
 

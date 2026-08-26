@@ -6,6 +6,7 @@ import {
   msg91AccessToken,
   msg91Identifier,
   msg91RequestId,
+  sendMsg91Otp,
 } from "../../apps/web/src/msg91";
 
 afterEach(() => {
@@ -40,10 +41,11 @@ describe("MSG91 client response handling", () => {
       <div id="msg91-phone-captcha"></div>
       <div id="msg91-student-email-captcha"></div>
     `;
-    window.sendOtp = vi.fn();
-    window.retryOtp = vi.fn();
-    window.verifyOtp = vi.fn();
-    window.initSendOTP = vi.fn();
+    window.initSendOTP = vi.fn(() => {
+      window.sendOtp = vi.fn();
+      window.retryOtp = vi.fn();
+      window.verifyOtp = vi.fn();
+    });
     const common = { widgetId: "widget", tokenAuth: "token" };
 
     await initializeMsg91({ ...common, captchaRenderId: "msg91-phone-captcha" });
@@ -67,5 +69,45 @@ describe("MSG91 client response handling", () => {
       3,
       expect.objectContaining({ captchaRenderId: "msg91-student-email-captcha" }),
     );
+  });
+
+  it("clears stale exposed methods before switching verification cards", async () => {
+    document.body.innerHTML = `
+      <div id="msg91-phone-captcha"></div>
+      <div id="msg91-student-email-captcha"></div>
+    `;
+    const methodsPresentAtInitialization: boolean[] = [];
+    window.initSendOTP = vi.fn(() => {
+      methodsPresentAtInitialization.push(Boolean(window.sendOtp));
+      window.sendOtp = vi.fn();
+      window.retryOtp = vi.fn();
+      window.verifyOtp = vi.fn();
+    });
+    const common = { widgetId: "widget", tokenAuth: "token" };
+
+    await initializeMsg91({ ...common, captchaRenderId: "msg91-phone-captcha" });
+    await initializeMsg91({
+      ...common,
+      captchaRenderId: "msg91-student-email-captcha",
+    });
+
+    expect(methodsPresentAtInitialization).toEqual([false, false]);
+  });
+
+  it("rejects when the provider never settles its callback", async () => {
+    vi.useFakeTimers();
+    try {
+      window.sendOtp = vi.fn();
+      const request = sendMsg91Otp("student@students.example.edu");
+      const rejection = expect(request).rejects.toThrow(
+        "Verification provider did not respond. Please try again.",
+      );
+
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

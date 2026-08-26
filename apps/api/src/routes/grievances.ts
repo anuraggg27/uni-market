@@ -11,6 +11,7 @@ import { grievanceClock, grievanceTracking, verifyTracking } from '../lib/grieva
 import { AppError, asyncRoute } from '../lib/errors.js';
 import { requireAuth, requireRole, requireStaffStepUp } from '../middleware/auth.js';
 import { adaptiveTurnstile } from '../middleware/adaptive-turnstile.js';
+import { marketplaceUrl } from '../lib/marketplace-url.js';
 import { directEmailJob } from '../services/email-outbox.js';
 
 const basePublicInput = z.object({
@@ -135,7 +136,7 @@ export function grievanceRouter(db: Database, config: AppConfig): Router {
       await tx.insert(reportEvents).values({ reportId: report.id, actorUserId: req.auth?.userId ?? null, eventType: 'SUBMITTED', publicMessage: 'Your grievance was received and queued for review.' });
       await tx.insert(emailOutbox).values([
         directEmailJob(config, { recipientEmail: input.email, template: 'grievance-received', payload: { reference: tracking.publicReference, trackingSecret: tracking.trackingSecret }, dedupeKey: `grievance-received:${report.id}` }),
-        directEmailJob(config, { recipientEmail: config.GRIEVANCE_EMAIL, template: 'grievance-new-internal', payload: { reference: tracking.publicReference, category: clock.category, actionDueAt: report.actionDueAt.toISOString(), adminUrl: `${config.CLIENT_URL}/admin/grievances` }, dedupeKey: `grievance-new-internal:${report.id}` }),
+        directEmailJob(config, { recipientEmail: config.GRIEVANCE_EMAIL, template: 'grievance-new-internal', payload: { reference: tracking.publicReference, category: clock.category, actionDueAt: report.actionDueAt.toISOString(), adminUrl: marketplaceUrl(config.CLIENT_URL, '/admin/grievances') }, dedupeKey: `grievance-new-internal:${report.id}` }),
       ]).onConflictDoNothing();
       return report;
     });
@@ -160,7 +161,7 @@ export function grievanceRouter(db: Database, config: AppConfig): Router {
       const current = (await tx.update(reports).set({ updatedAt: new Date() }).where(and(eq(reports.id, report.id), inArray(reports.status, ['OPEN', 'INVESTIGATING']))).returning({ id: reports.id }))[0];
       if (!current) throw new AppError(409, 'GRIEVANCE_CLOSED', 'This grievance is closed. Submit an appeal instead.');
       const event = (await tx.insert(reportEvents).values({ reportId: report.id, eventType: 'REPORTER_MESSAGE', publicMessageCiphertext: encryptText(input.message, config.DATA_ENCRYPTION_KEY) }).returning({ id: reportEvents.id }))[0]!;
-      await tx.insert(emailOutbox).values(directEmailJob(config, { recipientEmail: config.GRIEVANCE_EMAIL, template: 'grievance-follow-up-internal', payload: { reference, adminUrl: `${config.CLIENT_URL}/admin/grievances` }, dedupeKey: `grievance-follow-up:${event.id}` })).onConflictDoNothing();
+      await tx.insert(emailOutbox).values(directEmailJob(config, { recipientEmail: config.GRIEVANCE_EMAIL, template: 'grievance-follow-up-internal', payload: { reference, adminUrl: marketplaceUrl(config.CLIENT_URL, '/admin/grievances') }, dedupeKey: `grievance-follow-up:${event.id}` })).onConflictDoNothing();
     });
     res.status(201).json({ data: { received: true } });
   }));
@@ -176,7 +177,7 @@ export function grievanceRouter(db: Database, config: AppConfig): Router {
       const appealed = (await tx.update(reports).set({ status: 'INVESTIGATING', priority: clock.priority, acknowledgeDueAt: clock.acknowledgeDueAt, actionDueAt: clock.actionDueAt, acknowledgedAt: null, appealedAt: now, resolvedAt: null, purgeAfter: null, publicResponse: null, publicResponseCiphertext: null, assignedTo: null, updatedAt: now }).where(and(eq(reports.id, report.id), inArray(reports.status, ['RESOLVED', 'DISMISSED']))).returning({ id: reports.id }))[0];
       if (!appealed) throw new AppError(409, 'GRIEVANCE_NOT_RESOLVED', 'This grievance has not been resolved yet');
       const event = (await tx.insert(reportEvents).values({ reportId: report.id, eventType: 'APPEALED', publicMessage: 'Your appeal was received for further review.', internalMessageCiphertext: encryptText(input.reason, config.DATA_ENCRYPTION_KEY) }).returning({ id: reportEvents.id }))[0]!;
-      await tx.insert(emailOutbox).values(directEmailJob(config, { recipientEmail: config.GRIEVANCE_EMAIL, template: 'grievance-appeal-internal', payload: { reference, actionDueAt: clock.actionDueAt.toISOString(), adminUrl: `${config.CLIENT_URL}/admin/grievances` }, dedupeKey: `grievance-appeal:${event.id}` })).onConflictDoNothing();
+      await tx.insert(emailOutbox).values(directEmailJob(config, { recipientEmail: config.GRIEVANCE_EMAIL, template: 'grievance-appeal-internal', payload: { reference, actionDueAt: clock.actionDueAt.toISOString(), adminUrl: marketplaceUrl(config.CLIENT_URL, '/admin/grievances') }, dedupeKey: `grievance-appeal:${event.id}` })).onConflictDoNothing();
     });
     res.status(201).json({ data: { appealed: true } });
   }));

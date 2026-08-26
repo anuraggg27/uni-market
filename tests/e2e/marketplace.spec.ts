@@ -8,6 +8,8 @@ import AxeBuilder from "@axe-core/playwright";
 import sharp from "sharp";
 
 const API = `http://127.0.0.1:${process.env.E2E_API_PORT ?? "4000"}`;
+const marketplacePath = (path: string) =>
+  `/marketplace${path === "/" ? "/" : path}`;
 async function signIn(
   context: BrowserContext,
   credential: string,
@@ -154,13 +156,21 @@ async function approve(
   expect(response.ok()).toBeTruthy();
 }
 
+test("the uni.rocks root redirects into the marketplace product", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/marketplace\/?$/);
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+});
+
 test("E2E-01 seller journey from onboarding through moderator approval", async ({
   browser,
 }) => {
   const seller = await browser.newContext();
   await signIn(seller, "seller-journey", { profile: false, phone: false });
   const page = await seller.newPage();
-  await page.goto("/onboarding");
+  await page.goto(marketplacePath("/onboarding"));
   await page.getByLabel("Display name").fill("Journey Seller");
   await page.getByLabel("College or institution").selectOption({ label: "E2E University" });
   await page.getByLabel(/I declare that I am at least 18/).check();
@@ -183,7 +193,7 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   await page.getByLabel("6-digit email code").fill("999999");
   await page.getByRole("button", { name: "Verify student email" }).click();
   await expect(page.getByText(/@students\.example\.edu is verified/)).toBeVisible();
-  await page.goto("/sell");
+  await page.goto(marketplacePath("/sell"));
   await page.getByLabel("Title").fill("Engineering mechanics book");
   await page
     .getByRole("textbox", { name: "Description", exact: true })
@@ -224,18 +234,18 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   await page.getByRole("button", { name: "Save private draft" }).click();
   await expect(page).toHaveURL(/listing\//);
   const listingId = page.url().split("/").pop()!;
-  await page.goto("/my-listings");
+  await page.goto(marketplacePath("/my-listings"));
   await page.getByRole("button", { name: "Submit for review" }).click();
   await expect(page.getByText("PENDING").first()).toBeVisible();
   const mod = await browser.newContext();
   await approve(mod, listingId);
-  await page.goto(`/listing/${listingId}`);
+  await page.goto(marketplacePath(`/listing/${listingId}`));
   await expect(
     page.getByRole("heading", { name: "Engineering mechanics book", level: 1 }),
   ).toBeVisible();
   const guest = await browser.newContext();
   const guestPage = await guest.newPage();
-  await guestPage.goto("/browse");
+  await guestPage.goto(marketplacePath("/browse"));
   await expect(guestPage.getByText("Engineering mechanics book")).toBeVisible();
   await seller.close();
   await mod.close();
@@ -256,11 +266,11 @@ test("E2E-02 rejected listing is corrected, resubmitted and approved", async ({
     "Please describe the battery condition.",
   );
   const page = await seller.newPage();
-  await page.goto(`/listing/${listing.id}`);
+  await page.goto(marketplacePath(`/listing/${listing.id}`));
   await expect(
     page.getByText("Please describe the battery condition."),
   ).toBeVisible();
-  await page.goto(`/listing/${listing.id}/edit`);
+  await page.goto(marketplacePath(`/listing/${listing.id}/edit`));
   await page
     .getByRole("textbox", { name: "Description", exact: true })
     .fill(
@@ -269,12 +279,12 @@ test("E2E-02 rejected listing is corrected, resubmitted and approved", async ({
   await page.getByLabel(/I own this used physical item/).check();
   await page.getByLabel(/This listing is accurate and follows the seller rules/).check();
   await page.getByRole("button", { name: "Save changes" }).click();
-  await page.goto("/my-listings");
+  await page.goto(marketplacePath("/my-listings"));
   await page.getByRole("button", { name: "Submit for review" }).click();
   await approve(mod, listing.id);
   const guest = await browser.newContext();
   const guestPage = await guest.newPage();
-  await guestPage.goto(`/listing/${listing.id}`);
+  await guestPage.goto(marketplacePath(`/listing/${listing.id}`));
   await expect(
     guestPage.getByRole("heading", { name: "Old calculator", level: 1 }),
   ).toBeVisible();
@@ -295,11 +305,11 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
   await signIn(buyer, "transaction-buyer");
   const buyerPage = await buyer.newPage();
   const sellerPage = await seller.newPage();
-  await sellerPage.goto("/chats");
+  await sellerPage.goto(marketplacePath("/chats"));
   await expect(
     sellerPage.getByRole("heading", { name: "No conversations" }),
   ).toBeVisible();
-  await buyerPage.goto(`/listing/${listing.id}`);
+  await buyerPage.goto(marketplacePath(`/listing/${listing.id}`));
   await expect(buyerPage.getByRole("button", { name: "Buy", exact: true })).toHaveCount(0);
   await buyerPage.getByRole("button", { name: "Save", exact: true }).click();
   await expect(
@@ -364,9 +374,9 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
   ).toBe(false);
   await buyerPage.getByRole("button", { name: "Request reservation" }).click();
   await expect(buyerPage.getByRole("link", { name: "Reservation requested" })).toBeVisible();
-  await sellerPage.goto("/requests?view=received");
+  await sellerPage.goto(marketplacePath("/requests?view=received"));
   await sellerPage.getByRole("button", { name: "Accept and reserve" }).click();
-  await buyerPage.goto("/requests?view=sent");
+  await buyerPage.goto(marketplacePath("/requests?view=sent"));
   const exchangeCode = (await buyerPage.locator(".exchange-code-value").textContent())?.trim();
   expect(exchangeCode).toMatch(/^\d{6}$/);
   await sellerPage.getByLabel("6-digit exchange code").fill(exchangeCode!);
@@ -397,7 +407,7 @@ test("E2E-04 report, removal, seller notification and audit trail", async ({
   const reporter = await browser.newContext();
   await signIn(reporter, "reporting-user");
   const page = await reporter.newPage();
-  await page.goto(`/listing/${listing.id}`);
+  await page.goto(marketplacePath(`/listing/${listing.id}`));
   await page.getByRole("button", { name: "Report", exact: true }).click();
   await page.getByLabel("Reason").selectOption("MISLEADING_INFORMATION");
   await page
@@ -405,7 +415,7 @@ test("E2E-04 report, removal, seller notification and audit trail", async ({
     .fill("This listing appears misleading.");
   await page.getByRole("button", { name: "Submit report" }).click();
   const moderator = await mod.newPage();
-  await moderator.goto("/admin/reports");
+  await moderator.goto(marketplacePath("/admin/reports"));
   await expect(moderator.getByText("MISLEADING INFORMATION")).toBeVisible();
   await approve(
     mod,
@@ -414,14 +424,14 @@ test("E2E-04 report, removal, seller notification and audit trail", async ({
     "Removed after a confirmed misleading listing report.",
   );
   const guest = await browser.newContext();
-  await (await guest.newPage()).goto(`/listing/${listing.id}`);
+  await (await guest.newPage()).goto(marketplacePath(`/listing/${listing.id}`));
   await expect(
     (await guest.pages())[0].getByText("This listing is unavailable"),
   ).toBeVisible();
   const sellerPage = await seller.newPage();
-  await sellerPage.goto("/notifications");
+  await sellerPage.goto(marketplacePath("/notifications"));
   await expect(sellerPage.getByText("Listing removed")).toBeVisible();
-  await moderator.goto("/admin/audit-logs");
+  await moderator.goto(marketplacePath("/admin/audit-logs"));
   await expect(moderator.getByText("LISTING_REMOVE")).toBeVisible();
   await seller.close();
   await reporter.close();
@@ -438,13 +448,13 @@ test("guest Contact seller resumes into chat and exposes request history and ema
 
   const buyer = await browser.newContext();
   const page = await buyer.newPage();
-  await page.goto(`/listing/${listing.id}`);
+  await page.goto(marketplacePath(`/listing/${listing.id}`));
   await expect(page.getByRole("button", { name: "Buy", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Contact seller" }).click();
   await expect(page).toHaveURL(/\/login$/);
 
   await signIn(buyer, "resume-buyer");
-  await page.goto(`/listing/${listing.id}`);
+  await page.goto(marketplacePath(`/listing/${listing.id}`));
   await expect(page).toHaveURL(/\/chats\//);
   await expect(page.getByRole("button", { name: "Message seller first" })).toBeDisabled();
   await page.getByLabel("Message").fill("Is this desk lamp still available?");
@@ -452,18 +462,18 @@ test("guest Contact seller resumes into chat and exposes request history and ema
   await page.getByRole("button", { name: "Request reservation" }).click();
   await expect(page.getByRole("link", { name: "Reservation requested" })).toBeVisible();
 
-  await page.goto("/requests?view=sent");
+  await page.goto(marketplacePath("/requests?view=sent"));
   await expect(page.getByRole("link", { name: "Resume conversation desk lamp" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "View listing" })).toHaveAttribute("href", `/listing/${listing.id}`);
+  await expect(page.getByRole("link", { name: "View listing" })).toHaveAttribute("href", marketplacePath(`/listing/${listing.id}`));
   await expect(page.getByText("Waiting for the seller to respond")).toBeVisible();
-  await page.goto(`/transactions?view=buying#transaction-test`);
+  await page.goto(marketplacePath(`/transactions?view=buying#transaction-test`));
   await expect(page).toHaveURL(/\/requests\?view=sent#transaction-test$/);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator(".mobile-nav").getByRole("link", { name: "Requests" })).toBeVisible();
   await expect(page.locator(".mobile-nav").getByRole("link", { name: "Profile" })).toHaveCount(0);
 
-  await page.goto("/settings?section=email");
+  await page.goto(marketplacePath("/settings?section=email"));
   const marketplaceEmails = page.getByRole("switch", { name: "Marketplace emails" });
   await expect(marketplaceEmails).toHaveAttribute("aria-checked", "true");
   await marketplaceEmails.click();
@@ -482,7 +492,7 @@ test("E2E-05 support request receives an agent response and resolves", async ({
   const user = await browser.newContext();
   await signIn(user, "support-user");
   const page = await user.newPage();
-  await page.goto("/support");
+  await page.goto(marketplacePath("/support"));
   await page.getByLabel("Subject").fill("Listing status question");
   await page
     .getByLabel("Describe the issue")
@@ -495,7 +505,7 @@ test("E2E-05 support request receives an agent response and resolves", async ({
   const support = await browser.newContext();
   await signIn(support, "support");
   const agent = await support.newPage();
-  await agent.goto(`/admin/support/${ticketId}`);
+  await agent.goto(marketplacePath(`/admin/support/${ticketId}`));
   await agent
     .getByLabel("Reply")
     .fill("Your listing is still in the normal review queue.");
@@ -515,7 +525,7 @@ test("E2E-06 public grievance submission returns private tracking access", async
 }) => {
   const guest = await browser.newContext();
   const page = await guest.newPage();
-  await page.goto("/grievance");
+  await page.goto(marketplacePath("/grievance"));
   await page.getByLabel("Your email").fill("grievance-reporter@example.com");
   await page.getByLabel("Issue category").selectOption("OTHER");
   await page
@@ -561,7 +571,7 @@ test("E2E-07 important marketplace screens remain usable at mobile, tablet and d
       "/seller-policy",
       "/marketplace-disclosure",
     ]) {
-      await page.goto(path);
+      await page.goto(marketplacePath(path));
       if (path === "/") {
         const searchFontSize = await page
           .getByLabel("Search products")

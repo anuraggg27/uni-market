@@ -1,4 +1,5 @@
 import type { AppConfig } from '../config.js';
+import { marketplaceUrl } from '../lib/marketplace-url.js';
 import { emailCategory } from './email-preferences.js';
 
 type EmailContent = {
@@ -31,7 +32,7 @@ function escapeHtml(input: string): string {
 }
 
 function appUrl(config: AppConfig, path: string): string {
-  return new URL(path, `${config.CLIENT_URL}/`).toString();
+  return marketplaceUrl(config.CLIENT_URL, path);
 }
 
 function safeExternalUrl(candidate: string, fallback: string): string {

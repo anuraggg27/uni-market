@@ -3,6 +3,7 @@ import type { AppConfig } from '../config.js';
 import type { Database } from '../db/client.js';
 import { emailOutbox, reports } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
+import { marketplaceUrl } from '../lib/marketplace-url.js';
 import { directEmailJob } from './email-outbox.js';
 
 export class GrievanceMonitor {
@@ -29,7 +30,7 @@ export class GrievanceMonitor {
       return directEmailJob(this.config, {
         recipientEmail: this.config.GRIEVANCE_EMAIL,
         template: 'grievance-deadline-internal',
-        payload: { reference: item.publicReference, category: item.category, stage, actionDueAt: item.actionDueAt.toISOString(), adminUrl: `${this.config.CLIENT_URL}/admin/grievances` },
+        payload: { reference: item.publicReference, category: item.category, stage, actionDueAt: item.actionDueAt.toISOString(), adminUrl: marketplaceUrl(this.config.CLIENT_URL, '/admin/grievances') },
         dedupeKey: `grievance-deadline:${item.id}:${stage}`,
       });
     });

@@ -13,6 +13,7 @@ import { adaptiveTurnstile } from "./middleware/adaptive-turnstile.js";
 import { requestContext } from "./middleware/request.js";
 import { AppError, errorHandler, notFound } from "./lib/errors.js";
 import { logger } from "./lib/logger.js";
+import { MARKETPLACE_BASE_PATH } from "./lib/marketplace-url.js";
 import type { GoogleVerifier } from "./services/google.js";
 import { StorageService } from "./services/storage.js";
 import { authRouter } from "./routes/auth.js";
@@ -216,14 +217,19 @@ export function createApp(deps: {
   app.use("/api/admin", adminRouter(db, config));
   if (config.NODE_ENV === "production") {
     const webRoot = fileURLToPath(new URL("../../web/dist", import.meta.url));
-    app.use(express.static(webRoot, { index: false, maxAge: "1h" }));
-    app.get("/{*path}", (req, res, next) => {
-      if (req.path === "/api" || req.path.startsWith("/api/") || req.path.startsWith("/socket.io")) {
-        next();
-        return;
-      }
+    const sendMarketplace = (_req: express.Request, res: express.Response) =>
       res.sendFile(join(webRoot, "index.html"));
-    });
+    app.get("/", (_req, res) => res.redirect(302, MARKETPLACE_BASE_PATH));
+    app.use(
+      MARKETPLACE_BASE_PATH,
+      express.static(webRoot, {
+        index: false,
+        maxAge: "1h",
+        redirect: false,
+      }),
+    );
+    app.get(MARKETPLACE_BASE_PATH, sendMarketplace);
+    app.get(`${MARKETPLACE_BASE_PATH}/{*path}`, sendMarketplace);
   }
   app.use(notFound);
   app.use(errorHandler);

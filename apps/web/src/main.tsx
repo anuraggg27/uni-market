@@ -7,4 +7,5 @@ import { ThemeProvider } from './theme';
 import './styles.css';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: false }, mutations: { retry: 0 } } });
-createRoot(document.getElementById('root')!).render(<StrictMode><ThemeProvider><QueryClientProvider client={queryClient}><BrowserRouter><App /></BrowserRouter></QueryClientProvider></ThemeProvider></StrictMode>);
+const routerBasename = import.meta.env.BASE_URL.replace(/\/$/, "");
+createRoot(document.getElementById('root')!).render(<StrictMode><ThemeProvider><QueryClientProvider client={queryClient}><BrowserRouter basename={routerBasename}><App /></BrowserRouter></QueryClientProvider></ThemeProvider></StrictMode>);

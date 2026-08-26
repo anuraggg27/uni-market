@@ -52,7 +52,7 @@ npm run test:all
 npm run start -w @campus-market/api
 ```
 
-The production frontend is in `apps/web/dist`; the API entry point is `apps/api/dist/index.js`. Serve both behind TLS, keep `CLIENT_URL` exact, and set `TRUST_PROXY=true` only behind a trusted single proxy.
+The production frontend is in `apps/web/dist` and is served at `/marketplace`; `/` redirects to that product path. The API entry point is `apps/api/dist/index.js`, and `/api`, `/socket.io`, and `/health` remain at the origin root. Serve everything behind TLS, keep `CLIENT_URL` set to the exact origin without a path, and set `TRUST_PROXY=true` only behind a trusted single proxy.
 
 The included production container builds both applications, serves the SPA from Express, runs database migrations before startup, and exposes only port `4000` inside the container. On the shared deployment droplet, Compose binds it to `127.0.0.1:3020` and Caddy uses the isolated site fragment in `infra/uni-market.caddy`. Application logs are capped at three 10 MiB Docker files. Uni Market's Caddy access log rolls at 10 MiB and keeps no more than three rolled files or seven days, whichever removes a file first.
 
