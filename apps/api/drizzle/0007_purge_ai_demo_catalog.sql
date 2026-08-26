@@ -30,8 +30,8 @@ BEGIN
 	WHERE "seller_id" = ANY(demo_users);
 
 	demo_listing_count := cardinality(demo_listings);
-	IF demo_listing_count <> 19 THEN
-		RAISE EXCEPTION 'Refusing demo purge: expected 19 marked listings, found %', demo_listing_count;
+	IF demo_listing_count <> 20 THEN
+		RAISE EXCEPTION 'Refusing demo purge: expected 20 marked listings, found %', demo_listing_count;
 	END IF;
 
 	SELECT count(DISTINCT "listing_id")::integer
