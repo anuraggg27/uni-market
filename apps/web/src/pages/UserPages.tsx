@@ -138,6 +138,8 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
       brand: "",
       defects: "",
       meetupPoint: "",
+      usedPhysicalGoodsAttested: true,
+      accurateDescriptionAttested: true,
     },
   });
   useEffect(() => {
@@ -157,6 +159,8 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
         brand: existing.data.brand ?? "",
         defects: existing.data.defects ?? "",
         meetupPoint: existing.data.meetupPoint ?? "",
+        usedPhysicalGoodsAttested: true,
+        accurateDescriptionAttested: true,
       });
   }, [existing.data, form]);
   const priceType = form.watch("priceType");
@@ -457,16 +461,12 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
         </fieldset>
         <fieldset className="listing-section listing-section-fields">
           <legend>Seller declarations</legend>
-          <p className="listing-section-intro">Confirm these 4 points before saving your draft.</p>
+          <p className="listing-section-intro">Confirm these 2 points before saving your draft.</p>
           <div className="declaration-list">
-            <label className="declaration-row"><input type="checkbox" {...form.register("ownershipAttested")} /><span><strong>I own this item</strong><small>Or I am lawfully authorised to sell it.</small></span></label>
-            <FieldError>{form.formState.errors.ownershipAttested?.message}</FieldError>
-            <label className="declaration-row"><input type="checkbox" {...form.register("usedPhysicalGoodsAttested")} /><span><strong>This is a used physical good</strong><small>It is not a new item, service, digital product, ticket, account, or credential.</small></span></label>
-            <FieldError>{form.formState.errors.usedPhysicalGoodsAttested?.message}</FieldError>
-            <label className="declaration-row"><input type="checkbox" {...form.register("accurateDescriptionAttested")} /><span><strong>The description, condition, defects, price, and image declarations are accurate</strong><small>Buyers should receive the same item shown here.</small></span></label>
-            <FieldError>{form.formState.errors.accurateDescriptionAttested?.message}</FieldError>
-            <div className="declaration-row declaration-policy-row"><input id="sellerPolicyAccepted" type="checkbox" {...form.register("sellerPolicyAccepted")} /><span><label htmlFor="sellerPolicyAccepted"><strong>I accept the Seller policy and prohibited-items rules</strong></label><small>Read the <Link to="/seller-policy" target="_blank" rel="noreferrer">Seller Policy</Link> and <Link to="/prohibited-items" target="_blank" rel="noreferrer">Prohibited Items</Link> policy.</small></span></div>
-            <FieldError>{form.formState.errors.sellerPolicyAccepted?.message}</FieldError>
+            <label className="declaration-row"><input type="checkbox" {...form.register("ownershipAttested")} /><span><strong>I own this used physical item and may legally sell it</strong><small>It is not a service, digital product, ticket, account, credential, or new retail item.</small></span></label>
+            <FieldError>{form.formState.errors.ownershipAttested?.message ?? form.formState.errors.usedPhysicalGoodsAttested?.message}</FieldError>
+            <div className="declaration-row declaration-policy-row"><input id="sellerPolicyAccepted" type="checkbox" {...form.register("sellerPolicyAccepted")} /><span><label htmlFor="sellerPolicyAccepted"><strong>This listing is accurate and follows the seller rules</strong></label><small>The description, condition, defects, price, and images are accurate. I accept the <Link to="/seller-policy" target="_blank" rel="noreferrer">Seller Policy</Link> and <Link to="/prohibited-items" target="_blank" rel="noreferrer">Prohibited Items</Link> rules.</small></span></div>
+            <FieldError>{form.formState.errors.sellerPolicyAccepted?.message ?? form.formState.errors.accurateDescriptionAttested?.message}</FieldError>
           </div>
         </fieldset>
         {serverError ? <p className="field-error">{serverError}</p> : null}

@@ -209,10 +209,8 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   await expect(
     page.getByAltText("Selected product image: book.jpg"),
   ).toBeVisible();
-  await page.getByLabel(/I own this item/).check();
-  await page.getByLabel(/This is a used physical good/).check();
-  await page.getByLabel(/description, condition, defects/).check();
-  await page.getByLabel(/I accept the Seller policy/).check();
+  await page.getByLabel(/I own this used physical item/).check();
+  await page.getByLabel(/This listing is accurate and follows the seller rules/).check();
   await expect(
     page.getByAltText("Selected product image: book-detail.jpg"),
   ).toBeVisible();
@@ -268,10 +266,8 @@ test("E2E-02 rejected listing is corrected, resubmitted and approved", async ({
     .fill(
       "A working calculator with a recently replaced battery and clear display.",
     );
-  await page.getByLabel(/I own this item/).check();
-  await page.getByLabel(/This is a used physical good/).check();
-  await page.getByLabel(/description, condition, defects/).check();
-  await page.getByLabel(/I accept the Seller policy/).check();
+  await page.getByLabel(/I own this used physical item/).check();
+  await page.getByLabel(/This listing is accurate and follows the seller rules/).check();
   await page.getByRole("button", { name: "Save changes" }).click();
   await page.goto("/my-listings");
   await page.getByRole("button", { name: "Submit for review" }).click();
