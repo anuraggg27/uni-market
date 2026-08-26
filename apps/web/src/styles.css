@@ -1784,6 +1784,56 @@ html.dark .confirm-warning {
   flex-wrap: wrap;
   gap: 10px;
 }
+.exchange-code-panel,
+.exchange-code-entry {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.55fr) minmax(240px, 1fr);
+  align-items: center;
+  gap: 24px;
+  padding: 18px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  background: var(--color-surface-muted);
+}
+.exchange-code-panel.is-locked {
+  border-color: color-mix(in srgb, #b42318 35%, var(--color-line));
+}
+.exchange-code-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--color-muted);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+.exchange-code-value {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: clamp(1.75rem, 4vw, 2.35rem);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.22em;
+  line-height: 1;
+}
+.exchange-code-copy,
+.exchange-code-entry > div {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+}
+.exchange-code-copy p,
+.exchange-code-entry p {
+  margin: 0;
+  color: var(--color-muted);
+  line-height: 1.5;
+}
+.exchange-code-entry .field {
+  margin: 0;
+}
+.exchange-code-entry input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.18em;
+}
 .transaction-review-form {
   align-items: end;
 }
@@ -1796,6 +1846,15 @@ html.dark .confirm-warning {
     gap: 12px;
   }
   .transaction-card-actions .button {
+    width: 100%;
+  }
+  .exchange-code-panel,
+  .exchange-code-entry {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .exchange-code-copy .button,
+  .exchange-code-entry .button {
     width: 100%;
   }
   .transaction-review-form {

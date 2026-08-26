@@ -365,9 +365,13 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
   await buyerPage.getByRole("button", { name: "Buy", exact: true }).click();
   await sellerPage.goto("/transactions");
   await sellerPage.getByRole("button", { name: "Accept and reserve" }).click();
-  await sellerPage.getByRole("button", { name: "Mark handed over" }).click();
   await buyerPage.goto("/transactions");
-  await buyerPage.getByRole("button", { name: "Confirm receipt" }).click();
+  const exchangeCode = (await buyerPage.locator(".exchange-code-value").textContent())?.trim();
+  expect(exchangeCode).toMatch(/^\d{6}$/);
+  await sellerPage.getByLabel("Buyer's 6-digit exchange code").fill(exchangeCode!);
+  await sellerPage.getByRole("button", { name: "Complete sale" }).click();
+  await expect(sellerPage.getByText("COMPLETED")).toBeVisible();
+  await buyerPage.reload();
   await expect(buyerPage.getByText("COMPLETED")).toBeVisible();
   await buyerPage
     .getByLabel("Short review")

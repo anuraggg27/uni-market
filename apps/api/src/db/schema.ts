@@ -249,11 +249,16 @@ export const transactions = pgTable('transactions', {
   buyerId: uuid('buyer_id').references(() => users.id).notNull(),
   sellerId: uuid('seller_id').references(() => users.id).notNull(),
   status: transactionEnum('status').default('REQUESTED').notNull(),
+  exchangeCodeVersion: integer('exchange_code_version').default(1).notNull(),
+  exchangeCodeAttempts: integer('exchange_code_attempts').default(0).notNull(),
+  exchangeCodeIssuedAt: timestamp('exchange_code_issued_at', { withTimezone: true }),
+  exchangeCodeLockedAt: timestamp('exchange_code_locked_at', { withTimezone: true }),
+  exchangeCodeUsedAt: timestamp('exchange_code_used_at', { withTimezone: true }),
   completedAt: timestamp('completed_at', { withTimezone: true }),
   cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
   disputeReason: text('dispute_reason'),
   ...timestamps
-}, (table) => [check('transaction_not_self', sql`${table.buyerId} <> ${table.sellerId}`), index('transactions_listing_idx').on(table.listingId, table.status), index('transactions_buyer_idx').on(table.buyerId), index('transactions_seller_idx').on(table.sellerId), uniqueIndex('one_active_reservation_idx').on(table.listingId).where(sql`${table.status} in ('RESERVED', 'HANDED_OVER')`)]);
+}, (table) => [check('transaction_not_self', sql`${table.buyerId} <> ${table.sellerId}`), check('exchange_code_version_positive', sql`${table.exchangeCodeVersion} >= 1`), check('exchange_code_attempts_range', sql`${table.exchangeCodeAttempts} between 0 and 5`), index('transactions_listing_idx').on(table.listingId, table.status), index('transactions_buyer_idx').on(table.buyerId), index('transactions_seller_idx').on(table.sellerId), uniqueIndex('one_active_reservation_idx').on(table.listingId).where(sql`${table.status} in ('RESERVED', 'HANDED_OVER')`)]);
 
 export const reviews = pgTable('reviews', {
   id: uuid('id').defaultRandom().primaryKey(),

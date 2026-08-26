@@ -36,6 +36,13 @@
       "when": 1787699376000,
       "tag": "0004_restore_catalog_listings",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787753969328,
+      "tag": "0005_numerous_katie_power",
+      "breakpoints": true
     }
   ]
 }

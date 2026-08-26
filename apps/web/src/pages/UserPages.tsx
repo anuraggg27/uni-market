@@ -1518,11 +1518,22 @@ function ChatPanel({
   );
 }
 
+type TransactionRecord = {
+  id: string;
+  listingId: string;
+  listingTitle: string;
+  role: "BUYER" | "SELLER";
+  status: string;
+  exchangeCode?: string;
+  exchangeCodeLocked?: boolean;
+};
+
 export function TransactionsPage() {
   const client = useQueryClient();
+  const [exchangeCodeEntries, setExchangeCodeEntries] = useState<Record<string, string>>({});
   const query = useQuery({
     queryKey: ["transactions"],
-    queryFn: () => api<any[]>("/api/transactions"),
+    queryFn: () => api<TransactionRecord[]>("/api/transactions"),
   });
   const action = useMutation({
     mutationFn: ({ id, action }: { id: string; action: string }) =>
@@ -1544,6 +1555,28 @@ export function TransactionsPage() {
         method: "POST",
         ...jsonBody({ rating, text, tags: [] }),
       }),
+  });
+  const completeExchange = useMutation({
+    mutationFn: ({ id, code }: { id: string; code: string }) =>
+      api(`/api/transactions/${id}/exchange/complete`, {
+        method: "POST",
+        ...jsonBody({ code }),
+      }),
+    onSuccess: (_data, variables) => {
+      setExchangeCodeEntries((current) => {
+        const next = { ...current };
+        delete next[variables.id];
+        return next;
+      });
+    },
+    onSettled: () =>
+      void client.invalidateQueries({ queryKey: ["transactions"] }),
+  });
+  const rotateExchangeCode = useMutation({
+    mutationFn: (id: string) =>
+      api(`/api/transactions/${id}/exchange-code/rotate`, { method: "POST" }),
+    onSuccess: () =>
+      void client.invalidateQueries({ queryKey: ["transactions"] }),
   });
   return (
     <div className="page">
@@ -1574,6 +1607,62 @@ export function TransactionsPage() {
                 </div>
                 <StatusBadge value={tx.status} />
               </div>
+              {tx.role === "BUYER" && tx.status === "RESERVED" && tx.exchangeCode ? (
+                <div className={`exchange-code-panel${tx.exchangeCodeLocked ? " is-locked" : ""}`}>
+                  <div>
+                    <span className="exchange-code-label">Your exchange code</span>
+                    <strong className="exchange-code-value" aria-label={`Exchange code ${tx.exchangeCode.split("").join(" ")}`}>{tx.exchangeCode}</strong>
+                  </div>
+                  <div className="exchange-code-copy">
+                    <p>{tx.exchangeCodeLocked ? "This code is locked after too many incorrect attempts." : "Give this code to the seller only when you have received and checked the item."}</p>
+                    <button
+                      type="button"
+                      className="button secondary"
+                      disabled={rotateExchangeCode.isPending}
+                      onClick={() => rotateExchangeCode.mutate(tx.id)}
+                    >
+                      Generate new code
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              {tx.role === "SELLER" && tx.status === "RESERVED" ? (
+                <form
+                  className="exchange-code-entry"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    completeExchange.mutate({ id: tx.id, code: exchangeCodeEntries[tx.id] ?? "" });
+                  }}
+                >
+                  <label className="field" htmlFor={`exchange-code-${tx.id}`}>
+                    <span>Buyer&apos;s 6-digit exchange code</span>
+                    <input
+                      id={`exchange-code-${tx.id}`}
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      pattern="[0-9]{6}"
+                      maxLength={6}
+                      value={exchangeCodeEntries[tx.id] ?? ""}
+                      disabled={Boolean(tx.exchangeCodeLocked)}
+                      onChange={(event) => {
+                        const code = event.target.value.replace(/\D/g, "").slice(0, 6);
+                        setExchangeCodeEntries((current) => ({ ...current, [tx.id]: code }));
+                      }}
+                      required
+                    />
+                  </label>
+                  <div>
+                    <p>{tx.exchangeCodeLocked ? "The code is locked. Ask the buyer to generate a new one." : "Enter the code during the in-person exchange to mark the listing sold."}</p>
+                    <button
+                      className="button primary"
+                      type="submit"
+                      disabled={tx.exchangeCodeLocked || completeExchange.isPending || (exchangeCodeEntries[tx.id]?.length ?? 0) !== 6}
+                    >
+                      Complete sale
+                    </button>
+                  </div>
+                </form>
+              ) : null}
               <div className="transaction-card-actions">
                 {tx.role === "SELLER" && tx.status === "REQUESTED" ? (
                   <button
@@ -1583,16 +1672,6 @@ export function TransactionsPage() {
                     }
                   >
                     Accept and reserve
-                  </button>
-                ) : null}
-                {tx.role === "SELLER" && tx.status === "RESERVED" ? (
-                  <button
-                    className="button primary"
-                    onClick={() =>
-                      action.mutate({ id: tx.id, action: "handover" })
-                    }
-                  >
-                    Mark handed over
                   </button>
                 ) : null}
                 {tx.role === "BUYER" && tx.status === "HANDED_OVER" ? (
@@ -1659,6 +1738,12 @@ export function TransactionsPage() {
       )}
       {action.error ? (
         <p className="field-error">{action.error.message}</p>
+      ) : null}
+      {completeExchange.error ? (
+        <p className="field-error">{completeExchange.error.message}</p>
+      ) : null}
+      {rotateExchangeCode.error ? (
+        <p className="field-error">{rotateExchangeCode.error.message}</p>
       ) : null}
       {review.error ? (
         <p className="field-error">{review.error.message}</p>
