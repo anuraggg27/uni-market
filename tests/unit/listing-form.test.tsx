@@ -132,10 +132,8 @@ describe("ListingFormPage photos", () => {
       screen.getByLabelText(/Campus, hostel area or neighbourhood/),
       { target: { value: "Main campus" } },
     );
-    fireEvent.click(screen.getByLabelText(/I own this item/));
-    fireEvent.click(screen.getByLabelText(/This is a used physical good/));
-    fireEvent.click(screen.getByLabelText(/description, condition, defects/));
-    fireEvent.click(screen.getByLabelText(/I accept the Seller policy/));
+    fireEvent.click(screen.getByLabelText(/I own this used physical item/));
+    fireEvent.click(screen.getByLabelText(/This listing is accurate and follows the seller rules/));
     fireEvent.click(
       screen.getByRole("button", { name: "Save private draft" }),
     );
