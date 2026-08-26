@@ -39,15 +39,47 @@ describe('India compliance controls', () => {
 
   it('requires an approved separate academic email and an explicit 18+ declaration', async () => {
     const auth = await login(ctx.app, 'student-eligibility');
+    const domains = await auth.agent.get('/api/academic-domains').expect(200);
+    expect(domains.headers['cache-control']).toContain('private');
+    expect(domains.body.data.map((entry: { institutionName: string }) => entry.institutionName)).toEqual(['Example Institute', 'UPES']);
+    const upes = domains.body.data.find((entry: { domain: string }) => entry.domain === 'stu.upes.ac.in');
+    await auth.agent.post('/api/onboarding/complete').set(auth.headers).send({ displayName: 'Eligible Student', academicDomainId: upes.id, adultAttested: false, acceptTerms: true, acknowledgePrivacy: true, acceptCommunityRules: true, policyVersion: '2026-08-25' }).expect(400);
+    await auth.agent.post('/api/onboarding/complete').set(auth.headers).send({ displayName: 'Eligible Student', academicDomainId: upes.id, adultAttested: true, acceptTerms: true, acknowledgePrivacy: true, acceptCommunityRules: true, policyVersion: '2026-08-25' }).expect(200);
     const domain = await auth.agent.post('/api/student-email/send').set(auth.headers).send({ email: 'student@gmail.com' }).expect(400);
     expect(domain.body.error.code).toBe('ACADEMIC_DOMAIN_NOT_APPROVED');
+    const mismatch = await auth.agent.post('/api/student-email/send').set(auth.headers).send({ email: 'student@students.example.edu' }).expect(400);
+    expect(mismatch.body.error.code).toBe('STUDENT_EMAIL_DOMAIN_MISMATCH');
     await auth.agent.post('/api/student-email/send').set(auth.headers).send({ email: 'student@stu.upes.ac.in' }).expect(200);
     await auth.agent.post('/api/student-email/verify').set(auth.headers).send({ email: 'student@stu.upes.ac.in', code: '999999' }).expect(200);
-    await auth.agent.post('/api/onboarding/complete').set(auth.headers).send({ displayName: 'Eligible Student', adultAttested: false, acceptTerms: true, acknowledgePrivacy: true, acceptCommunityRules: true, policyVersion: '2026-08-25' }).expect(400);
+  });
+
+  it('clears student-email verification when the selected institution changes', async () => {
+    const auth = await login(ctx.app, 'institution-change');
+    await verifyPhone(auth);
+    const domains = await auth.agent.get('/api/academic-domains').expect(200);
+    const upes = domains.body.data.find((entry: { domain: string }) => entry.domain === 'stu.upes.ac.in');
+
+    await auth.agent.patch('/api/auth/me').set(auth.headers).send({
+      displayName: 'Institution Change',
+      academicDomainId: upes.id,
+      campus: null,
+      graduationYear: null,
+    }).expect(200);
+
+    const me = await auth.agent.get('/api/auth/me').expect(200);
+    expect(me.body.data.institution).toBe('UPES');
+    expect(me.body.data.studentEmailDomain).toBe('stu.upes.ac.in');
+    expect(me.body.data.studentEmailMasked).toBeNull();
+    expect(me.body.data.eligibility.studentEmailVerified).toBe(false);
+    const oldDomain = await auth.agent.post('/api/student-email/send').set(auth.headers).send({ email: 'again@students.example.edu' }).expect(400);
+    expect(oldDomain.body.error.code).toBe('STUDENT_EMAIL_DOMAIN_MISMATCH');
   });
 
   it('accepts a matching MSG91 student-email token once and never queues an SMTP OTP', async () => {
     const auth = await login(ctx.app, 'msg91-student-email');
+    const domains = await auth.agent.get('/api/academic-domains').expect(200);
+    const upes = domains.body.data.find((entry: { domain: string }) => entry.domain === 'stu.upes.ac.in');
+    await auth.agent.post('/api/onboarding/complete').set(auth.headers).send({ displayName: 'MSG91 Student', academicDomainId: upes.id, adultAttested: true, acceptTerms: true, acknowledgePrivacy: true, acceptCommunityRules: true, policyVersion: '2026-08-25' }).expect(200);
     const providerConfig = {
       ...ctx.config,
       DEV_MODE: false,

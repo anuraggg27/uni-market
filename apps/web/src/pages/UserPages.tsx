@@ -80,11 +80,25 @@ type VerificationProviderConfig =
       otpLength: number;
       retryAfter: number;
     };
+type SupportedAcademicDomain = {
+  id: string;
+  domain: string;
+  institutionName: string;
+};
 
 function useCategories() {
   return useQuery({
     queryKey: ["categories"],
     queryFn: () => api<any[]>("/api/categories"),
+  });
+}
+
+function useAcademicDomains(enabled = true) {
+  return useQuery({
+    queryKey: ["supported-academic-domains"],
+    queryFn: () => api<SupportedAcademicDomain[]>("/api/academic-domains"),
+    enabled,
+    staleTime: 5 * 60_000,
   });
 }
 
@@ -1657,6 +1671,7 @@ export function TransactionsPage() {
 export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
   const { user, refresh } = useAuth();
   const navigate = useNavigate();
+  const academicDomains = useAcademicDomains(Boolean(user));
   const mutation = useMutation({
     mutationFn: (data: any) =>
       api(onboarding ? "/api/onboarding/complete" : "/api/auth/me", { method: onboarding ? "POST" : "PATCH", ...jsonBody(data) }),
@@ -1666,13 +1681,22 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
     },
   });
   if (!user) return null;
+  if (academicDomains.isLoading) {
+    return <div className="page narrow"><Loading variant="form" label="Loading supported institutions" /></div>;
+  }
+  if (academicDomains.isError) {
+    return <div className="page narrow"><ErrorState error={academicDomains.error} /></div>;
+  }
+  const selectedAcademicDomainId = academicDomains.data?.find((entry) =>
+    entry.domain === user.studentEmailDomain || entry.institutionName === user.institution
+  )?.id ?? "";
   return (
     <div className="page narrow">
       <div className="page-header">
         <div>
           <h1>{onboarding ? "Confirm your name" : "Your profile"}</h1>
           <p className="lede">
-            Institution details are optional and never restrict registration.
+            Choose your institution so we can use the correct student email domain.
           </p>
         </div>
       </div>
@@ -1683,7 +1707,7 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
           const f = new FormData(e.currentTarget);
           mutation.mutate({
             displayName: String(f.get("displayName")),
-            institution: String(f.get("institution")) || null,
+            academicDomainId: String(f.get("academicDomainId")),
             campus: String(f.get("campus")) || null,
             graduationYear: f.get("graduationYear")
               ? Number(f.get("graduationYear"))
@@ -1709,8 +1733,13 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
           />
         </label>
         <label className="field">
-          <span>College or institution (optional)</span>
-          <input name="institution" defaultValue={user.institution ?? ""} />
+          <span>College or institution</span>
+          <select name="academicDomainId" defaultValue={selectedAcademicDomainId} required>
+            <option value="" disabled>Select your college or institution</option>
+            {academicDomains.data?.map((entry) => (
+              <option key={entry.id} value={entry.id}>{entry.institutionName}</option>
+            ))}
+          </select>
         </label>
         <div className="form-grid">
           <label className="field">
@@ -2097,7 +2126,7 @@ export function SettingsPage() {
   const [codeSent, setCodeSent] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [requestId, setRequestId] = useState<string>();
-  const [studentEmail, setStudentEmail] = useState("");
+  const [studentEmailLocalPart, setStudentEmailLocalPart] = useState("");
   const [studentCode, setStudentCode] = useState("");
   const [studentCodeSent, setStudentCodeSent] = useState(false);
   const [studentResendCooldown, setStudentResendCooldown] = useState(0);
@@ -2119,6 +2148,13 @@ export function SettingsPage() {
     enabled: !user?.studentEmailVerifiedAt,
     staleTime: Number.POSITIVE_INFINITY,
   });
+  const academicDomains = useAcademicDomains(Boolean(user && !user.studentEmailVerifiedAt));
+  const selectedAcademicDomain = academicDomains.data?.find((entry) =>
+    entry.domain === user?.studentEmailDomain || (!user?.studentEmailDomain && entry.institutionName === user?.institution)
+  );
+  const studentEmail = selectedAcademicDomain && studentEmailLocalPart.trim()
+    ? `${studentEmailLocalPart.trim()}@${selectedAcademicDomain.domain}`.toLowerCase()
+    : "";
   async function prepareVerificationCard(target: "phone" | "student") {
     setActiveVerification(target);
     await new Promise<void>((resolve) => {
@@ -2313,7 +2349,7 @@ export function SettingsPage() {
     const codeAlreadySent = activeVerification === "phone"
       ? codeSent
       : studentCodeSent;
-    if (!provider || provider.provider !== "msg91" || alreadyVerified || codeAlreadySent) return;
+    if (!provider || provider.provider !== "msg91" || alreadyVerified || codeAlreadySent || (activeVerification === "student" && !selectedAcademicDomain)) return;
 
     setCaptchaInitializationError("");
     void initializeMsg91({
@@ -2327,7 +2363,7 @@ export function SettingsPage() {
         error instanceof Error ? error.message : "Verification could not be loaded",
       );
     });
-  }, [activeVerification, codeSent, studentCodeSent, studentVerificationConfig.data, user?.phoneVerifiedAt, user?.studentEmailVerifiedAt, verificationConfig.data]);
+  }, [activeVerification, codeSent, selectedAcademicDomain, studentCodeSent, studentVerificationConfig.data, user?.phoneVerifiedAt, user?.studentEmailVerifiedAt, verificationConfig.data]);
   const otpLength = verificationConfig.data?.otpLength ?? 4;
   const studentOtpLength = studentVerificationConfig.data?.otpLength ?? 6;
   const eligibilityItems = [
@@ -2368,11 +2404,13 @@ export function SettingsPage() {
         <section className="settings-card" aria-label="Academic verification controls">
           <header><span className="settings-card-icon"><MailCheck aria-hidden="true" /></span><div><h2>Student Email</h2><p>Verified separately from your Google sign-in.</p></div></header>
           {user?.studentEmailVerifiedAt ? <div className="verification-complete"><CheckCircle2 aria-hidden="true" /><div><strong>{user.studentEmailMasked} is verified</strong><span>Valid until {user.studentEmailExpiresAt ? accountDateFormatter.format(new Date(user.studentEmailExpiresAt)) : "12 months after verification"}.</span></div></div> : <div className="settings-card-form" onFocusCapture={() => setActiveVerification("student")}>
-            <label className="field"><span>Student email</span><input name="studentEmail" type="email" value={studentEmail} onChange={(event) => { setStudentEmail(event.target.value); setStudentCodeSent(false); setStudentCode(""); setStudentRequestId(undefined); setStudentResendCooldown(0); }} autoComplete="email" spellCheck={false} placeholder="you@stu.upes.ac.in…" /></label>
-            {activeVerification === "student" && !studentCodeSent ? <div id="msg91-student-email-captcha" className="msg91-captcha-host" /> : null}
-            <button type="button" className="button secondary" onClick={() => sendStudentCode.mutate()} disabled={studentVerificationConfig.isPending || sendStudentCode.isPending || !studentEmail || studentResendCooldown > 0}>{sendStudentCode.isPending ? "Sending…" : studentCodeSent ? studentResendCooldown > 0 ? `Resend in ${studentResendCooldown}s` : "Resend Code" : "Send Email Code"}</button>
+            {academicDomains.isPending ? <Loading label="Loading student email domain" /> : selectedAcademicDomain ? <>
+              <label className="field"><span>Student email</span><div className="student-email-address"><input aria-label="Student email" name="studentEmailLocalPart" type="text" value={studentEmailLocalPart} onChange={(event) => { setStudentEmailLocalPart(event.target.value.replace(/@.*$/, "")); setStudentCodeSent(false); setStudentCode(""); setStudentRequestId(undefined); setStudentResendCooldown(0); }} autoComplete="username" spellCheck={false} placeholder="your.name" /><span aria-hidden="true">@{selectedAcademicDomain.domain}</span></div></label>
+              {activeVerification === "student" && !studentCodeSent ? <div id="msg91-student-email-captcha" className="msg91-captcha-host" /> : null}
+              <button type="button" className="button secondary" onClick={() => sendStudentCode.mutate()} disabled={studentVerificationConfig.isPending || sendStudentCode.isPending || !studentEmail || studentResendCooldown > 0}>{sendStudentCode.isPending ? "Sending…" : studentCodeSent ? studentResendCooldown > 0 ? `Resend in ${studentResendCooldown}s` : "Resend Code" : "Send Email Code"}</button>
+            </> : <p className="verification-setup-note">Choose a supported college or institution in <Link to="/profile">your profile</Link> before verifying your student email.</p>}
             {studentCodeSent ? <><label className="field"><span>{studentOtpLength}-digit email code</span><input name="studentCode" value={studentCode} onChange={(event) => setStudentCode(event.target.value.replace(/\D/g, "").slice(0, studentOtpLength))} inputMode="numeric" autoComplete="one-time-code" maxLength={studentOtpLength} /></label><button type="button" className="button primary" onClick={() => verifyStudentEmail.mutate()} disabled={verifyStudentEmail.isPending || studentCode.length !== studentOtpLength}>{verifyStudentEmail.isPending ? "Verifying…" : "Verify Student Email"}</button></> : null}
-            {sendStudentCode.error ? <p className="field-error" role="alert">{sendStudentCode.error.message}</p> : null}{verifyStudentEmail.error ? <p className="field-error" role="alert">{verifyStudentEmail.error.message}</p> : null}{studentVerificationConfig.error ? <p className="field-error" role="alert">{studentVerificationConfig.error.message}</p> : null}{activeVerification === "student" && captchaInitializationError ? <p className="field-error" role="alert">{captchaInitializationError}</p> : null}
+            {sendStudentCode.error ? <p className="field-error" role="alert">{sendStudentCode.error.message}</p> : null}{verifyStudentEmail.error ? <p className="field-error" role="alert">{verifyStudentEmail.error.message}</p> : null}{studentVerificationConfig.error ? <p className="field-error" role="alert">{studentVerificationConfig.error.message}</p> : null}{academicDomains.error ? <p className="field-error" role="alert">{academicDomains.error.message}</p> : null}{activeVerification === "student" && captchaInitializationError ? <p className="field-error" role="alert">{captchaInitializationError}</p> : null}
           </div>}
         </section>
       </div>

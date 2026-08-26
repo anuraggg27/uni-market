@@ -3,7 +3,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import type { AppConfig } from '../config.js';
 import type { Database } from '../db/client.js';
-import { oauthAccounts, sessions, userRoles, users } from '../db/schema.js';
+import { academicDomains, oauthAccounts, sessions, studentEmailVerifications, userRoles, users } from '../db/schema.js';
 import { requireAuth } from '../middleware/auth.js';
 import { decryptText, maskEmail, randomToken, sha256 } from '../lib/crypto.js';
 import { AppError, asyncRoute } from '../lib/errors.js';
@@ -12,7 +12,7 @@ import type { GoogleVerifier } from '../services/google.js';
 const profileSchema = z.object({
   displayName: z.string().trim().min(2).max(80),
   avatarUrl: z.string().url().nullable().optional(),
-  institution: z.string().trim().max(120).nullable().optional(),
+  academicDomainId: z.string().uuid(),
   campus: z.string().trim().max(120).nullable().optional(),
   graduationYear: z.number().int().min(2020).max(2040).nullable().optional()
 }).strict();
@@ -25,7 +25,7 @@ export function authRouter(db: Database, config: AppConfig, verifier: GoogleVeri
   const router = Router();
 
   const currentUser = async (userId: string) => {
-    const user = (await db.select({ id: users.id, email: users.email, displayName: users.displayName, avatarUrl: users.avatarUrl, institution: users.institution, campus: users.campus, graduationYear: users.graduationYear, phoneVerifiedAt: users.phoneVerifiedAt, phoneE164: users.phoneE164, studentEmailCiphertext: users.studentEmailCiphertext, studentEmailVerifiedAt: users.studentEmailVerifiedAt, studentEmailExpiresAt: users.studentEmailExpiresAt, adultAttestedAt: users.adultAttestedAt, onboardingComplete: users.onboardingComplete, suspendedAt: users.suspendedAt, createdAt: users.createdAt }).from(users).where(and(eq(users.id, userId), isNull(users.deletedAt), isNull(users.closedAt))).limit(1))[0];
+    const user = (await db.select({ id: users.id, email: users.email, displayName: users.displayName, avatarUrl: users.avatarUrl, institution: users.institution, campus: users.campus, graduationYear: users.graduationYear, phoneVerifiedAt: users.phoneVerifiedAt, phoneE164: users.phoneE164, studentEmailCiphertext: users.studentEmailCiphertext, studentEmailDomain: users.studentEmailDomain, studentEmailVerifiedAt: users.studentEmailVerifiedAt, studentEmailExpiresAt: users.studentEmailExpiresAt, adultAttestedAt: users.adultAttestedAt, onboardingComplete: users.onboardingComplete, suspendedAt: users.suspendedAt, createdAt: users.createdAt }).from(users).where(and(eq(users.id, userId), isNull(users.deletedAt), isNull(users.closedAt))).limit(1))[0];
     if (!user) return null;
     const { studentEmailCiphertext, ...safeUser } = user;
     return {
@@ -122,14 +122,32 @@ export function authRouter(db: Database, config: AppConfig, verifier: GoogleVeri
 
   router.patch('/me', requireAuth, asyncRoute(async (req, res) => {
     const input = profileSchema.parse(req.body);
-    const updated = (await db.update(users).set({
-      displayName: input.displayName,
-      ...(input.avatarUrl !== undefined ? { avatarUrl: input.avatarUrl } : {}),
-      ...(input.institution !== undefined ? { institution: input.institution } : {}),
-      ...(input.campus !== undefined ? { campus: input.campus } : {}),
-      ...(input.graduationYear !== undefined ? { graduationYear: input.graduationYear } : {}),
-      updatedAt: new Date()
-    }).where(eq(users.id, req.auth!.userId)).returning({ id: users.id, displayName: users.displayName, onboardingComplete: users.onboardingComplete }))[0]!;
+    const academicDomain = (await db.select().from(academicDomains).where(and(eq(academicDomains.id, input.academicDomainId), eq(academicDomains.active, true))).limit(1))[0];
+    if (!academicDomain) throw new AppError(400, 'ACADEMIC_DOMAIN_NOT_APPROVED', 'Choose a supported college or institution');
+    const now = new Date();
+    const updated = await db.transaction(async (tx) => {
+      const current = (await tx.select({ studentEmailDomain: users.studentEmailDomain }).from(users).where(eq(users.id, req.auth!.userId)).limit(1))[0];
+      const domainChanged = Boolean(current?.studentEmailDomain && current.studentEmailDomain !== academicDomain.domain);
+      const result = (await tx.update(users).set({
+        displayName: input.displayName,
+        ...(input.avatarUrl !== undefined ? { avatarUrl: input.avatarUrl } : {}),
+        institution: academicDomain.institutionName,
+        studentEmailDomain: academicDomain.domain,
+        ...(domainChanged ? {
+          studentEmailCiphertext: null,
+          studentEmailHash: null,
+          studentEmailVerifiedAt: null,
+          studentEmailExpiresAt: null,
+        } : {}),
+        ...(input.campus !== undefined ? { campus: input.campus } : {}),
+        ...(input.graduationYear !== undefined ? { graduationYear: input.graduationYear } : {}),
+        updatedAt: now,
+      }).where(eq(users.id, req.auth!.userId)).returning({ id: users.id, displayName: users.displayName, onboardingComplete: users.onboardingComplete }))[0]!;
+      if (domainChanged) {
+        await tx.update(studentEmailVerifications).set({ invalidatedAt: now }).where(and(eq(studentEmailVerifications.userId, req.auth!.userId), isNull(studentEmailVerifications.usedAt), isNull(studentEmailVerifications.invalidatedAt)));
+      }
+      return result;
+    });
     res.json({ data: updated });
   }));
 

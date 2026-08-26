@@ -20,12 +20,15 @@ async function signIn(
   const csrf = (await (await request.get(`${API}/api/auth/csrf`)).json()).data
     .csrfToken;
   const headers = { "x-csrf-token": csrf };
-  if (profile)
+  if (profile) {
+    const academicDomains = (await (await request.get(`${API}/api/academic-domains`)).json()).data as Array<{ id: string; domain: string }>;
+    const academicDomain = academicDomains.find((entry) => entry.domain === "students.example.edu");
+    if (!academicDomain) throw new Error("Expected E2E academic domain");
     await request.post(`${API}/api/onboarding/complete`, {
       headers,
       data: {
         displayName: credential,
-        institution: "Open University",
+        academicDomainId: academicDomain.id,
         campus: "Main campus",
         graduationYear: 2028,
         adultAttested: true,
@@ -35,6 +38,7 @@ async function signIn(
         policyVersion: "2026-08-25",
       },
     });
+  }
   if (phone) {
     const suffix = String(
       (Math.abs(hash(credential)) % 9000000000) + 1000000000,
@@ -158,6 +162,7 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   const page = await seller.newPage();
   await page.goto("/onboarding");
   await page.getByLabel("Display name").fill("Journey Seller");
+  await page.getByLabel("College or institution").selectOption({ label: "E2E University" });
   await page.getByLabel(/I declare that I am at least 18/).check();
   await page.getByLabel("I accept the platform policies").check();
   await page.getByRole("button", { name: "Continue" }).click();
@@ -167,7 +172,7 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   await page.getByLabel("6-digit code").fill("999999");
   await page.getByRole("button", { name: "Verify phone" }).click();
   await expect(page.getByText("Your phone is verified")).toBeVisible();
-  await page.getByLabel("Student email").fill("journey@students.example.edu");
+  await page.getByLabel("Student email").fill("journey");
   await page.getByRole("button", { name: "Send email code" }).click();
   await page.getByLabel("6-digit email code").fill("999999");
   await page.getByRole("button", { name: "Verify student email" }).click();

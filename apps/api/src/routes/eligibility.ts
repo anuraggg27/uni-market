@@ -1,6 +1,6 @@
 import { domainToASCII } from 'node:url';
 import { Router } from 'express';
-import { and, count, desc, eq, gt, gte, isNull, ne } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, gte, isNull, ne } from 'drizzle-orm';
 import { currentPolicyVersion, requiredOnboardingPolicies } from '@campus-market/shared';
 import { z } from 'zod';
 import type { AppConfig } from '../config.js';
@@ -14,7 +14,7 @@ import { verifiedMsg91Identifier } from '../services/msg91.js';
 const emailInput = z.string().trim().email().max(254).transform((value) => value.toLowerCase());
 const onboardingInput = z.object({
   displayName: z.string().trim().min(2).max(80),
-  institution: z.string().trim().max(120).nullable().optional(),
+  academicDomainId: z.string().uuid(),
   campus: z.string().trim().max(120).nullable().optional(),
   graduationYear: z.number().int().min(2020).max(2040).nullable().optional(),
   adultAttested: z.literal(true),
@@ -37,6 +37,21 @@ async function approvedAcademicDomain(db: Database, domain: string): Promise<typ
   const academicDomain = domains.find((entry) => domain === entry.domain || (entry.allowSubdomains && domain.endsWith(`.${entry.domain}`)));
   if (!academicDomain) throw new AppError(400, 'ACADEMIC_DOMAIN_NOT_APPROVED', 'This institution email domain has not been approved yet');
   return academicDomain;
+}
+
+async function assertSelectedAcademicDomain(db: Database, userId: string, domain: string): Promise<void> {
+  const user = (await db.select({ institution: users.institution, studentEmailDomain: users.studentEmailDomain }).from(users).where(eq(users.id, userId)).limit(1))[0];
+  if (user?.studentEmailDomain) {
+    if (domain !== user.studentEmailDomain) {
+      throw new AppError(400, 'STUDENT_EMAIL_DOMAIN_MISMATCH', 'Use the student email domain for your selected institution');
+    }
+    return;
+  }
+  if (user?.institution) {
+    const legacyMatch = (await db.select({ id: academicDomains.id }).from(academicDomains).where(and(eq(academicDomains.domain, domain), eq(academicDomains.institutionName, user.institution), eq(academicDomains.active, true))).limit(1))[0];
+    if (legacyMatch) return;
+  }
+  throw new AppError(400, 'INSTITUTION_REQUIRED', 'Choose your college or institution before verifying a student email');
 }
 
 async function assertStudentEmailAvailable(db: Database, userId: string, emailHash: string): Promise<void> {
@@ -67,19 +82,43 @@ export function eligibilityRouter(db: Database, config: AppConfig): Router {
     res.json({ data: publicCompliance(config) });
   });
 
+  router.get('/academic-domains', requireAuth, asyncRoute(async (_req, res) => {
+    const domains = await db.select({
+      id: academicDomains.id,
+      domain: academicDomains.domain,
+      institutionName: academicDomains.institutionName,
+    }).from(academicDomains).where(eq(academicDomains.active, true)).orderBy(asc(academicDomains.institutionName));
+    res.setHeader('cache-control', 'private, max-age=300');
+    res.json({ data: domains });
+  }));
+
   router.post('/onboarding/complete', requireAuth, asyncRoute(async (req, res) => {
     const input = onboardingInput.parse(req.body);
+    const academicDomain = (await db.select().from(academicDomains).where(and(eq(academicDomains.id, input.academicDomainId), eq(academicDomains.active, true))).limit(1))[0];
+    if (!academicDomain) throw new AppError(400, 'ACADEMIC_DOMAIN_NOT_APPROVED', 'Choose a supported college or institution');
     const now = new Date();
     await db.transaction(async (tx) => {
+      const current = (await tx.select({ studentEmailDomain: users.studentEmailDomain }).from(users).where(eq(users.id, req.auth!.userId)).limit(1))[0];
+      const domainChanged = Boolean(current?.studentEmailDomain && current.studentEmailDomain !== academicDomain.domain);
       await tx.update(users).set({
         displayName: input.displayName,
-        institution: input.institution ?? null,
+        institution: academicDomain.institutionName,
+        studentEmailDomain: academicDomain.domain,
+        ...(domainChanged ? {
+          studentEmailCiphertext: null,
+          studentEmailHash: null,
+          studentEmailVerifiedAt: null,
+          studentEmailExpiresAt: null,
+        } : {}),
         campus: input.campus ?? null,
         graduationYear: input.graduationYear ?? null,
         adultAttestedAt: now,
         onboardingComplete: true,
         updatedAt: now,
       }).where(eq(users.id, req.auth!.userId));
+      if (domainChanged) {
+        await tx.update(studentEmailVerifications).set({ invalidatedAt: now }).where(and(eq(studentEmailVerifications.userId, req.auth!.userId), isNull(studentEmailVerifications.usedAt), isNull(studentEmailVerifications.invalidatedAt)));
+      }
       await tx.insert(policyAcceptances).values(requiredOnboardingPolicies.map((policy) => ({
         userId: req.auth!.userId,
         policy,
@@ -108,6 +147,7 @@ export function eligibilityRouter(db: Database, config: AppConfig): Router {
   router.post('/student-email/check-availability', requireAuth, asyncRoute(async (req, res) => {
     const { email, domain } = splitStudentEmail(z.object({ email: z.string() }).parse(req.body).email);
     await approvedAcademicDomain(db, domain);
+    await assertSelectedAcademicDomain(db, req.auth!.userId, domain);
     await assertStudentEmailAvailable(db, req.auth!.userId, keyedHash(email, config.DATA_ENCRYPTION_KEY));
     res.json({ data: { available: true, maskedEmail: maskEmail(email) } });
   }));
@@ -115,6 +155,7 @@ export function eligibilityRouter(db: Database, config: AppConfig): Router {
   router.post('/student-email/send', requireAuth, asyncRoute(async (req, res) => {
     const { email, domain } = splitStudentEmail(z.object({ email: z.string() }).parse(req.body).email);
     const academicDomain = await approvedAcademicDomain(db, domain);
+    await assertSelectedAcademicDomain(db, req.auth!.userId, domain);
     const emailHash = keyedHash(email, config.DATA_ENCRYPTION_KEY);
     await assertStudentEmailAvailable(db, req.auth!.userId, emailHash);
     if (!config.DEV_MODE) throw new AppError(400, 'OTP_WIDGET_REQUIRED', 'Use MSG91 verification to request a student email code');
@@ -142,6 +183,7 @@ export function eligibilityRouter(db: Database, config: AppConfig): Router {
     if (!config.DEV_MODE) throw new AppError(400, 'OTP_WIDGET_REQUIRED', 'Use MSG91 verification to verify the student email code');
     const input = z.object({ email: z.string(), code: z.string().regex(/^\d{6}$/) }).parse(req.body);
     const { email, domain } = splitStudentEmail(input.email);
+    await assertSelectedAcademicDomain(db, req.auth!.userId, domain);
     const emailHash = keyedHash(email, config.DATA_ENCRYPTION_KEY);
     const now = new Date();
     const verification = (await db.select().from(studentEmailVerifications).where(and(eq(studentEmailVerifications.userId, req.auth!.userId), eq(studentEmailVerifications.emailHash, emailHash), isNull(studentEmailVerifications.usedAt), isNull(studentEmailVerifications.invalidatedAt))).orderBy(desc(studentEmailVerifications.createdAt)).limit(1))[0];
@@ -178,6 +220,7 @@ export function eligibilityRouter(db: Database, config: AppConfig): Router {
     }).parse(req.body);
     const { email, domain } = splitStudentEmail(input.email);
     const academicDomain = await approvedAcademicDomain(db, domain);
+    await assertSelectedAcademicDomain(db, req.auth!.userId, domain);
     const emailHash = keyedHash(email, config.DATA_ENCRYPTION_KEY);
     await assertStudentEmailAvailable(db, req.auth!.userId, emailHash);
 

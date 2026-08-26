@@ -2102,6 +2102,49 @@ html.dark .confirm-warning {
   gap: 14px;
   margin-top: 24px;
 }
+.student-email-address {
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-surface);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.student-email-address:focus-within {
+  border-color: var(--color-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-focus) 15%, transparent);
+}
+.field .student-email-address input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: 0;
+}
+.student-email-address > span {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 0 12px;
+  border-left: 1px solid var(--color-line);
+  background: var(--color-surface-muted);
+  color: var(--color-muted);
+  font-size: 0.84rem;
+  white-space: nowrap;
+}
+.verification-setup-note {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+.verification-setup-note a {
+  color: var(--color-accent);
+  font-weight: 600;
+}
 .settings-card-form .button,
 .settings-card-form + .button {
   justify-self: start;

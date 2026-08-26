@@ -14,6 +14,7 @@ export interface CurrentUser {
   graduationYear: number | null;
   phoneVerifiedAt: string | null;
   studentEmailMasked: string | null;
+  studentEmailDomain: string | null;
   studentEmailVerifiedAt: string | null;
   studentEmailExpiresAt: string | null;
   adultAttestedAt: string | null;
