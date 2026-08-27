@@ -34,7 +34,6 @@ import {
   savePendingContact,
 } from "../contact-intent";
 import { ProductCard } from "../components/ProductCard";
-import { ReportButton } from "../components/ReportButton";
 import {
   EmptyState,
   ErrorState,
@@ -43,6 +42,8 @@ import {
 } from "../components/UI";
 
 import { HeroCampusBackground } from "../components/HeroCampusBackground";
+import { SellerProfilePage } from "./SellerProfilePage";
+import { UserAvatar } from "../components/UserAvatar";
 
 const HOME_SEARCH_PLACEHOLDER_WORDS = [
   "books",
@@ -1008,19 +1009,12 @@ export function ListingPage() {
             aria-label="Seller"
           >
             <div className="flex items-center gap-3.5">
-              {item.seller?.avatarUrl ? (
-                <img
-                  className="size-14 rounded-full object-cover"
-                  src={item.seller.avatarUrl}
-                  alt=""
-                  width={56}
-                  height={56}
-                />
-              ) : (
-                <span className="grid size-14 shrink-0 place-items-center rounded-full bg-surface-muted text-[15px] font-medium text-ink">
-                  {sellerName.charAt(0).toUpperCase()}
-                </span>
-              )}
+              <UserAvatar
+                avatarId={item.seller?.avatarId}
+                avatarUrl={item.seller?.avatarUrl}
+                displayName={sellerName}
+                size={56}
+              />
               <div className="min-w-0">
                 <Link
                   to={`/seller/${item.seller.id}`}
@@ -1277,109 +1271,7 @@ export function ListingPage() {
 }
 
 export function SellerPage() {
-  const { sellerId } = useParams();
-  const { user } = useAuth();
-  const query = useQuery({
-    queryKey: ["seller", sellerId],
-    queryFn: () => api<any>(`/api/sellers/${sellerId}`),
-  });
-  if (query.isLoading)
-    return (
-      <div className="page">
-        <Loading label="Loading seller" />
-      </div>
-    );
-  if (query.isError)
-    return (
-      <div className="page">
-        <ErrorState error={query.error} />
-      </div>
-    );
-  const s = query.data;
-  return (
-    <div className="page">
-      <section className="panel">
-        <div className="row">
-          {s.avatarUrl ? (
-            <img className="avatar" src={s.avatarUrl} alt="" />
-          ) : (
-            <span className="avatar">{s.displayName[0]}</span>
-          )}
-          <div>
-            <h1>{s.displayName}</h1>
-            <div className="meta">
-              <span>
-                <ShieldCheck width={14} />
-                Phone verified
-              </span>
-              <span>
-                Member since {new Date(s.createdAt).toLocaleDateString()}
-              </span>
-              <span>{s.completedSales} completed sales</span>
-            </div>
-          </div>
-        </div>
-        <p>{[s.institution, s.campus].filter(Boolean).join(" · ")}</p>
-        <strong>
-          {Number(s.averageRating).toFixed(1)} ★ from {s.reviewCount} reviews
-        </strong>
-        {user?.phoneVerifiedAt && user.id !== sellerId ? (
-          <ReportButton
-            targetType="USER"
-            targetId={sellerId!}
-            label="Report seller"
-          />
-        ) : null}
-      </section>
-      <section className="section">
-        <h2>Current listings</h2>
-        {s.activeListings.length ? (
-          <div className="product-grid">
-            {s.activeListings.map((l: any) => (
-              <ProductCard key={l.id} listing={l} />
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            title="No active listings"
-            body="This seller has no approved products for sale right now."
-          />
-        )}
-      </section>
-      <section className="section">
-        <h2>Recent verified reviews</h2>
-        {s.recentReviews.length ? (
-          <div className="stack">
-            {s.recentReviews.map((r: any) => (
-              <article className="panel" key={r.id}>
-                <strong>
-                  {"★".repeat(r.rating)}
-                  {"☆".repeat(5 - r.rating)}
-                </strong>
-                <p>{r.text}</p>
-                <span className="meta">
-                  Verified transaction ·{" "}
-                  {new Date(r.createdAt).toLocaleDateString()}
-                </span>
-                {user?.phoneVerifiedAt ? (
-                  <ReportButton
-                    targetType="REVIEW"
-                    targetId={r.id}
-                    label="Report review"
-                  />
-                ) : null}
-              </article>
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            title="No reviews yet"
-            body="Reviews appear after completed exchanges."
-          />
-        )}
-      </section>
-    </div>
-  );
+  return <SellerProfilePage />;
 }
 
 export function LeaderboardPage() {

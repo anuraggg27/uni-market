@@ -43,8 +43,8 @@ describe('India compliance controls', () => {
     expect(domains.headers['cache-control']).toContain('private');
     expect(domains.body.data.map((entry: { institutionName: string }) => entry.institutionName)).toEqual(['Example Institute', 'UPES']);
     const upes = domains.body.data.find((entry: { domain: string }) => entry.domain === 'stu.upes.ac.in');
-    await auth.agent.post('/api/onboarding/complete').set(auth.headers).send({ displayName: 'Eligible Student', academicDomainId: upes.id, adultAttested: false, acceptTerms: true, acknowledgePrivacy: true, acceptCommunityRules: true, policyVersion: '2026-08-25' }).expect(400);
-    await auth.agent.post('/api/onboarding/complete').set(auth.headers).send({ displayName: 'Eligible Student', academicDomainId: upes.id, adultAttested: true, acceptTerms: true, acknowledgePrivacy: true, acceptCommunityRules: true, policyVersion: '2026-08-25' }).expect(200);
+    await auth.agent.post('/api/onboarding/complete').set(auth.headers).send({ displayName: 'Eligible Student', avatarId: 'avatar-01', academicDomainId: upes.id, adultAttested: false, acceptTerms: true, acknowledgePrivacy: true, acceptCommunityRules: true, policyVersion: '2026-08-25' }).expect(400);
+    await auth.agent.post('/api/onboarding/complete').set(auth.headers).send({ displayName: 'Eligible Student', avatarId: 'avatar-01', academicDomainId: upes.id, adultAttested: true, acceptTerms: true, acknowledgePrivacy: true, acceptCommunityRules: true, policyVersion: '2026-08-25' }).expect(200);
     const domain = await auth.agent.post('/api/student-email/send').set(auth.headers).send({ email: 'student@gmail.com' }).expect(400);
     expect(domain.body.error.code).toBe('ACADEMIC_DOMAIN_NOT_APPROVED');
     const mismatch = await auth.agent.post('/api/student-email/send').set(auth.headers).send({ email: 'student@students.example.edu' }).expect(400);
@@ -61,6 +61,7 @@ describe('India compliance controls', () => {
 
     await auth.agent.patch('/api/auth/me').set(auth.headers).send({
       displayName: 'Institution Change',
+      avatarId: 'avatar-02',
       academicDomainId: upes.id,
       campus: null,
       graduationYear: null,
@@ -79,7 +80,7 @@ describe('India compliance controls', () => {
     const auth = await login(ctx.app, 'msg91-student-email');
     const domains = await auth.agent.get('/api/academic-domains').expect(200);
     const upes = domains.body.data.find((entry: { domain: string }) => entry.domain === 'stu.upes.ac.in');
-    await auth.agent.post('/api/onboarding/complete').set(auth.headers).send({ displayName: 'MSG91 Student', academicDomainId: upes.id, adultAttested: true, acceptTerms: true, acknowledgePrivacy: true, acceptCommunityRules: true, policyVersion: '2026-08-25' }).expect(200);
+    await auth.agent.post('/api/onboarding/complete').set(auth.headers).send({ displayName: 'MSG91 Student', avatarId: 'avatar-01', academicDomainId: upes.id, adultAttested: true, acceptTerms: true, acknowledgePrivacy: true, acceptCommunityRules: true, policyVersion: '2026-08-25' }).expect(200);
     const providerConfig = {
       ...ctx.config,
       DEV_MODE: false,

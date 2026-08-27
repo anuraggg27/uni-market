@@ -9,7 +9,7 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { currentPolicyVersion, listingInputSchema, type ListingInput } from "@campus-market/shared";
+import { currentPolicyVersion, defaultAvatarId, listingInputSchema, type AvatarId, type ListingInput } from "@campus-market/shared";
 import { z } from "zod";
 import {
   ArrowDown,
@@ -48,6 +48,8 @@ import {
   verifyMsg91Otp,
 } from "../msg91";
 import { ProductCard } from "../components/ProductCard";
+import { AvatarPicker, AvatarPickerDialog } from "../components/AvatarPicker";
+import { UserAvatar } from "../components/UserAvatar";
 import {
   formatNotificationTime,
   getNotificationIcon,
@@ -1903,14 +1905,44 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
   const { user, refresh } = useAuth();
   const navigate = useNavigate();
   const academicDomains = useAcademicDomains(Boolean(user));
+  const [avatarId, setAvatarId] = useState<AvatarId>(
+    user?.avatarId ?? defaultAvatarId,
+  );
+  const [avatarDraft, setAvatarDraft] = useState<AvatarId>(
+    user?.avatarId ?? defaultAvatarId,
+  );
+  const [avatarDialogOpen, setAvatarDialogOpen] = useState(false);
+
+  useEffect(() => {
+    const nextAvatar = user?.avatarId ?? defaultAvatarId;
+    setAvatarId(nextAvatar);
+    setAvatarDraft(nextAvatar);
+  }, [user?.avatarId, user?.id]);
+
   const mutation = useMutation({
-    mutationFn: (data: any) =>
-      api(onboarding ? "/api/onboarding/complete" : "/api/auth/me", { method: onboarding ? "POST" : "PATCH", ...jsonBody(data) }),
+    mutationFn: (data: Record<string, unknown>) =>
+      api(onboarding ? "/api/onboarding/complete" : "/api/auth/me", {
+        method: onboarding ? "POST" : "PATCH",
+        ...jsonBody(data),
+      }),
     onSuccess: async () => {
       await refresh();
       if (onboarding) navigate("/settings?verify=eligibility");
     },
   });
+  const avatarMutation = useMutation({
+    mutationFn: (nextAvatarId: AvatarId) =>
+      api("/api/auth/me/avatar", {
+        method: "PATCH",
+        ...jsonBody({ avatarId: nextAvatarId }),
+      }),
+    onSuccess: async (_data, savedAvatarId) => {
+      setAvatarId(savedAvatarId);
+      await refresh();
+      setAvatarDialogOpen(false);
+    },
+  });
+
   if (!user) return null;
   if (academicDomains.isLoading) {
     return <div className="page narrow"><Loading variant="form" label="Loading supported institutions" /></div>;
@@ -1918,41 +1950,74 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
   if (academicDomains.isError) {
     return <div className="page narrow"><ErrorState error={academicDomains.error} /></div>;
   }
+
   const selectedAcademicDomainId = academicDomains.data?.find((entry) =>
     entry.domain === user.studentEmailDomain || entry.institutionName === user.institution
   )?.id ?? "";
+
   return (
-    <div className="page narrow">
+    <div className="page narrow profile-page">
       <div className="page-header">
         <div>
-          <h1>{onboarding ? "Confirm your name" : "Your profile"}</h1>
+          <h1>{onboarding ? "Set up your profile" : "Your profile"}</h1>
           <p className="lede">
-            Choose your institution so we can use the correct student email domain.
+            {onboarding
+              ? "Choose how you appear, then add your student details."
+              : "Manage how other students see you across Uni Market."}
           </p>
         </div>
       </div>
       <form
-        className="form panel"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const f = new FormData(e.currentTarget);
+        className="form panel profile-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const form = new FormData(event.currentTarget);
           mutation.mutate({
-            displayName: String(f.get("displayName")),
-            academicDomainId: String(f.get("academicDomainId")),
-            campus: String(f.get("campus")) || null,
-            graduationYear: f.get("graduationYear")
-              ? Number(f.get("graduationYear"))
+            avatarId,
+            displayName: String(form.get("displayName")),
+            academicDomainId: String(form.get("academicDomainId")),
+            campus: String(form.get("campus")) || null,
+            graduationYear: form.get("graduationYear")
+              ? Number(form.get("graduationYear"))
               : null,
             ...(onboarding ? {
-              adultAttested: f.get("adultAttested") === "on",
-              acceptTerms: f.get("policiesAccepted") === "on",
-              acknowledgePrivacy: f.get("policiesAccepted") === "on",
-              acceptCommunityRules: f.get("policiesAccepted") === "on",
+              adultAttested: form.get("adultAttested") === "on",
+              acceptTerms: form.get("policiesAccepted") === "on",
+              acknowledgePrivacy: form.get("policiesAccepted") === "on",
+              acceptCommunityRules: form.get("policiesAccepted") === "on",
               policyVersion: currentPolicyVersion,
             } : {}),
           });
         }}
       >
+        {onboarding ? (
+          <AvatarPicker value={avatarId} onChange={setAvatarId} />
+        ) : (
+          <section className="profile-avatar-card" aria-labelledby="profile-avatar-heading">
+            <UserAvatar
+              avatarId={avatarId}
+              avatarUrl={user.avatarUrl}
+              displayName={user.displayName}
+              size={104}
+            />
+            <div>
+              <span className="profile-avatar-eyebrow">Profile avatar</span>
+              <h2 id="profile-avatar-heading">{user.displayName}</h2>
+              <p>This illustration appears in your account menu, listings, and seller profile.</p>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={() => {
+                  setAvatarDraft(avatarId);
+                  setAvatarDialogOpen(true);
+                }}
+              >
+                Change avatar
+              </button>
+            </div>
+          </section>
+        )}
+
         <label className="field">
           <span>Display name</span>
           <input
@@ -2017,6 +2082,20 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
           <p className="field-error">{mutation.error.message}</p>
         ) : null}
       </form>
+
+      {!onboarding ? (
+        <AvatarPickerDialog
+          open={avatarDialogOpen}
+          value={avatarDraft}
+          onChange={setAvatarDraft}
+          onClose={() => {
+            if (!avatarMutation.isPending) setAvatarDialogOpen(false);
+          }}
+          onSave={() => avatarMutation.mutate(avatarDraft)}
+          pending={avatarMutation.isPending}
+          error={avatarMutation.error?.message}
+        />
+      ) : null}
     </div>
   );
 }

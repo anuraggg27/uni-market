@@ -12,6 +12,37 @@ export const reportReasons = ['CSAM_CHILD_SAFETY', 'NON_CONSENSUAL_INTIMATE_IMAG
 export const currentPolicyVersion = '2026-08-25';
 export const requiredOnboardingPolicies = ['TERMS', 'PRIVACY', 'COMMUNITY_RULES'] as const;
 export const syntheticStatuses = ['UNKNOWN', 'NOT_SYNTHETIC', 'SYNTHETIC_OR_MATERIALLY_ALTERED'] as const;
+export const avatarIds = [
+  'avatar-01', 'avatar-02', 'avatar-03', 'avatar-04', 'avatar-05',
+  'avatar-06', 'avatar-07', 'avatar-08', 'avatar-09', 'avatar-10',
+  'avatar-11', 'avatar-12', 'avatar-13', 'avatar-14', 'avatar-15',
+  'avatar-16', 'avatar-17', 'avatar-18', 'avatar-19', 'avatar-20',
+] as const;
+export type AvatarId = typeof avatarIds[number];
+export const avatars: readonly { id: AvatarId; name: string; src: string }[] = [
+  { id: 'avatar-01', name: 'Avatar 01', src: 'avatars/avatar-01.webp' },
+  { id: 'avatar-02', name: 'Avatar 02', src: 'avatars/avatar-02.webp' },
+  { id: 'avatar-03', name: 'Avatar 03', src: 'avatars/avatar-03.webp' },
+  { id: 'avatar-04', name: 'Avatar 04', src: 'avatars/avatar-04.webp' },
+  { id: 'avatar-05', name: 'Avatar 05', src: 'avatars/avatar-05.webp' },
+  { id: 'avatar-06', name: 'Avatar 06', src: 'avatars/avatar-06.webp' },
+  { id: 'avatar-07', name: 'Avatar 07', src: 'avatars/avatar-07.webp' },
+  { id: 'avatar-08', name: 'Avatar 08', src: 'avatars/avatar-08.webp' },
+  { id: 'avatar-09', name: 'Avatar 09', src: 'avatars/avatar-09.webp' },
+  { id: 'avatar-10', name: 'Avatar 10', src: 'avatars/avatar-10.webp' },
+  { id: 'avatar-11', name: 'Avatar 11', src: 'avatars/avatar-11.webp' },
+  { id: 'avatar-12', name: 'Avatar 12', src: 'avatars/avatar-12.webp' },
+  { id: 'avatar-13', name: 'Avatar 13', src: 'avatars/avatar-13.webp' },
+  { id: 'avatar-14', name: 'Avatar 14', src: 'avatars/avatar-14.webp' },
+  { id: 'avatar-15', name: 'Avatar 15', src: 'avatars/avatar-15.webp' },
+  { id: 'avatar-16', name: 'Avatar 16', src: 'avatars/avatar-16.webp' },
+  { id: 'avatar-17', name: 'Avatar 17', src: 'avatars/avatar-17.webp' },
+  { id: 'avatar-18', name: 'Avatar 18', src: 'avatars/avatar-18.webp' },
+  { id: 'avatar-19', name: 'Avatar 19', src: 'avatars/avatar-19.webp' },
+  { id: 'avatar-20', name: 'Avatar 20', src: 'avatars/avatar-20.webp' },
+];
+export const avatarIdSchema = z.enum(avatarIds);
+export const defaultAvatarId: AvatarId = 'avatar-01';
 
 export const idSchema = z.string().uuid();
 export const phoneSchema = z.string().regex(/^\+91[6-9]\d{9}$/, 'Enter a valid Indian mobile number');

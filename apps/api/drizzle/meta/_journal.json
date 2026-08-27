@@ -57,6 +57,13 @@
       "when": 1787771370715,
       "tag": "0007_purge_ai_demo_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787823622644,
+      "tag": "0008_glorious_cerise",
+      "breakpoints": true
     }
   ]
 }

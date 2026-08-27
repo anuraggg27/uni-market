@@ -1,7 +1,7 @@
 import { domainToASCII } from 'node:url';
 import { Router } from 'express';
 import { and, asc, count, desc, eq, gt, gte, isNull, ne } from 'drizzle-orm';
-import { currentPolicyVersion, requiredOnboardingPolicies } from '@campus-market/shared';
+import { avatarIdSchema, currentPolicyVersion, requiredOnboardingPolicies } from '@campus-market/shared';
 import { z } from 'zod';
 import type { AppConfig } from '../config.js';
 import type { Database } from '../db/client.js';
@@ -14,6 +14,7 @@ import { verifiedMsg91Identifier } from '../services/msg91.js';
 const emailInput = z.string().trim().email().max(254).transform((value) => value.toLowerCase());
 const onboardingInput = z.object({
   displayName: z.string().trim().min(2).max(80),
+  avatarId: avatarIdSchema,
   academicDomainId: z.string().uuid(),
   campus: z.string().trim().max(120).nullable().optional(),
   graduationYear: z.number().int().min(2020).max(2040).nullable().optional(),
@@ -102,6 +103,7 @@ export function eligibilityRouter(db: Database, config: AppConfig): Router {
       const domainChanged = Boolean(current?.studentEmailDomain && current.studentEmailDomain !== academicDomain.domain);
       await tx.update(users).set({
         displayName: input.displayName,
+        avatarId: input.avatarId,
         institution: academicDomain.institutionName,
         studentEmailDomain: academicDomain.domain,
         ...(domainChanged ? {

@@ -57,6 +57,7 @@ export async function verifyPhone(auth: Awaited<ReturnType<typeof login>>, phone
   if (!academicDomain) throw new Error('Expected test academic domain');
   const onboarding = await auth.agent.post('/api/onboarding/complete').set(auth.headers).send({
     displayName: auth.user.displayName,
+    avatarId: 'avatar-01',
     academicDomainId: academicDomain.id,
     campus: null,
     graduationYear: null,

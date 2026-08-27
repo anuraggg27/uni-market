@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
+import { avatarIdSchema } from '@campus-market/shared';
 import type { AppConfig } from '../config.js';
 import type { Database } from '../db/client.js';
 import { academicDomains, oauthAccounts, sessions, studentEmailVerifications, userRoles, users } from '../db/schema.js';
@@ -12,6 +13,7 @@ import type { GoogleVerifier } from '../services/google.js';
 const profileSchema = z.object({
   displayName: z.string().trim().min(2).max(80),
   avatarUrl: z.string().url().nullable().optional(),
+  avatarId: avatarIdSchema,
   academicDomainId: z.string().uuid(),
   campus: z.string().trim().max(120).nullable().optional(),
   graduationYear: z.number().int().min(2020).max(2040).nullable().optional()
@@ -25,7 +27,7 @@ export function authRouter(db: Database, config: AppConfig, verifier: GoogleVeri
   const router = Router();
 
   const currentUser = async (userId: string) => {
-    const user = (await db.select({ id: users.id, email: users.email, displayName: users.displayName, avatarUrl: users.avatarUrl, institution: users.institution, campus: users.campus, graduationYear: users.graduationYear, phoneVerifiedAt: users.phoneVerifiedAt, phoneE164: users.phoneE164, studentEmailCiphertext: users.studentEmailCiphertext, studentEmailDomain: users.studentEmailDomain, studentEmailVerifiedAt: users.studentEmailVerifiedAt, studentEmailExpiresAt: users.studentEmailExpiresAt, adultAttestedAt: users.adultAttestedAt, onboardingComplete: users.onboardingComplete, suspendedAt: users.suspendedAt, createdAt: users.createdAt }).from(users).where(and(eq(users.id, userId), isNull(users.deletedAt), isNull(users.closedAt))).limit(1))[0];
+    const user = (await db.select({ id: users.id, email: users.email, displayName: users.displayName, avatarUrl: users.avatarUrl, avatarId: users.avatarId, institution: users.institution, campus: users.campus, graduationYear: users.graduationYear, phoneVerifiedAt: users.phoneVerifiedAt, phoneE164: users.phoneE164, studentEmailCiphertext: users.studentEmailCiphertext, studentEmailDomain: users.studentEmailDomain, studentEmailVerifiedAt: users.studentEmailVerifiedAt, studentEmailExpiresAt: users.studentEmailExpiresAt, adultAttestedAt: users.adultAttestedAt, onboardingComplete: users.onboardingComplete, suspendedAt: users.suspendedAt, createdAt: users.createdAt }).from(users).where(and(eq(users.id, userId), isNull(users.deletedAt), isNull(users.closedAt))).limit(1))[0];
     if (!user) return null;
     const { studentEmailCiphertext, ...safeUser } = user;
     return {
@@ -131,6 +133,7 @@ export function authRouter(db: Database, config: AppConfig, verifier: GoogleVeri
       const result = (await tx.update(users).set({
         displayName: input.displayName,
         ...(input.avatarUrl !== undefined ? { avatarUrl: input.avatarUrl } : {}),
+        avatarId: input.avatarId,
         institution: academicDomain.institutionName,
         studentEmailDomain: academicDomain.domain,
         ...(domainChanged ? {
@@ -148,6 +151,13 @@ export function authRouter(db: Database, config: AppConfig, verifier: GoogleVeri
       }
       return result;
     });
+    res.json({ data: updated });
+  }));
+
+  router.patch('/me/avatar', requireAuth, asyncRoute(async (req, res) => {
+    const input = z.object({ avatarId: avatarIdSchema }).strict().parse(req.body);
+    const updated = (await db.update(users).set({ avatarId: input.avatarId, updatedAt: new Date() }).where(eq(users.id, req.auth!.userId)).returning({ avatarId: users.avatarId }))[0];
+    if (!updated) throw new AppError(404, 'USER_NOT_FOUND', 'Account not found');
     res.json({ data: updated });
   }));
 

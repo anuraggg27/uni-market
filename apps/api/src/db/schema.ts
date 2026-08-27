@@ -21,6 +21,7 @@ export const users = pgTable('users', {
   email: text('email').notNull(),
   displayName: text('display_name').notNull(),
   avatarUrl: text('avatar_url'),
+  avatarId: text('avatar_id'),
   institution: text('institution'),
   campus: text('campus'),
   graduationYear: integer('graduation_year'),

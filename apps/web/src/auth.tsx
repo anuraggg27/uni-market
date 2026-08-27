@@ -2,6 +2,7 @@ import { createContext, useContext, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Navigate, useLocation } from 'react-router-dom';
 import { api } from './api';
+import type { AvatarId } from '@campus-market/shared';
 import { RouteLoading } from './components/LoadingSkeletons';
 
 export interface CurrentUser {
@@ -9,6 +10,7 @@ export interface CurrentUser {
   email: string;
   displayName: string;
   avatarUrl: string | null;
+  avatarId: AvatarId | null;
   institution: string | null;
   campus: string | null;
   graduationYear: number | null;

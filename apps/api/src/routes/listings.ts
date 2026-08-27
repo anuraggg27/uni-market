@@ -58,7 +58,7 @@ export function listingsRouter(db: Database, config: AppConfig, storage: Storage
 
   router.get('/listings/:id', asyncRoute(async (req, res) => {
     const id = idSchema.parse(req.params.id);
-    const listing = (await db.select({ listing: listings, seller: { id: users.id, displayName: users.displayName, avatarUrl: users.avatarUrl, institution: users.institution, campus: users.campus, phoneVerifiedAt: users.phoneVerifiedAt, completedSales: users.completedSales, createdAt: users.createdAt } }).from(listings).innerJoin(users, eq(users.id, listings.sellerId)).where(and(eq(listings.id, id), isNull(listings.deletedAt))).limit(1))[0];
+    const listing = (await db.select({ listing: listings, seller: { id: users.id, displayName: users.displayName, avatarUrl: users.avatarUrl, avatarId: users.avatarId, institution: users.institution, campus: users.campus, phoneVerifiedAt: users.phoneVerifiedAt, completedSales: users.completedSales, createdAt: users.createdAt } }).from(listings).innerJoin(users, eq(users.id, listings.sellerId)).where(and(eq(listings.id, id), isNull(listings.deletedAt))).limit(1))[0];
     if (!listing) throw new AppError(404, 'LISTING_UNAVAILABLE', 'This listing is unavailable');
     const privileged = req.auth?.userId === listing.listing.sellerId || req.auth?.roles.some((role: string) => ['MODERATOR', 'SUPER_ADMIN'].includes(role));
     if (!privileged && !(listing.listing.moderationState === 'APPROVED' && ['ACTIVE', 'RESERVED', 'SOLD'].includes(listing.listing.lifecycleState))) throw new AppError(404, 'LISTING_UNAVAILABLE', 'This listing is unavailable');

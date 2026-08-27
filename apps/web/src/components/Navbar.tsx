@@ -23,6 +23,7 @@ import { Button } from "./ui/button";
 import { NotificationTray } from "./NotificationTray";
 import { MarketplaceSearch } from "./MarketplaceSearch";
 import { ThemeToggle } from "./ThemeToggle";
+import { UserAvatar } from "./UserAvatar";
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -164,7 +165,17 @@ function ProfileMenu({ compact = false }: { compact?: boolean }) {
         aria-haspopup="dialog"
         aria-expanded={menuOpen}
       >
-        <UserRound className="size-4" aria-hidden="true" />
+        {user ? (
+          <UserAvatar
+            avatarId={user.avatarId}
+            avatarUrl={user.avatarUrl}
+            displayName={user.displayName}
+            size={compact ? 28 : 32}
+            decorative
+          />
+        ) : (
+          <UserRound className="size-4" aria-hidden="true" />
+        )}
       </button>
 
       {menuOpen ? (
@@ -174,11 +185,12 @@ function ProfileMenu({ compact = false }: { compact?: boolean }) {
           aria-label="Account menu"
         >
           {user ? (
-            <div className="mb-1 border-b border-line px-3 pb-3 pt-2">
-              <strong className="block truncate text-[14px] font-semibold text-ink">
+            <div className="mb-1 grid grid-cols-[40px_minmax(0,1fr)] items-center gap-x-3 border-b border-line px-3 pb-3 pt-2">
+              <UserAvatar avatarId={user.avatarId} avatarUrl={user.avatarUrl} displayName={user.displayName} size={40} decorative />
+              <strong className="col-start-2 block truncate text-[14px] font-semibold text-ink">
                 {user.displayName}
               </strong>
-              <span className="mt-0.5 block truncate text-[11px] text-muted">
+              <span className="col-start-2 mt-0.5 block truncate text-[11px] text-muted">
                 {user.email}
               </span>
             </div>
