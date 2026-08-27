@@ -2002,7 +2002,6 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
           <section className="profile-avatar-card" aria-labelledby="profile-avatar-heading">
             <UserAvatar
               avatarId={avatarId}
-              avatarUrl={user.avatarUrl}
               displayName={user.displayName}
               size={104}
             />

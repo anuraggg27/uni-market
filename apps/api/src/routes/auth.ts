@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
-import { avatarIdSchema } from '@campus-market/shared';
+import { avatarIdSchema, defaultAvatarId } from '@campus-market/shared';
 import type { AppConfig } from '../config.js';
 import type { Database } from '../db/client.js';
 import { academicDomains, oauthAccounts, sessions, studentEmailVerifications, userRoles, users } from '../db/schema.js';
@@ -12,7 +12,6 @@ import type { GoogleVerifier } from '../services/google.js';
 
 const profileSchema = z.object({
   displayName: z.string().trim().min(2).max(80),
-  avatarUrl: z.string().url().nullable().optional(),
   avatarId: avatarIdSchema,
   academicDomainId: z.string().uuid(),
   campus: z.string().trim().max(120).nullable().optional(),
@@ -27,7 +26,7 @@ export function authRouter(db: Database, config: AppConfig, verifier: GoogleVeri
   const router = Router();
 
   const currentUser = async (userId: string) => {
-    const user = (await db.select({ id: users.id, email: users.email, displayName: users.displayName, avatarUrl: users.avatarUrl, avatarId: users.avatarId, institution: users.institution, campus: users.campus, graduationYear: users.graduationYear, phoneVerifiedAt: users.phoneVerifiedAt, phoneE164: users.phoneE164, studentEmailCiphertext: users.studentEmailCiphertext, studentEmailDomain: users.studentEmailDomain, studentEmailVerifiedAt: users.studentEmailVerifiedAt, studentEmailExpiresAt: users.studentEmailExpiresAt, adultAttestedAt: users.adultAttestedAt, onboardingComplete: users.onboardingComplete, suspendedAt: users.suspendedAt, createdAt: users.createdAt }).from(users).where(and(eq(users.id, userId), isNull(users.deletedAt), isNull(users.closedAt))).limit(1))[0];
+    const user = (await db.select({ id: users.id, email: users.email, displayName: users.displayName, avatarId: users.avatarId, institution: users.institution, campus: users.campus, graduationYear: users.graduationYear, phoneVerifiedAt: users.phoneVerifiedAt, phoneE164: users.phoneE164, studentEmailCiphertext: users.studentEmailCiphertext, studentEmailDomain: users.studentEmailDomain, studentEmailVerifiedAt: users.studentEmailVerifiedAt, studentEmailExpiresAt: users.studentEmailExpiresAt, adultAttestedAt: users.adultAttestedAt, onboardingComplete: users.onboardingComplete, suspendedAt: users.suspendedAt, createdAt: users.createdAt }).from(users).where(and(eq(users.id, userId), isNull(users.deletedAt), isNull(users.closedAt))).limit(1))[0];
     if (!user) return null;
     const { studentEmailCiphertext, ...safeUser } = user;
     return {
@@ -58,7 +57,7 @@ export function authRouter(db: Database, config: AppConfig, verifier: GoogleVeri
         if (current.deletedAt && !current.closedAt) throw new AppError(410, 'ACCOUNT_DELETED', 'This account has already been deleted');
         const existing = (await tx.update(users).set({
           email: identity.email.toLowerCase(),
-          avatarUrl: identity.picture ?? null,
+          avatarId: current.avatarId ?? defaultAvatarId,
           lastActiveAt: now,
           ...(current.closedAt && reactivate ? { closedAt: null, deletedAt: null, purgeAfter: null } : {}),
           updatedAt: now,
@@ -66,7 +65,7 @@ export function authRouter(db: Database, config: AppConfig, verifier: GoogleVeri
         await tx.update(oauthAccounts).set({ emailAtLogin: identity.email.toLowerCase() }).where(and(eq(oauthAccounts.provider, 'google'), eq(oauthAccounts.providerSubject, identity.sub)));
         return { user: existing, reactivated: Boolean(current.closedAt && reactivate) };
       }
-      const created = (await tx.insert(users).values({ email: identity.email.toLowerCase(), displayName: identity.name, avatarUrl: identity.picture ?? null }).returning())[0]!;
+      const created = (await tx.insert(users).values({ email: identity.email.toLowerCase(), displayName: identity.name, avatarId: defaultAvatarId }).returning())[0]!;
       await tx.insert(oauthAccounts).values({ userId: created.id, providerSubject: identity.sub, emailAtLogin: identity.email.toLowerCase() });
       await tx.insert(userRoles).values({ userId: created.id, role: 'USER' });
       return { user: created, reactivated: false };
@@ -132,7 +131,6 @@ export function authRouter(db: Database, config: AppConfig, verifier: GoogleVeri
       const domainChanged = Boolean(current?.studentEmailDomain && current.studentEmailDomain !== academicDomain.domain);
       const result = (await tx.update(users).set({
         displayName: input.displayName,
-        ...(input.avatarUrl !== undefined ? { avatarUrl: input.avatarUrl } : {}),
         avatarId: input.avatarId,
         institution: academicDomain.institutionName,
         studentEmailDomain: academicDomain.domain,

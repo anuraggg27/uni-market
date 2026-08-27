@@ -31,10 +31,12 @@ describe("illustrated avatar persistence", () => {
     const secondSession = await login(ctx.app, "avatar-student");
     const me = await secondSession.agent.get("/api/auth/me").expect(200);
     expect(me.body.data.avatarId).toBe("avatar-06");
+    expect(me.body.data).not.toHaveProperty("avatarUrl");
 
     const seller = await secondSession.agent
       .get(`/api/sellers/${secondSession.user.id}`)
       .expect(200);
     expect(seller.body.data.avatarId).toBe("avatar-06");
+    expect(seller.body.data).not.toHaveProperty("avatarUrl");
   });
 });

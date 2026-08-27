@@ -188,7 +188,7 @@ No incident plan, CERT-In point of contact, six-hour reporting runbook, incident
 
 **Rating:** High · **Status:** Staged for 13 May 2027; current transparency risk · **Owner:** Privacy + Engineering
 
-The schema processes email, name, avatar, OAuth subject, institution, graduation year, phone, session metadata, IP hashes, messages, images, transactions, reviews, reports, support messages, and audit records. There is no data inventory mapped to purpose and authority; no itemised notice; and no user workflow for access, correction, erasure, consent withdrawal, grievance, or nomination.
+The schema processes email, name, a selected built-in avatar identifier, OAuth subject, institution, graduation year, phone, session metadata, IP hashes, messages, images, transactions, reviews, reports, support messages, and audit records. Google profile photos are neither retained nor displayed. There is no data inventory mapped to purpose and authority; no itemised notice; and no user workflow for access, correction, erasure, consent withdrawal, grievance, or nomination.
 
 **Remediation and acceptance:** Build a processing inventory and data-flow map; define purpose, necessity, source, recipients, storage region, and retention per field; deliver a clear itemised notice before collection; minimise optional profile fields; implement authenticated rights requests and identity verification proportionate to risk; and prepare for the security, breach, processor, consent, and one-year-log requirements commencing in 2027. Ensure withdrawal is as easy as giving consent where consent is relied upon.
 

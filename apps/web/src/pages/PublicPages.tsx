@@ -1024,7 +1024,6 @@ export function ListingPage() {
             <div className="flex items-center gap-3.5">
               <UserAvatar
                 avatarId={item.seller?.avatarId}
-                avatarUrl={item.seller?.avatarUrl}
                 displayName={sellerName}
                 size={56}
               />

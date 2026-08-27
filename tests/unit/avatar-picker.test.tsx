@@ -31,8 +31,23 @@ describe("illustrated avatar components", () => {
     expect(screen.getByRole("img", { name: "Asha Student's avatar" }))
       .toHaveAttribute("data-avatar-id", "avatar-03");
 
-    rerender(<UserAvatar avatarId={null} avatarUrl={null} displayName="New Student" />);
-    expect(screen.getByRole("img", { name: "New Student's avatar" }))
-      .toHaveAttribute("data-avatar-id", "fallback");
+    const LegacyUserAvatar = UserAvatar as React.ComponentType<
+      React.ComponentProps<typeof UserAvatar> & { avatarUrl: string }
+    >;
+    rerender(
+      <LegacyUserAvatar
+        avatarId={null}
+        avatarUrl="https://lh3.googleusercontent.com/private-photo"
+        displayName="New Student"
+      />,
+    );
+    const fallbackAvatar = screen.getByRole("img", {
+      name: "New Student's avatar",
+    });
+    expect(fallbackAvatar).toHaveAttribute("data-avatar-id", "avatar-01");
+    expect(fallbackAvatar.querySelector("img")).toHaveAttribute(
+      "src",
+      "/avatars/avatar-01.webp",
+    );
   });
 });

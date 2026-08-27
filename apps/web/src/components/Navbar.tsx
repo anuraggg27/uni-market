@@ -168,7 +168,6 @@ function ProfileMenu({ compact = false }: { compact?: boolean }) {
         {user ? (
           <UserAvatar
             avatarId={user.avatarId}
-            avatarUrl={user.avatarUrl}
             displayName={user.displayName}
             size={compact ? 28 : 32}
             decorative
@@ -186,7 +185,7 @@ function ProfileMenu({ compact = false }: { compact?: boolean }) {
         >
           {user ? (
             <div className="mb-1 grid grid-cols-[40px_minmax(0,1fr)] items-center gap-x-3 border-b border-line px-3 pb-3 pt-2">
-              <UserAvatar avatarId={user.avatarId} avatarUrl={user.avatarUrl} displayName={user.displayName} size={40} decorative />
+              <UserAvatar avatarId={user.avatarId} displayName={user.displayName} size={40} decorative />
               <strong className="col-start-2 block truncate text-[14px] font-semibold text-ink">
                 {user.displayName}
               </strong>

@@ -9,7 +9,6 @@ export interface CurrentUser {
   id: string;
   email: string;
   displayName: string;
-  avatarUrl: string | null;
   avatarId: AvatarId | null;
   institution: string | null;
   campus: string | null;

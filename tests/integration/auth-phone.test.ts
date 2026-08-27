@@ -22,6 +22,8 @@ describe('authentication acceptance',()=>{
   it('AUTH-02 Google registration creates a secure session and requests name confirmation',async()=>{
     const auth=await login(ctx.app,'new-student-google');
     expect(auth.user.onboardingComplete).toBe(false);
+    expect(auth.user.avatarId).toBe('avatar-01');
+    expect(auth.user).not.toHaveProperty('avatarUrl');
     const accounts=await ctx.db.select().from(schema.oauthAccounts);const sessions=await ctx.db.select().from(schema.sessions);
     expect(accounts).toHaveLength(1);expect(sessions).toHaveLength(1);expect(sessions[0]?.tokenHash).not.toContain('campus_session');
   });

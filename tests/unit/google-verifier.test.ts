@@ -37,7 +37,7 @@ describe("ProductionGoogleVerifier", () => {
     expect(verifyIdToken).not.toHaveBeenCalled();
   });
 
-  it("accepts verified Google claims and forwards the configured audience", async () => {
+  it("accepts verified Google claims without importing the profile photo", async () => {
     verifyIdToken.mockResolvedValue({
       getPayload: () => ({
         sub: "google-user-1",
@@ -55,7 +55,6 @@ describe("ProductionGoogleVerifier", () => {
       email: "student@example.edu",
       emailVerified: true,
       name: "Student Name",
-      picture: "https://images.example.test/avatar.png",
     });
     expect(verifyIdToken).toHaveBeenCalledWith({
       idToken: "valid-credential",

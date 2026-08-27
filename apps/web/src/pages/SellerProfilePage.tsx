@@ -47,7 +47,6 @@ type SellerReview = {
 type SellerProfile = {
   id: string;
   displayName: string;
-  avatarUrl: string | null;
   avatarId: string | null;
   institution: string | null;
   campus: string | null;
@@ -96,7 +95,6 @@ export function SellerProfilePage() {
         <div className="seller-profile-identity">
           <UserAvatar
             avatarId={seller.avatarId}
-            avatarUrl={seller.avatarUrl}
             displayName={seller.displayName}
             size={100}
             className="seller-profile-avatar"

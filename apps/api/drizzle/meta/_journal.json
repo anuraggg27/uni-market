@@ -71,6 +71,13 @@
       "when": 1787840985871,
       "tag": "0009_serious_talisman",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787847159863,
+      "tag": "0010_kind_runaways",
+      "breakpoints": true
     }
   ]
 }
