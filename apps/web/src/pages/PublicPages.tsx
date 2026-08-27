@@ -804,10 +804,9 @@ export function ListingPage() {
   const item = query.data!;
   const owner = user?.id === item.sellerId;
   const awaitingReview = Boolean(
-    owner &&
+    item.ownerPreview &&
       item.lifecycleState === "DRAFT" &&
-      item.moderationState === "PENDING" &&
-      item.submittedAt,
+      item.moderationState === "PENDING",
   );
   const images = Array.isArray(item.images) ? item.images : [];
   const activeImageUrl = images[activeImage]?.url as string | undefined;
@@ -965,7 +964,7 @@ export function ListingPage() {
               className="mb-0 mt-4 rounded-xl border border-line bg-surface-muted px-4 py-3 text-sm leading-relaxed text-ink"
               role="status"
             >
-              Your listing is under review. We’ll notify you as soon as it is approved.
+              Your listing is in review. We’ll notify you as soon as it is approved.
             </p>
           ) : null}
 
