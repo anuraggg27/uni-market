@@ -2244,12 +2244,14 @@ html.dark .confirm-warning {
   gap: 22px;
   margin-bottom: 22px;
 }
+.msg91-captcha-slot,
 .msg91-captcha-host {
   width: 100%;
   max-width: 100%;
   min-width: 0;
   overflow-x: auto;
 }
+.msg91-captcha-slot:empty,
 .msg91-captcha-host:empty {
   display: none;
 }

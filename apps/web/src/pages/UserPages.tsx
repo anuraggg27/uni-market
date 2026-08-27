@@ -38,6 +38,7 @@ import { useAuth } from "../auth";
 import { shouldFollowNewMessage } from "../chat-scroll";
 import { pendingContact } from "../contact-intent";
 import {
+  detachMsg91Captcha,
   initializeMsg91,
   msg91AccessToken,
   msg91Identifier,
@@ -2458,12 +2459,6 @@ export function SettingsPage() {
       window.requestAnimationFrame(() => resolve());
     });
   }
-  function clearVerificationCaptcha(target: "phone" | "student") {
-    const captchaId = target === "phone"
-      ? "msg91-phone-captcha"
-      : "msg91-student-email-captcha";
-    document.getElementById(captchaId)?.replaceChildren();
-  }
   const send = useMutation({
     mutationFn: async () => {
       const provider = verificationConfig.data;
@@ -2498,7 +2493,7 @@ export function SettingsPage() {
       };
     },
     onSuccess: ({ retryAfter, requestId: nextRequestId }) => {
-      clearVerificationCaptcha("phone");
+      detachMsg91Captcha();
       setCodeSent(true);
       setResendCooldown(retryAfter);
       setRequestId(nextRequestId);
@@ -2522,7 +2517,7 @@ export function SettingsPage() {
       });
     },
     onSuccess: async () => {
-      clearVerificationCaptcha("phone");
+      detachMsg91Captcha();
       await refresh();
     },
   });
@@ -2560,7 +2555,7 @@ export function SettingsPage() {
       };
     },
     onSuccess: ({ retryAfter, requestId: nextRequestId }) => {
-      clearVerificationCaptcha("student");
+      detachMsg91Captcha();
       setStudentCodeSent(true);
       setStudentResendCooldown(retryAfter);
       setStudentRequestId(nextRequestId);
@@ -2584,7 +2579,7 @@ export function SettingsPage() {
       });
     },
     onSuccess: async () => {
-      clearVerificationCaptcha("student");
+      detachMsg91Captcha();
       await refresh();
     },
   });
@@ -2723,7 +2718,7 @@ export function SettingsPage() {
           <header><span className="settings-card-icon"><Smartphone aria-hidden="true" /></span><div><h2 id="phone-verification-title">Mobile Number</h2><p>Kept private and used for account trust.</p></div></header>
           {user?.phoneVerifiedAt ? <div className="verification-complete"><CheckCircle2 aria-hidden="true" /><div><strong>Your phone is verified</strong><span>Your Indian mobile number is confirmed.</span></div></div> : <div className="settings-card-form" onFocusCapture={() => setActiveVerification("phone")}>
             <label className="field"><span>Indian mobile number</span><input name="phone" type="tel" value={phone} onChange={(event) => { setPhone(event.target.value); if (codeSent) { setCodeSent(false); setCode(""); setRequestId(undefined); setResendCooldown(0); } }} placeholder="e.g. 98765 43210…" inputMode="tel" autoComplete="tel" disabled={send.isPending || verify.isPending} /></label>
-            {activeVerification === "phone" && !codeSent ? <div id="msg91-phone-captcha" className="msg91-captcha-host" /> : null}
+            {activeVerification === "phone" && !codeSent ? <div id="msg91-phone-captcha" className="msg91-captcha-slot" /> : null}
             <button type="button" className="button secondary" onClick={() => send.mutate()} disabled={verificationConfig.isPending || send.isPending || resendCooldown > 0}>{send.isPending ? "Sending…" : codeSent ? resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend Code" : "Send Code"}</button>
             {codeSent ? <><label className="field"><span>{otpLength}-digit code</span><input name="phoneCode" value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, otpLength))} inputMode="numeric" autoComplete="one-time-code" maxLength={otpLength} /></label><button type="button" className="button primary" onClick={() => verify.mutate()} disabled={verify.isPending || code.length !== otpLength || !/^\d+$/.test(code)}>{verify.isPending ? "Verifying…" : "Verify Phone"}</button></> : null}
             {send.error ? <p className="field-error" role="alert">{send.error.message}</p> : null}{verify.error ? <p className="field-error" role="alert">{verify.error.message}</p> : null}{verificationConfig.error ? <p className="field-error" role="alert">{verificationConfig.error.message}</p> : null}{activeVerification === "phone" && captchaInitializationError ? <p className="field-error" role="alert">{captchaInitializationError}</p> : null}
@@ -2735,7 +2730,7 @@ export function SettingsPage() {
           {user?.studentEmailVerifiedAt ? <div className="verification-complete"><CheckCircle2 aria-hidden="true" /><div><strong>{user.studentEmailMasked} is verified</strong><span>Valid until {user.studentEmailExpiresAt ? accountDateFormatter.format(new Date(user.studentEmailExpiresAt)) : "12 months after verification"}.</span></div></div> : <div className="settings-card-form" onFocusCapture={() => setActiveVerification("student")}>
             {academicDomains.isPending ? <Loading label="Loading student email domain" /> : selectedAcademicDomain ? <>
               <label className="field"><span>Student email</span><div className="student-email-address"><input aria-label="Student email" name="studentEmailLocalPart" type="text" value={studentEmailLocalPart} onChange={(event) => { setStudentEmailLocalPart(event.target.value.replace(/@.*$/, "")); setStudentCodeSent(false); setStudentCode(""); setStudentRequestId(undefined); setStudentResendCooldown(0); }} autoComplete="username" spellCheck={false} placeholder="your.name" /><span aria-hidden="true">@{selectedAcademicDomain.domain}</span></div></label>
-              {activeVerification === "student" && !studentCodeSent ? <div id="msg91-student-email-captcha" className="msg91-captcha-host" /> : null}
+              {activeVerification === "student" && !studentCodeSent ? <div id="msg91-student-email-captcha" className="msg91-captcha-slot" /> : null}
               <button type="button" className="button secondary" onClick={() => sendStudentCode.mutate()} disabled={studentVerificationConfig.isPending || sendStudentCode.isPending || !studentEmail || studentResendCooldown > 0}>{sendStudentCode.isPending ? "Sending…" : studentCodeSent ? studentResendCooldown > 0 ? `Resend in ${studentResendCooldown}s` : "Resend Code" : "Send Email Code"}</button>
             </> : <p className="verification-setup-note">Choose a supported college or institution in <Link to="/profile">your profile</Link> before verifying your student email.</p>}
             {studentCodeSent ? <><label className="field"><span>{studentOtpLength}-digit email code</span><input name="studentCode" value={studentCode} onChange={(event) => setStudentCode(event.target.value.replace(/\D/g, "").slice(0, studentOtpLength))} inputMode="numeric" autoComplete="one-time-code" maxLength={studentOtpLength} /></label><button type="button" className="button primary" onClick={() => verifyStudentEmail.mutate()} disabled={verifyStudentEmail.isPending || studentCode.length !== studentOtpLength}>{verifyStudentEmail.isPending ? "Verifying…" : "Verify Student Email"}</button></> : null}

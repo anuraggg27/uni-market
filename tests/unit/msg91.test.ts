@@ -11,10 +11,11 @@ import {
 
 afterEach(() => {
   document.body.replaceChildren();
-  delete window.initSendOTP;
-  delete window.sendOtp;
-  delete window.retryOtp;
-  delete window.verifyOtp;
+  for (const key of ["initSendOTP", "sendOtp", "retryOtp", "verifyOtp"] as const) {
+    const descriptor = Object.getOwnPropertyDescriptor(window, key);
+    if (descriptor?.configurable) Reflect.deleteProperty(window, key);
+    else if (descriptor?.writable) Reflect.set(window, key, undefined);
+  }
   vi.restoreAllMocks();
 });
 
@@ -36,7 +37,7 @@ describe("MSG91 client response handling", () => {
     );
   });
 
-  it("initializes MSG91 in the selected verification card", async () => {
+  it("initializes MSG91 once and moves its persistent captcha between cards", async () => {
     document.body.innerHTML = `
       <div id="msg91-phone-captcha"></div>
       <div id="msg91-student-email-captcha"></div>
@@ -49,6 +50,9 @@ describe("MSG91 client response handling", () => {
     const common = { widgetId: "widget", tokenAuth: "token" };
 
     await initializeMsg91({ ...common, captchaRenderId: "msg91-phone-captcha" });
+    expect(document.getElementById("msg91-verification-captcha")?.parentElement?.id).toBe(
+      "msg91-phone-captcha",
+    );
     await initializeMsg91({ ...common, captchaRenderId: "msg91-phone-captcha" });
     document.getElementById("msg91-phone-captcha")!.replaceWith(
       Object.assign(document.createElement("div"), { id: "msg91-phone-captcha" }),
@@ -56,29 +60,27 @@ describe("MSG91 client response handling", () => {
     await initializeMsg91({ ...common, captchaRenderId: "msg91-phone-captcha" });
     await initializeMsg91({ ...common, captchaRenderId: "msg91-student-email-captcha" });
 
-    expect(window.initSendOTP).toHaveBeenCalledTimes(3);
-    expect(window.initSendOTP).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ captchaRenderId: "msg91-phone-captcha" }),
+    expect(window.initSendOTP).toHaveBeenCalledTimes(1);
+    expect(window.initSendOTP).toHaveBeenCalledWith(
+      expect.objectContaining({ captchaRenderId: "msg91-verification-captcha" }),
     );
-    expect(window.initSendOTP).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ captchaRenderId: "msg91-phone-captcha" }),
-    );
-    expect(window.initSendOTP).toHaveBeenNthCalledWith(
-      3,
-      expect.objectContaining({ captchaRenderId: "msg91-student-email-captcha" }),
+    expect(document.getElementById("msg91-verification-captcha")?.parentElement?.id).toBe(
+      "msg91-student-email-captcha",
     );
   });
 
-  it("clears stale exposed methods before switching verification cards", async () => {
+  it("does not delete non-configurable methods exposed by MSG91", async () => {
     document.body.innerHTML = `
       <div id="msg91-phone-captcha"></div>
       <div id="msg91-student-email-captcha"></div>
     `;
-    const methodsPresentAtInitialization: boolean[] = [];
+    const staleSendOtp = vi.fn();
+    Object.defineProperty(window, "sendOtp", {
+      value: staleSendOtp,
+      writable: true,
+      configurable: false,
+    });
     window.initSendOTP = vi.fn(() => {
-      methodsPresentAtInitialization.push(Boolean(window.sendOtp));
       window.sendOtp = vi.fn();
       window.retryOtp = vi.fn();
       window.verifyOtp = vi.fn();
@@ -88,10 +90,11 @@ describe("MSG91 client response handling", () => {
     await initializeMsg91({ ...common, captchaRenderId: "msg91-phone-captcha" });
     await initializeMsg91({
       ...common,
-      captchaRenderId: "msg91-student-email-captcha",
+      captchaRenderId: "msg91-phone-captcha",
     });
 
-    expect(methodsPresentAtInitialization).toEqual([false, false]);
+    expect(window.initSendOTP).toHaveBeenCalledOnce();
+    expect(window.sendOtp).not.toBe(staleSendOtp);
   });
 
   it("rejects when the provider never settles its callback", async () => {

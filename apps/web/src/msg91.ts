@@ -34,15 +34,30 @@ declare global {
 
 const SCRIPT_URL = "https://verify.msg91.com/otp-provider.js";
 const CALLBACK_TIMEOUT_MS = 30_000;
+const CAPTCHA_HOST_ID = "msg91-verification-captcha";
 let scriptPromise: Promise<void> | null = null;
 let initializationPromise: Promise<void> | null = null;
 let initializationKey: string | null = null;
-let initializationHost: HTMLElement | null = null;
+let initializationComplete = false;
+let captchaHost: HTMLDivElement | null = null;
 
-function clearExposedMethods(): void {
-  delete window.sendOtp;
-  delete window.retryOtp;
-  delete window.verifyOtp;
+function exposedMethodsReady(): boolean {
+  return Boolean(window.sendOtp && window.retryOtp && window.verifyOtp);
+}
+
+function mountCaptchaHost(containerId: string): HTMLDivElement {
+  const container = document.getElementById(containerId);
+  if (!container) throw new Error("Verification form could not be found");
+  captchaHost ??= Object.assign(document.createElement("div"), {
+    id: CAPTCHA_HOST_ID,
+    className: "msg91-captcha-host",
+  });
+  container.append(captchaHost);
+  return captchaHost;
+}
+
+export function detachMsg91Captcha(): void {
+  captchaHost?.remove();
 }
 
 function loadScript(): Promise<void> {
@@ -80,7 +95,7 @@ function waitForMethods(): Promise<void> {
   const deadline = Date.now() + 10_000;
   return new Promise((resolve, reject) => {
     const check = () => {
-      if (window.sendOtp && window.retryOtp && window.verifyOtp) {
+      if (exposedMethodsReady()) {
         resolve();
         return;
       }
@@ -99,19 +114,25 @@ export function initializeMsg91(input: {
   tokenAuth: string;
   captchaRenderId: string;
 }): Promise<void> {
-  const nextKey = `${input.widgetId}:${input.tokenAuth}:${input.captchaRenderId}`;
-  const requestedHost = document.getElementById(input.captchaRenderId);
-  if (
-    initializationPromise &&
-    initializationKey === nextKey &&
-    requestedHost === initializationHost
-  ) {
+  const nextKey = `${input.widgetId}:${input.tokenAuth}`;
+  mountCaptchaHost(input.captchaRenderId);
+  if (initializationComplete && !exposedMethodsReady()) {
+    initializationPromise = null;
+    initializationKey = null;
+    initializationComplete = false;
+  }
+  if (initializationPromise && initializationKey === nextKey) {
     return initializationPromise;
+  }
+
+  if (initializationPromise && initializationKey !== nextKey) {
+    return Promise.reject(
+      new Error("Verification configuration changed. Reload this page and try again."),
+    );
   }
 
   const previousInitialization = initializationPromise;
   initializationKey = nextKey;
-  initializationHost = requestedHost;
 
   initializationPromise = (async () => {
     await previousInitialization?.catch(() => undefined);
@@ -119,17 +140,13 @@ export function initializeMsg91(input: {
     if (!window.initSendOTP) {
       throw new Error("Verification could not be initialized");
     }
-    const captchaHost = requestedHost ?? document.getElementById(input.captchaRenderId);
-    if (!captchaHost) {
+    if (!captchaHost?.isConnected) {
       throw new Error("Verification form could not be found");
     }
     captchaHost.replaceChildren();
-    // MSG91 replaces its provider element asynchronously. Without clearing the
-    // old globals, readiness can resolve against the destroyed phone widget
-    // before the student-email widget has exposed its own methods.
-    clearExposedMethods();
     window.initSendOTP({
       ...input,
+      captchaRenderId: CAPTCHA_HOST_ID,
       exposeMethods: true,
       // Current MSG91 builds require both callbacks during initialization,
       // even when each exposed method supplies its own callbacks.
@@ -137,11 +154,12 @@ export function initializeMsg91(input: {
       failure: () => undefined,
     });
     await waitForMethods();
+    initializationComplete = true;
   })().catch((error) => {
     if (initializationKey === nextKey) {
       initializationPromise = null;
       initializationKey = null;
-      initializationHost = null;
+      initializationComplete = false;
     }
     throw error;
   });
