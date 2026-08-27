@@ -27,14 +27,14 @@ export function uploadsRouter(db: Database, config: AppConfig, storage: StorageS
 
   router.post('/uploads/listings/:listingId/presign', requireVerified, asyncRoute(async (req, res) => {
     const listingId = idSchema.parse(req.params.listingId);
-    const input = z.object({ mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']), byteSize: z.number().int().positive(), syntheticStatus: z.enum(['NOT_SYNTHETIC', 'SYNTHETIC_OR_MATERIALLY_ALTERED']) }).parse(req.body);
+    const input = z.object({ mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']), byteSize: z.number().int().positive() }).strict().parse(req.body);
     const listing = (await db.select().from(listings).where(and(eq(listings.id, listingId), eq(listings.sellerId, req.auth!.userId), isNull(listings.deletedAt))).limit(1))[0];
     if (!listing) throw new AppError(404, 'LISTING_NOT_FOUND', 'Listing not found');
     if (['SOLD', 'RESERVED'].includes(listing.lifecycleState)) throw new AppError(409, 'LISTING_LOCKED', 'Images cannot be changed now');
     const existing = await db.select({ value: count() }).from(listingImages).where(and(eq(listingImages.listingId, listingId), isNull(listingImages.deletedAt)));
     if ((existing[0]?.value ?? 0) >= config.MAX_LISTING_IMAGES) throw new AppError(400, 'IMAGE_LIMIT_REACHED', `A listing can have up to ${config.MAX_LISTING_IMAGES} images`);
     const ticket = await storage.createUploadTicket(req.auth!.userId, listingId, input.mimeType, input.byteSize);
-    const image = (await db.insert(listingImages).values({ listingId, ownerId: req.auth!.userId, tempKey: ticket.tempKey, mimeType: input.mimeType, byteSize: input.byteSize, position: Number(existing[0]?.value ?? 0), syntheticStatus: input.syntheticStatus, syntheticDeclaredAt: new Date() }).returning({ id: listingImages.id, provenanceId: listingImages.provenanceId }))[0]!;
+    const image = (await db.insert(listingImages).values({ listingId, ownerId: req.auth!.userId, tempKey: ticket.tempKey, mimeType: input.mimeType, byteSize: input.byteSize, position: Number(existing[0]?.value ?? 0), syntheticStatus: 'NOT_SYNTHETIC', syntheticDeclaredAt: new Date() }).returning({ id: listingImages.id }))[0]!;
     res.status(201).json({ data: { imageId: image.id, ...ticket } });
   }));
 
@@ -44,7 +44,7 @@ export function uploadsRouter(db: Database, config: AppConfig, storage: StorageS
     const row = (await db.select({ image: listingImages, listing: listings }).from(listingImages).innerJoin(listings, eq(listings.id, listingImages.listingId)).where(and(eq(listingImages.id, imageId), eq(listingImages.listingId, listingId), eq(listingImages.ownerId, req.auth!.userId), eq(listings.sellerId, req.auth!.userId), isNull(listingImages.deletedAt))).limit(1))[0];
     if (!row?.image.tempKey || row.image.finalizedAt) throw new AppError(404, 'UPLOAD_NOT_FOUND', 'Upload not found');
     let result;
-    try { result = await storage.finalize(row.image.tempKey, req.auth!.userId, listingId, row.image.provenanceId, row.image.syntheticStatus); }
+    try { result = await storage.finalize(row.image.tempKey, req.auth!.userId, listingId); }
     catch (error) {
       await db.update(listingImages).set({ deletedAt: new Date() }).where(eq(listingImages.id, imageId));
       throw error;

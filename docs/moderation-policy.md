@@ -9,7 +9,7 @@ Reject or remove explicit sexual content, alcohol, tobacco/nicotine, recreationa
 ## Review procedure
 
 1. Inspect title, description, category, condition, defects, price and meetup wording.
-2. Open every image at full size. Look for prohibited items, personal information, abuse, misleading substitutions and duplicates.
+2. Open every image at full size. Reject AI-generated or materially altered images, stock or catalogue substitutes, edits that conceal defects, prohibited content, personal information, abuse, misleading substitutions and duplicates. Approve only when the photos appear to show the actual item truthfully.
 3. Review the seller summary, previous rejection history and keyword flags.
 4. Record an internal factual reason for every decision. Rejection, change requests and removal also require clear user-visible guidance.
 5. Approve only when the entire listing complies. Approval activates the listing; never approve by automation.
@@ -23,4 +23,3 @@ Material edits to title, description, images, category, price, condition or defe
 Investigate only data relevant to the report. For conversations, use the captured context window; do not browse unrelated private messages. Hide abusive reviews with a recorded reason, recalculate public aggregates and audit access/action. Warnings and suspensions must be proportional, documented and preserve records for appeal/investigation. Escalate credible fraud, safety or illegal-content issues to a super admin and applicable authorities under organizational policy.
 
 Moderators must never promise payment protection, escrow, delivery or product authenticity. Remind users: inspect before paying, meet in a safe public place, and never share OTP or sensitive financial information.
-

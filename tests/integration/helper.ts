@@ -65,7 +65,7 @@ export async function verifyPhone(auth: Awaited<ReturnType<typeof login>>, phone
     acceptTerms: true,
     acknowledgePrivacy: true,
     acceptCommunityRules: true,
-    policyVersion: '2026-08-25',
+    policyVersion: '2026-08-27',
   });
   await auth.agent.post('/api/phone/send').set(auth.headers).send({ phone }).expect(200);
   await auth.agent.post('/api/phone/verify').set(auth.headers).send({ phone, code: '999999' }).expect(200);
@@ -83,7 +83,7 @@ export async function createDraft(auth: Awaited<ReturnType<typeof login>>, categ
 
 export async function uploadImage(auth: Awaited<ReturnType<typeof login>>, listingId: string, content?: Buffer) {
   const buffer = content ?? await sharp({ create: { width: 640, height: 480, channels: 3, background: '#56806a' } }).jpeg().toBuffer();
-  const presign = await auth.agent.post(`/api/uploads/listings/${listingId}/presign`).set(auth.headers).send({ mimeType: 'image/jpeg', byteSize: buffer.length, syntheticStatus: 'NOT_SYNTHETIC' }).expect(201);
+  const presign = await auth.agent.post(`/api/uploads/listings/${listingId}/presign`).set(auth.headers).send({ mimeType: 'image/jpeg', byteSize: buffer.length }).expect(201);
   const url = new URL(presign.body.data.uploadUrl);
   await auth.agent.put(`${url.pathname}${url.search}`).set('content-type', 'image/jpeg').send(buffer).expect(204);
   return auth.agent.post(`/api/uploads/listings/${listingId}/finalize`).set(auth.headers).send({ imageId: presign.body.data.imageId });

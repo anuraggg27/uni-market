@@ -475,30 +475,6 @@ button:disabled {
   font-size: 0.62rem;
   text-transform: uppercase;
 }
-.market-card-synthetic {
-  position: absolute;
-  z-index: 2;
-  right: 9px;
-  bottom: 9px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  max-width: calc(100% - 18px);
-  padding: 6px 8px;
-  border: 1px solid rgb(255 255 255 / 0.18);
-  border-radius: 7px;
-  background: rgb(8 14 10 / 0.78);
-  color: #f1f5f2;
-  font-size: 0.61rem;
-  font-weight: 650;
-  line-height: 1;
-  backdrop-filter: blur(10px);
-}
-.market-card-synthetic svg {
-  width: 12px;
-  height: 12px;
-  flex: 0 0 auto;
-}
 .market-card-content {
   min-width: 0;
   flex: 1;
@@ -2107,30 +2083,6 @@ html.dark .confirm-warning {
   font-weight: 650;
   white-space: nowrap;
 }
-.product-synthetic-label {
-  position: absolute;
-  bottom: 12px;
-  left: 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: calc(100% - 24px);
-  padding: 7px 10px;
-  border: 1px solid rgb(255 255 255 / 0.22);
-  border-radius: 8px;
-  background: rgb(16 18 17 / 0.82);
-  color: white;
-  font-size: 0.7rem;
-  font-weight: 650;
-  line-height: 1.25;
-  backdrop-filter: blur(10px);
-}
-.product-synthetic-label svg {
-  width: 14px;
-  height: 14px;
-  flex: 0 0 auto;
-}
-
 /* Account settings and marketplace eligibility */
 .settings-page {
   max-width: 980px;
@@ -3320,32 +3272,6 @@ textarea.control {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-.photo-ai-toggle {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  left: 8px;
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
-  align-items: center;
-  gap: 0;
-  padding: 7px 9px;
-  border: 1px solid rgb(255 255 255 / 0.28);
-  border-radius: 8px;
-  background: rgb(16 18 17 / 0.84);
-  color: white;
-  font-size: 0.66rem;
-  font-weight: 600;
-  line-height: 1.35;
-  cursor: pointer;
-  backdrop-filter: blur(8px);
-}
-.photo-ai-toggle input {
-  width: 15px;
-  height: 15px;
-  margin: 0;
-  accent-color: #fff;
 }
 .photo-remove {
   position: absolute;

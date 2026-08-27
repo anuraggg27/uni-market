@@ -64,6 +64,13 @@
       "when": 1787823622644,
       "tag": "0008_glorious_cerise",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787840985871,
+      "tag": "0009_serious_talisman",
+      "breakpoints": true
     }
   ]
 }

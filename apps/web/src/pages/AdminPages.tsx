@@ -345,7 +345,6 @@ export function AdminListingReview() {
           <dt>Defects</dt>
           <dd>{item.defects || "None disclosed"}</dd>
         </dl>
-        {item.images.some((image: any) => image.syntheticStatus === "SYNTHETIC_OR_MATERIALLY_ALTERED") ? <p><strong>Synthetic-image disclosure:</strong> one or more seller images are declared AI-generated or materially altered.</p> : null}
       </section>
       <section className="panel">
         <h3>Seller summary</h3>

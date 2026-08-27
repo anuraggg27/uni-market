@@ -51,7 +51,7 @@ const schema = z
     CUSTOMER_CARE_EMAIL: z.string().email().default("support@uni.rocks"),
     GRIEVANCE_EMAIL: z.string().email().default("grievance@uni.rocks"),
     PRIVACY_EMAIL: z.string().email().default("privacy@uni.rocks"),
-    LEGAL_POLICY_VERSION: z.string().default("2026-08-25"),
+    LEGAL_POLICY_VERSION: z.string().default("2026-08-27"),
     EMAIL_PROVIDER_NAME: z.string().default("Configured SMTP provider"),
     EMAIL_PROVIDER_REGION: z.string().default("Contract review required"),
     DATABASE_REGION: z.string().default("Contract review required"),
@@ -126,7 +126,7 @@ const schema = z
           });
         }
       }
-      if (env.LEGAL_POLICY_VERSION !== "2026-08-25") {
+      if (env.LEGAL_POLICY_VERSION !== "2026-08-27") {
         context.addIssue({ code: "custom", path: ["LEGAL_POLICY_VERSION"], message: "LEGAL_POLICY_VERSION must match the reviewed policy release" });
       }
       if (env.DATA_ENCRYPTION_KEY === "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef") {

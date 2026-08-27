@@ -119,7 +119,7 @@ export function TermsPage() {
     <h2>2. Independent platform</h2><p>Uni Market is an independent marketplace and is not affiliated with, endorsed by, sponsored by, or operated by any university, college, or educational institution. Institution names and email domains are used only to verify eligibility.</p>
     <h2>3. Uni Market’s role</h2><p>{data.transactionModel}</p>
     <h2>4. Your promises</h2>
-    <p>Every listing must be a used physical item you own or may lawfully sell. Its description, price, condition, defects, and images must be accurate. Declare synthetic or materially altered images, and never list a prohibited item.</p>
+    <p>Every listing must be a used physical item you own or may lawfully sell. Its description, price, condition, defects, and images must be accurate. Listing images must be genuine photos of the actual item; AI-generated or materially altered images are prohibited. Basic cropping, rotation, and lighting adjustments are allowed only when they do not misrepresent the item. Never list a prohibited item.</p>
     <h2>5. Moderation & enforcement</h2>
     <p>We may review, reject, label, restrict, preserve, or remove content; suspend or close accounts; prevent risky messages; cooperate with valid legal process; and preserve records under a legal hold. Automated rules can flag risk, but staff review material enforcement decisions.</p>
     <h2>6. Liability</h2>
@@ -141,6 +141,7 @@ export function PrivacyPage() {
 export function CommunityRulesPage() {
   return <LegalPage title="Community Rules" summary="Simple standards for honest listings, respectful conversation, and safer exchanges.">{() => <>
     <h2>Be honest & respectful</h2><p>Do not impersonate another person, misrepresent affiliation, manipulate reviews, spam, harass, threaten, discriminate, dox, or publish another person’s intimate or private information. Do not evade a suspension or coordinate deceptive accounts.</p>
+    <h2>Use genuine listing photos</h2><p>Listing photos must show the actual item being offered. Do not use AI-generated images, materially alter an item’s appearance, conceal defects, or substitute stock or catalogue images for the item.</p>
     <h2>Keep exchanges safe</h2><p>Never request or share an OTP, password, recovery code, card PIN, or remote-access credentials. Do not demand advance fees or use fabricated payment screenshots. Inspect the item before paying and meet in a well-lit public place.</p>
     <h2>Report urgent harm</h2><p>Use the <Link to="/grievance">safety reporting form</Link> for child-safety material, non-consensual intimate imagery, sexual impersonation, credible threats, doxxing, or identity impersonation. If anyone is in immediate danger, contact local emergency services or law enforcement first.</p>
   </>}</LegalPage>;
@@ -153,6 +154,7 @@ export function ProhibitedItemsPage() {
     <ul>
       <li><strong>Dangerous or regulated goods:</strong> weapons, ammunition, explosives, fireworks, drugs, tobacco, vapes, alcohol, unlawfully offered medicines or medical devices, hazardous materials, and recalled goods.</li>
       <li><strong>Stolen or deceptive goods:</strong> stolen property, counterfeits, piracy devices, forged documents, government IDs, SIM cards, and bank or payment accounts.</li>
+      <li><strong>Misleading listing media:</strong> AI-generated or materially altered product images, stock or catalogue images presented as the actual item, and edits that conceal defects or misrepresent condition.</li>
       <li><strong>Exploitative or invasive material:</strong> pornography, sexual services, child sexual abuse material, non-consensual intimate imagery, hate or extremist material, personal data, and surveillance tools offered for misuse.</li>
       <li><strong>Academic misconduct:</strong> exam papers, answer keys, assignment-writing, fabricated certificates, and credentials.</li>
       <li><strong>Wildlife or human material:</strong> human remains, animals, wildlife products, or anything whose sale or possession is unlawful.</li>
@@ -164,7 +166,7 @@ export function ProhibitedItemsPage() {
 export function SellerPolicyPage() {
   return <LegalPage title="Seller Policy" summary="What every seller must disclose before a listing can go live.">{() => <>
     <p>Before saving or submitting a listing, confirm lawful ownership, that the item is a used physical good, that the description is accurate, and that you accept this policy.</p>
-    <h2>Describe the actual item</h2><p>Disclose its condition, material defects, working status, inclusions, price or price range, pickup area, and whether each image is synthetic or materially altered. Images must depict the actual item unless clearly labelled.</p>
+    <h2>Describe and photograph the actual item</h2><p>Disclose its condition, material defects, working status, inclusions, price or price range, and pickup area. Every listing image must be a genuine photo of the actual item. AI-generated or materially altered images, stock photos, catalogue images, and edits that conceal defects or misrepresent condition are prohibited. Basic cropping, rotation, and lighting adjustments are allowed only when they remain truthful.</p>
     <h2>You are responsible for the sale</h2><p>The seller—not Uni Market—is responsible for title, legality, authenticity, description, agreed price, handover, promised returns, tax obligations, and any consumer-law obligations that apply to the seller.</p>
   </>}</LegalPage>;
 }

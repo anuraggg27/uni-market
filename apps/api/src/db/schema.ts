@@ -185,6 +185,7 @@ export const listings = pgTable('listings', {
   reservedBuyerId: uuid('reserved_buyer_id').references(() => users.id),
   viewCount: integer('view_count').default(0).notNull(),
   favouriteCount: integer('favourite_count').default(0).notNull(),
+  submittedAt: timestamp('submitted_at', { withTimezone: true }),
   approvedAt: timestamp('approved_at', { withTimezone: true }),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
   withdrawnAt: timestamp('withdrawn_at', { withTimezone: true }),

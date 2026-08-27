@@ -118,7 +118,6 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
     enabled: edit && Boolean(listingId),
   });
   const [images, setImages] = useState<File[]>([]);
-  const [imageSynthetic, setImageSynthetic] = useState<boolean[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -180,20 +179,18 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
     if (!files?.length) return;
     const selectedFiles = Array.from(files);
     setImages((current) => [...current, ...selectedFiles].slice(0, 8));
-    setImageSynthetic((current) => [...current, ...selectedFiles.map(() => false)].slice(0, 8));
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
   function removeImage(index: number) {
     setImages((current) =>
       current.filter((_, imageIndex) => imageIndex !== index),
     );
-    setImageSynthetic((current) => current.filter((_, imageIndex) => imageIndex !== index));
   }
   async function uploadFiles(id: string) {
-    for (const [index, file] of images.entries()) {
+    for (const file of images) {
       const ticket = await api<any>(`/api/uploads/listings/${id}/presign`, {
         method: "POST",
-        ...jsonBody({ mimeType: file.type, byteSize: file.size, syntheticStatus: imageSynthetic[index] ? "SYNTHETIC_OR_MATERIALLY_ALTERED" : "NOT_SYNTHETIC" }),
+        ...jsonBody({ mimeType: file.type, byteSize: file.size }),
       });
       const uploaded = await fetch(ticket.uploadUrl, {
         method: "PUT",
@@ -255,7 +252,7 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
         <fieldset className="listing-section listing-photo-section">
           <legend>Photos</legend>
           <p className="listing-section-intro">
-            Add clear photos of your product.
+            Add clear, genuine photos of the actual item. AI-generated or materially altered images are not allowed.
           </p>
           <div className="photo-uploader">
             <input
@@ -297,10 +294,6 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
                     alt={`Selected product image: ${file.name}`}
                   />
                   {index === 0 ? <figcaption>Cover</figcaption> : null}
-                  <label className="photo-ai-toggle">
-                    <input type="checkbox" checked={imageSynthetic[index] ?? false} onChange={(event) => setImageSynthetic((current) => current.map((value, imageIndex) => imageIndex === index ? event.target.checked : value))} />
-                    <span>AI-generated or materially altered</span>
-                  </label>
                   <button
                     type="button"
                     className="photo-remove"
@@ -471,7 +464,7 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
           <div className="declaration-list">
             <label className="declaration-row"><input type="checkbox" {...form.register("ownershipAttested")} /><span><strong>I own this used physical item and may legally sell it</strong><small>It is not a service, digital product, ticket, account, credential, or new retail item.</small></span></label>
             <FieldError>{form.formState.errors.ownershipAttested?.message ?? form.formState.errors.usedPhysicalGoodsAttested?.message}</FieldError>
-            <div className="declaration-row declaration-policy-row"><input id="sellerPolicyAccepted" type="checkbox" {...form.register("sellerPolicyAccepted")} /><span><label htmlFor="sellerPolicyAccepted"><strong>This listing is accurate and follows the seller rules</strong></label><small>The description, condition, defects, price, and images are accurate. I accept the <Link to="/seller-policy" target="_blank" rel="noreferrer">Seller Policy</Link> and <Link to="/prohibited-items" target="_blank" rel="noreferrer">Prohibited Items</Link> rules.</small></span></div>
+            <div className="declaration-row declaration-policy-row"><input id="sellerPolicyAccepted" type="checkbox" {...form.register("sellerPolicyAccepted")} /><span><label htmlFor="sellerPolicyAccepted"><strong>This listing is accurate and follows the seller rules</strong></label><small>The description, condition, defects, and price are accurate, and the images are genuine photos of the actual item. I accept the <Link to="/seller-policy" target="_blank" rel="noreferrer">Seller Policy</Link> and <Link to="/prohibited-items" target="_blank" rel="noreferrer">Prohibited Items</Link> rules.</small></span></div>
             <FieldError>{form.formState.errors.sellerPolicyAccepted?.message ?? form.formState.errors.accurateDescriptionAttested?.message}</FieldError>
           </div>
         </fieldset>
@@ -505,7 +498,8 @@ function getListingDisplayStatus(item: any): string {
   if (item.moderationState === "REJECTED") return "REJECTED";
   if (
     item.lifecycleState === "DRAFT" &&
-    item.moderationState === "PENDING"
+    item.moderationState === "PENDING" &&
+    item.submittedAt
   ) {
     return "PENDING";
   }
@@ -517,10 +511,18 @@ function matchesListingTab(item: any, tab: ListingTab): boolean {
   if (tab === "PENDING") {
     return (
       item.moderationState === "PENDING" &&
-      item.lifecycleState === "DRAFT"
+      item.lifecycleState === "DRAFT" &&
+      Boolean(item.submittedAt)
     );
   }
   if (tab === "REJECTED") return item.moderationState === "REJECTED";
+  if (tab === "DRAFT") {
+    return (
+      item.lifecycleState === "DRAFT" &&
+      item.moderationState === "PENDING" &&
+      !item.submittedAt
+    );
+  }
   return item.lifecycleState === tab;
 }
 
@@ -695,7 +697,11 @@ export function MyListingsPage() {
         <div className="my-listings-grid">
           {items.map((item) => {
             const displayStatus = getListingDisplayStatus(item);
-            const canSubmit = item.lifecycleState === "DRAFT";
+            const canSubmit =
+              item.lifecycleState === "DRAFT" &&
+              !(
+                item.moderationState === "PENDING" && item.submittedAt
+              );
             const continueEditing = ["DRAFT", "REJECTED"].includes(
               displayStatus,
             );

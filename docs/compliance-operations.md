@@ -31,7 +31,7 @@ At the owner's direction, the public application and deployment configuration do
 
 - Treat term and chat detections as signals. Listing block rules stop clearly prohibited submissions; flagged cases still require human review. Chat warnings record risk codes and acknowledgement without making a second copy of message content.
 - Ban attempts to disguise prohibited goods, new goods, services, digital goods, accounts, tickets, credentials, academic-misconduct products, weapons, regulated substances, counterfeit/stolen goods, intimate content, or personal data.
-- Check synthetic-image labels and the actual-item requirement. Processed declared images carry platform provenance metadata; the platform does not claim a classifier can reliably determine whether an image is AI-generated.
+- Reject AI-generated or materially altered listing images, stock or catalogue substitutes, and edits that conceal defects or misrepresent condition. Confirm that photos appear to show the actual item. The platform does not claim that automated processing can reliably detect AI-generated media, so this remains part of manual review.
 - Review staff roles at least quarterly. Record each outcome in the access-review register and remove unnecessary access immediately. Role changes revoke active sessions.
 
 ## Privacy, retention, and legal holds

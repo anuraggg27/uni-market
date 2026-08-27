@@ -9,9 +9,8 @@ export const transactionStatuses = ['REQUESTED', 'ACCEPTED', 'RESERVED', 'HANDED
 export const supportStatuses = ['OPEN', 'ASSIGNED', 'WAITING_FOR_USER', 'RESOLVED', 'CLOSED'] as const;
 export const reportReasons = ['CSAM_CHILD_SAFETY', 'NON_CONSENSUAL_INTIMATE_IMAGE', 'SEXUAL_IMPERSONATION', 'CREDIBLE_THREAT', 'DOXXING', 'IDENTITY_IMPERSONATION', 'EXPLICIT_CONTENT', 'SCAM', 'STOLEN_PRODUCT', 'COUNTERFEIT_PRODUCT', 'PROHIBITED_ITEM', 'UNLAWFUL_CONTENT', 'INTELLECTUAL_PROPERTY', 'PRIVACY', 'MISLEADING_INFORMATION', 'HARASSMENT', 'SPAM', 'DUPLICATE_LISTING', 'ALREADY_SOLD', 'WRONG_CATEGORY', 'UNSAFE_MEETUP', 'ACADEMIC_MISCONDUCT', 'COURT_GOVERNMENT_ORDER', 'OTHER'] as const;
 
-export const currentPolicyVersion = '2026-08-25';
+export const currentPolicyVersion = '2026-08-27';
 export const requiredOnboardingPolicies = ['TERMS', 'PRIVACY', 'COMMUNITY_RULES'] as const;
-export const syntheticStatuses = ['UNKNOWN', 'NOT_SYNTHETIC', 'SYNTHETIC_OR_MATERIALLY_ALTERED'] as const;
 export const avatarIds = [
   'avatar-01', 'avatar-02', 'avatar-03', 'avatar-04', 'avatar-05',
   'avatar-06', 'avatar-07', 'avatar-08', 'avatar-09', 'avatar-10',

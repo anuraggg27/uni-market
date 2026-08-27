@@ -94,7 +94,7 @@ The rules were amended on 10 February 2026. The implementation must be built aga
 | Preserve registration information after cancellation | 180 days |
 | Preserve removed content and associated records | 180 days, or longer when lawfully required |
 
-The 2026 amendments also introduce duties concerning synthetically generated information. Because users can upload images, the final control design must be reviewed against Rule 3(3), including prevention of specified unlawful synthetic information, visible labelling, and provenance/metadata for permitted synthetic information. The express user-declaration and declaration-verification duty in Rule 4(1A) applies to significant social media intermediaries; under the approved below-threshold assumption, a declaration here is a proposed control rather than a claim that Rule 4(1A) already applies. The current WebP re-encoding pipeline removes source metadata, so this cannot be treated as a policy-only issue.
+The 2026 amendments also introduce duties concerning synthetically generated information. Uni Market’s product policy prohibits AI-generated or materially altered listing images instead of offering a permitted-and-labelled upload path. Because users can still attempt to upload prohibited material, counsel must review the prohibition, manual moderation, reporting, removal, and legacy-record controls against Rule 3(3). The express user-declaration and declaration-verification duty in Rule 4(1A) applies to significant social media intermediaries; the approved design does not claim that the service is already subject to that threshold-specific duty. The WebP re-encoding pipeline removes source metadata and cannot reliably detect AI generation, so enforcement must not be described as automated detection.
 
 ### 5.2 Digital Personal Data Protection Act and Rules — staged readiness
 
@@ -160,13 +160,13 @@ Listings do not collect a seller undertaking to provide accurate information and
 
 **Remediation and acceptance:** Have counsel confirm application of the E-Commerce Rules to individual sellers. Add an enforceable seller declaration; truthful product/condition/ownership fields; any legally required seller and importer/manufacturer/product details; ranking and sponsored-treatment disclosure; complaint tracking; and concise role/transaction disclaimers at decision points. Do not use disclaimers to waive non-waivable consumer rights.
 
-### IND-06 — Synthetic-media compliance is not designed
+### IND-06 — Synthetic-media prohibition requires legal validation
 
 **Rating:** High · **Status:** Current rule, counsel interpretation required · **Owner:** Legal + Trust & Safety + Engineering
 
-The platform accepts listing images but captures no synthetic-media declaration and displays no label. `apps/api/src/services/storage.ts` rotates, resizes, and converts uploads to WebP; this sanitises images but normally strips embedded provenance metadata.
+The platform prohibits AI-generated and materially altered listing images in the Terms, Seller Policy, Community Rules, and Prohibited Items policy. The seller upload UI and API expose no synthetic-image option. New image records use the genuine-photo path, while submission, approval, public search, and public detail controls reject or hide legacy records marked synthetic or undeclared. Moderators must still inspect images because `apps/api/src/services/storage.ts` sanitises uploads but does not reliably determine whether an image was AI-generated.
 
-**Remediation and acceptance:** Obtain a written interpretation of current Rule 3(3). As a practical control, add an upload declaration even while below the significant-intermediary threshold; preserve a secured original or extracted provenance record where lawful and necessary; display a durable label when required; prevent removal of platform-applied labels; and include false declarations in enforcement rules. Balance provenance preservation with minimisation and image-privacy controls. Tests must verify the label survives every thumbnail and detail view. If the service reaches the significant-intermediary threshold, implement Rule 4(1A)'s declaration-verification requirements before crossing it.
+**Remediation and acceptance:** Obtain a written interpretation of current Rule 3(3) and confirm whether the prohibition and removal model is sufficient for this service. Train moderators to reject fabricated or materially altered listing media, keep a dedicated report/removal path, and test that prohibited or legacy-declared images cannot be submitted, approved, searched, or viewed publicly. Do not claim automated detection. If the service reaches the significant-intermediary threshold, reassess Rule 4(1A) before crossing it.
 
 ### IND-07 — Emergency and victim-content routes are incomplete
 
@@ -354,7 +354,7 @@ Add structured records such as:
 - `data_rights_requests`;
 - scoped `legal_holds`;
 - report SLA, escalation, notice, appeal, and disposition fields; and
-- synthetic-media declaration, label, provenance status, and moderator decision per image.
+- image-policy status and moderator decision records sufficient to prevent prohibited or legacy synthetic media from publication.
 
 Sensitive evidence should use isolated storage, short-lived access, explicit purpose checks, and audit logging—not ordinary listing-image paths.
 
@@ -385,7 +385,7 @@ Counsel and the security/privacy owners must approve this table before implement
 4. Enforce 18+ attestation and reviewed academic-email domains; migrate or restrict existing users.
 5. Add public/victim grievance intake, opaque receipts, current statutory clocks, pager escalation, GAC information, and appeals.
 6. Add emergency NCII/sexual-impersonation/CSAM/threat/doxxing/impersonation categories and counsel-approved handling runbooks.
-7. Obtain Rule 3(3) advice and implement synthetic-media declaration, labels, and a provenance-preserving architecture.
+7. Obtain Rule 3(3) advice and validate the AI-generated-image prohibition, manual review, reporting, removal, and legacy-record safeguards.
 8. Confirm marketplace classification and add seller, product, ranking, platform-role, and offline-transaction disclosures.
 9. Approve the prohibited/restricted-goods catalogue and moderator decision guide; disable unsafe categories pending capability.
 10. Establish the CERT-In point of contact, 180-day India log control, six-hour incident process, clock synchronisation, and incident exercise.
@@ -423,7 +423,7 @@ The launch gate should include at least these automated and tabletop cases:
 7. A general complaint and qualifying unlawful-content complaint receive the correct independent deadlines and overdue escalation.
 8. A lawful government/court notice reaches the three-hour workflow and preserves the original request, decision, and action.
 9. Reporter identity and attachments are not exposed to the reported user, public status endpoint, logs, or analytics.
-10. Synthetic-media declarations and required labels persist through upload, resize, thumbnails, search cards, and detail views.
+10. The upload interface and API offer no AI-image option, and prohibited or legacy synthetic/undeclared images cannot be submitted, approved, searched, or viewed publicly.
 11. Suspected illegal sexual media is quarantined with least-privilege access and no unnecessary staff copying.
 12. Account closure preserves only data covered by the approved 180-day/legal-hold rules and schedules everything else for deletion.
 13. Export excludes other users' private data, staff notes, secrets, and internal anti-abuse signals while covering the user's entitled data.

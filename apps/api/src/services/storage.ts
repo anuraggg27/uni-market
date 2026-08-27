@@ -50,7 +50,7 @@ export class StorageService {
     const path = this.localPath(params.key); await mkdir(dirname(path), { recursive: true }); await writeFile(path, buffer, { flag: 'wx' });
   }
 
-  async finalize(tempKey: string, ownerId: string, listingId: string, provenanceId: string, syntheticStatus: string): Promise<{ objectKey: string; mimeType: string; byteSize: number; width: number; height: number; sourceSha256: string; sourceProvenanceDetected: boolean }> {
+  async finalize(tempKey: string, ownerId: string, listingId: string): Promise<{ objectKey: string; mimeType: string; byteSize: number; width: number; height: number; sourceSha256: string; sourceProvenanceDetected: boolean }> {
     if (!tempKey.startsWith(`temporary/${ownerId}/${listingId}/`) || tempKey.includes('..')) throw new AppError(403, 'UPLOAD_FORBIDDEN', 'This upload does not belong to you');
     let buffer: Buffer;
     try {
@@ -66,10 +66,7 @@ export class StorageService {
       const input = sharp(buffer, { failOn: 'error', limitInputPixels: false });
       const metadata = await input.metadata();
       if (!metadata.width || !metadata.height) throw new AppError(400, 'INVALID_IMAGE', 'Image validation failed');
-      let pipeline = input.rotate().resize({ width: 2200, height: 2200, fit: 'inside', withoutEnlargement: true }).webp({ quality: 84 });
-      if (syntheticStatus === 'SYNTHETIC_OR_MATERIALLY_ALTERED') {
-        pipeline = pipeline.withXmp(`<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?><x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:um="https://uni.rocks/ns/provenance/1.0/" um:Synthetic="true" um:ProvenanceId="${provenanceId}"/></rdf:RDF></x:xmpmeta><?xpacket end="w"?>`);
-      }
+      const pipeline = input.rotate().resize({ width: 2200, height: 2200, fit: 'inside', withoutEnlargement: true }).webp({ quality: 84 });
       const sanitized = await pipeline.toBuffer();
       const finalMeta = await sharp(sanitized).metadata();
       const objectKey = `listings/${listingId}/${randomUUID()}.webp`;

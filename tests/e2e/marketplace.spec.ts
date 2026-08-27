@@ -38,7 +38,7 @@ async function signIn(
         acceptTerms: true,
         acknowledgePrivacy: true,
         acceptCommunityRules: true,
-        policyVersion: "2026-08-25",
+        policyVersion: "2026-08-27",
       },
     });
     expect(onboarding.ok()).toBeTruthy();
@@ -118,7 +118,7 @@ async function createListing(
         `${API}/api/uploads/listings/${listing.id}/presign`,
         {
           headers: auth.headers,
-          data: { mimeType: "image/jpeg", byteSize: image.length, syntheticStatus: "NOT_SYNTHETIC" },
+          data: { mimeType: "image/jpeg", byteSize: image.length },
         },
       )
     ).json()
@@ -239,6 +239,8 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   await page.goto(marketplacePath("/my-listings"));
   await page.getByRole("button", { name: "Submit for review" }).click();
   await expect(page.getByText("PENDING").first()).toBeVisible();
+  await page.goto(marketplacePath(`/listing/${listingId}`));
+  await expect(page.getByText("Your listing is under review. We’ll notify you as soon as it is approved.")).toBeVisible();
   const mod = await browser.newContext();
   await approve(mod, listingId);
   await page.goto(marketplacePath(`/listing/${listingId}`));

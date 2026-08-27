@@ -20,7 +20,7 @@ Student-email codes expire after ten minutes. Email addresses are encrypted at r
 
 ## Uploads and R2
 
-Only the draft owner can request/finalize/delete an image. Keys are random and owner-scoped; original names are ignored. Finalization checks recorded ownership, size, magic bytes, allowlisted format and dimensions, re-encodes through Sharp, strips EXIF and deletes temporary objects. Each image requires a seller declaration; synthetic or materially altered images receive a public label and embedded platform provenance identifier. Pending assets are private and available only through short signed reads. SVG, GIF, PDF, HTML, spoofed and oversized payloads are rejected.
+Only the draft owner can request/finalize/delete an image. Keys are random and owner-scoped; original names are ignored. Finalization checks recorded ownership, size, magic bytes, allowlisted format and dimensions, re-encodes through Sharp, strips EXIF and deletes temporary objects. AI-generated or materially altered listing images are prohibited by the Terms, Seller Policy, Community Rules, and Prohibited Items policy. The upload API exposes no synthetic-image declaration or labelling path, and legacy images recorded as synthetic or undeclared cannot be submitted. Pending assets are private and available only through short signed reads. SVG, GIF, PDF, HTML, spoofed and oversized payloads are rejected.
 
 Use `infra/r2-cors.json` with the exact deployed origin. A scheduled cleanup should remove `temporary/` objects older than one hour; R2 lifecycle rules may provide a second safety net.
 

@@ -803,9 +803,14 @@ export function ListingPage() {
     );
   const item = query.data!;
   const owner = user?.id === item.sellerId;
+  const awaitingReview = Boolean(
+    owner &&
+      item.lifecycleState === "DRAFT" &&
+      item.moderationState === "PENDING" &&
+      item.submittedAt,
+  );
   const images = Array.isArray(item.images) ? item.images : [];
   const activeImageUrl = images[activeImage]?.url as string | undefined;
-  const activeImageSynthetic = images[activeImage]?.syntheticStatus === "SYNTHETIC_OR_MATERIALLY_ALTERED";
   const listedAt = new Date(item.approvedAt ?? item.createdAt);
   const listedLabel = Number.isNaN(listedAt.getTime())
     ? null
@@ -912,7 +917,6 @@ export function ListingPage() {
                 <span className="text-sm">Image unavailable</span>
               </div>
             )}
-            {activeImageSynthetic ? <span className="product-synthetic-label"><Sparkles aria-hidden="true" /> AI-generated or materially altered image</span> : null}
           </div>
 
           {images.length > 1 ? (
@@ -950,10 +954,20 @@ export function ListingPage() {
         <aside className="mt-10 min-w-0 lg:mt-0">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge value={item.lifecycleState} />
-            {item.ownerPreview ? (
+            {item.ownerPreview &&
+            (item.moderationState !== "PENDING" || awaitingReview) ? (
               <StatusBadge value={item.moderationState} />
             ) : null}
           </div>
+
+          {awaitingReview ? (
+            <p
+              className="mb-0 mt-4 rounded-xl border border-line bg-surface-muted px-4 py-3 text-sm leading-relaxed text-ink"
+              role="status"
+            >
+              Your listing is under review. We’ll notify you as soon as it is approved.
+            </p>
+          ) : null}
 
           {item.ownerPreview && item.rejectionReason ? (
             <div

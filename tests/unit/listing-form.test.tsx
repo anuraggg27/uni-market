@@ -144,7 +144,7 @@ describe("ListingFormPage photos", () => {
       ),
     );
     const presignCall = apiMock.mock.calls.find(([path]) => path === "/api/uploads/listings/listing-1/presign");
-    expect(JSON.parse(String(presignCall?.[1]?.body))).toMatchObject({ syntheticStatus: "NOT_SYNTHETIC" });
+    expect(JSON.parse(String(presignCall?.[1]?.body))).toEqual({ mimeType: "image/jpeg", byteSize: book.size });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
       "https://uploads.example.test/image",

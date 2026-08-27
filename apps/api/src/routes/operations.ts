@@ -9,6 +9,7 @@ import {
   ilike,
   inArray,
   isNull,
+  isNotNull,
   ne,
   or,
   sql,
@@ -23,6 +24,7 @@ import {
   conversations,
   emailOutbox,
   listings,
+  listingImages,
   messages,
   moderationNotes,
   notifications,
@@ -550,7 +552,14 @@ export function adminRouter(db: Database, config: AppConfig): Router {
         metric(users, gte(users.createdAt, monthAgo)),
         metric(users, sql`${users.phoneVerifiedAt} is not null`),
         metric(users, gte(users.lastActiveAt, dayAgo)),
-        metric(listings, eq(listings.moderationState, "PENDING")),
+        metric(
+          listings,
+          and(
+            eq(listings.moderationState, "PENDING"),
+            isNotNull(listings.submittedAt),
+            isNull(listings.deletedAt),
+          ),
+        ),
         metric(
           listings,
           and(
@@ -621,7 +630,7 @@ export function adminRouter(db: Database, config: AppConfig): Router {
           flagged: z.enum(["true", "false"]).optional(),
         })
         .parse(req.query);
-      const conditions = [eq(listings.moderationState, "PENDING"), isNull(listings.deletedAt)];
+      const conditions = [eq(listings.moderationState, "PENDING"), isNotNull(listings.submittedAt), isNull(listings.deletedAt)];
       if (query.seller) conditions.push(eq(listings.sellerId, query.seller));
       if (query.category)
         conditions.push(eq(listings.categoryId, query.category));
@@ -748,6 +757,12 @@ export function adminRouter(db: Database, config: AppConfig): Router {
       )[0];
       if (!current)
         throw new AppError(404, "LISTING_NOT_FOUND", "Listing not found");
+      if (input.decision === "APPROVE" && !current.submittedAt)
+        throw new AppError(
+          409,
+          "LISTING_NOT_SUBMITTED",
+          "This listing has not been submitted for review",
+        );
       if (input.decision !== "APPROVE" && input.internalReason.length < 3)
         throw new AppError(
           400,
@@ -760,6 +775,25 @@ export function adminRouter(db: Database, config: AppConfig): Router {
           "REASON_REQUIRED",
           "A user-visible reason is required",
         );
+      if (input.decision === "APPROVE") {
+        const disallowedImages = await db
+          .select({ id: listingImages.id })
+          .from(listingImages)
+          .where(
+            and(
+              eq(listingImages.listingId, id),
+              isNull(listingImages.deletedAt),
+              ne(listingImages.syntheticStatus, "NOT_SYNTHETIC"),
+            ),
+          )
+          .limit(1);
+        if (disallowedImages.length)
+          throw new AppError(
+            400,
+            "AI_GENERATED_IMAGE_NOT_ALLOWED",
+            "AI-generated or materially altered listing images are not allowed",
+          );
+      }
       const patch =
         input.decision === "APPROVE"
           ? {
