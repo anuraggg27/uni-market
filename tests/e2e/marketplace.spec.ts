@@ -26,9 +26,10 @@ async function signIn(
     const academicDomains = (await (await request.get(`${API}/api/academic-domains`)).json()).data as Array<{ id: string; domain: string }>;
     const academicDomain = academicDomains.find((entry) => entry.domain === "students.example.edu");
     if (!academicDomain) throw new Error("Expected E2E academic domain");
-    await request.post(`${API}/api/onboarding/complete`, {
+    const onboarding = await request.post(`${API}/api/onboarding/complete`, {
       headers,
       data: {
+        avatarId: "avatar-01",
         displayName: credential,
         academicDomainId: academicDomain.id,
         campus: "Main campus",
@@ -40,6 +41,7 @@ async function signIn(
         policyVersion: "2026-08-25",
       },
     });
+    expect(onboarding.ok()).toBeTruthy();
   }
   if (phone) {
     const suffix = String(
