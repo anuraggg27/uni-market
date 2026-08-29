@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Building2,
   CalendarDays,
@@ -714,9 +715,6 @@ export function ListingPage() {
   const [reportOpen, setReportOpen] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
   const [savedOverride, setSavedOverride] = useState<boolean | null>(null);
-  const [savedToast, setSavedToast] = useState<"saved" | "removed" | null>(
-    null,
-  );
   const query = useQuery({
     queryKey: ["listing", listingId],
     queryFn: () => api<any>(`/api/listings/${listingId}`),
@@ -743,15 +741,10 @@ export function ListingPage() {
     onError: (_error, _nextSaved, context) =>
       setSavedOverride(context?.previousSaved ?? null),
     onSuccess: (_data, nextSaved) => {
-      setSavedToast(nextSaved ? "saved" : "removed");
+      toast.success(nextSaved ? "Saved to your favourites" : "Removed from saved");
       void client.invalidateQueries({ queryKey: ["favourites"] });
     },
   });
-  useEffect(() => {
-    if (!savedToast) return;
-    const timeout = window.setTimeout(() => setSavedToast(null), 2400);
-    return () => window.clearTimeout(timeout);
-  }, [savedToast]);
   const contact = useMutation({
     mutationFn: () =>
       api<any>("/api/conversations", {
@@ -789,7 +782,10 @@ export function ListingPage() {
         method: "POST",
         ...jsonBody({ targetType: "LISTING", targetId: listingId, ...data }),
       }),
-    onSuccess: () => setReportOpen(false),
+    onSuccess: () => {
+      setReportOpen(false);
+      toast.success("Report submitted for review");
+    },
   });
   if (query.isLoading)
     return (
@@ -1261,23 +1257,6 @@ export function ListingPage() {
           </section>
         ) : null}
       </div>
-      {savedToast ? (
-        <div
-          className="saved-toast fixed bottom-20 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2.5 whitespace-nowrap rounded-full bg-brand px-4 py-3 text-[13px] font-medium text-on-brand shadow-[0_10px_30px_rgba(0,0,0,0.2)] sm:bottom-6"
-          role="status"
-          aria-live="polite"
-        >
-          <Heart
-            className={`size-4 text-[#ef4444] ${
-              savedToast === "saved" ? "fill-[#ef4444]" : ""
-            }`}
-            aria-hidden="true"
-          />
-          {savedToast === "saved"
-            ? "Saved to your favourites"
-            : "Removed from saved"}
-        </div>
-      ) : null}
     </main>
   );
 }

@@ -329,14 +329,14 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
     buyerPage.getByRole("button", { name: "Unsave item" }),
   ).toBeVisible();
   await expect(
-    buyerPage.getByRole("status").filter({ hasText: "Saved to your favourites" }),
+    buyerPage.getByText("Saved to your favourites", { exact: true }),
   ).toBeVisible();
   await buyerPage.getByRole("button", { name: "Unsave item" }).click();
   await expect(
     buyerPage.getByRole("button", { name: "Save", exact: true }),
   ).toBeVisible();
   await expect(
-    buyerPage.getByRole("status").filter({ hasText: "Removed from saved" }),
+    buyerPage.getByText("Removed from saved", { exact: true }),
   ).toBeVisible();
   await buyerPage.getByRole("button", { name: "Save", exact: true }).click();
   await buyerPage.getByRole("button", { name: "Contact seller" }).click();

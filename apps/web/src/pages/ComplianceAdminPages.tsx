@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   AlertTriangle,
   ChevronDown,
@@ -51,9 +52,9 @@ function GrievanceCaseCard({ row }: { row: any }) {
     void client.invalidateQueries({ queryKey: ["admin-grievances"] });
     void client.invalidateQueries({ queryKey: ["admin-grievance", row.id] });
   };
-  const acknowledge = useMutation({ mutationFn: () => api(`/api/admin/grievances/${row.id}/acknowledge`, { method: "POST" }), onSuccess: refresh });
-  const sendUpdate = useMutation({ mutationFn: (body: unknown) => api(`/api/admin/grievances/${row.id}/messages`, { method: "POST", ...jsonBody(body) }), onSuccess: refresh });
-  const resolve = useMutation({ mutationFn: (body: unknown) => api(`/api/admin/grievances/${row.id}/resolve`, { method: "POST", ...jsonBody(body) }), onSuccess: refresh });
+  const acknowledge = useMutation({ mutationFn: () => api(`/api/admin/grievances/${row.id}/acknowledge`, { method: "POST" }), onSuccess: () => { toast.success("Grievance acknowledged"); refresh(); } });
+  const sendUpdate = useMutation({ mutationFn: (body: unknown) => api(`/api/admin/grievances/${row.id}/messages`, { method: "POST", ...jsonBody(body) }), onSuccess: () => { toast.success("Update sent"); refresh(); } });
+  const resolve = useMutation({ mutationFn: (body: unknown) => api(`/api/admin/grievances/${row.id}/resolve`, { method: "POST", ...jsonBody(body) }), onSuccess: () => { toast.success("Decision saved"); refresh(); } });
   const mutationError = acknowledge.error ?? sendUpdate.error ?? resolve.error;
 
   return <article className={`grievance-case-card ${row.overdue ? "is-overdue" : ""}`}>
@@ -90,10 +91,10 @@ export function AdminCompliance() {
   const providers = useQuery({ queryKey: ["service-providers"], queryFn: () => api<any[]>("/api/admin/service-providers"), enabled: superAdmin });
   const holds = useQuery({ queryKey: ["legal-holds"], queryFn: () => api<any[]>("/api/admin/legal-holds"), enabled: superAdmin });
   const access = useQuery({ queryKey: ["access-reviews"], queryFn: () => api<any>("/api/admin/access-reviews"), enabled: superAdmin });
-  const createDomain = useMutation({ mutationFn: (body: unknown) => api("/api/admin/academic-domains", { method: "POST", ...jsonBody(body) }), onSuccess: () => void client.invalidateQueries({ queryKey: ["academic-domains"] }) });
-  const reviewProvider = useMutation({ mutationFn: ({ id, body }: { id: string; body: unknown }) => api(`/api/admin/service-providers/${id}`, { method: "PATCH", ...jsonBody(body) }), onSuccess: () => { void client.invalidateQueries({ queryKey: ["service-providers"] }); void client.invalidateQueries({ queryKey: ["compliance-readiness"] }); } });
-  const createHold = useMutation({ mutationFn: (body: unknown) => api("/api/admin/legal-holds", { method: "POST", ...jsonBody(body) }), onSuccess: () => void client.invalidateQueries({ queryKey: ["legal-holds"] }) });
-  const reviewAccess = useMutation({ mutationFn: ({ id, body }: { id: string; body: unknown }) => api(`/api/admin/access-reviews/${id}`, { method: "POST", ...jsonBody(body) }), onSuccess: () => void client.invalidateQueries({ queryKey: ["access-reviews"] }) });
+  const createDomain = useMutation({ mutationFn: (body: unknown) => api("/api/admin/academic-domains", { method: "POST", ...jsonBody(body) }), onSuccess: () => { toast.success("Academic domain added"); void client.invalidateQueries({ queryKey: ["academic-domains"] }); } });
+  const reviewProvider = useMutation({ mutationFn: ({ id, body }: { id: string; body: unknown }) => api(`/api/admin/service-providers/${id}`, { method: "PATCH", ...jsonBody(body) }), onSuccess: () => { toast.success("Provider review saved"); void client.invalidateQueries({ queryKey: ["service-providers"] }); void client.invalidateQueries({ queryKey: ["compliance-readiness"] }); } });
+  const createHold = useMutation({ mutationFn: (body: unknown) => api("/api/admin/legal-holds", { method: "POST", ...jsonBody(body) }), onSuccess: () => { toast.success("Legal hold created"); void client.invalidateQueries({ queryKey: ["legal-holds"] }); } });
+  const reviewAccess = useMutation({ mutationFn: ({ id, body }: { id: string; body: unknown }) => api(`/api/admin/access-reviews/${id}`, { method: "POST", ...jsonBody(body) }), onSuccess: () => { toast.success("Access review recorded"); void client.invalidateQueries({ queryKey: ["access-reviews"] }); } });
 
   if (!canManageDomains) return <ErrorState error={new Error("This section is available to support and super administrators.")} />;
   return <div className="compliance-admin-page">

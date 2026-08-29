@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { reportReasons } from "@campus-market/shared";
 import { api, jsonBody } from "../api";
 import { SubmitButton } from "./UI";
@@ -23,7 +24,10 @@ export function ReportButton({
         method: "POST",
         ...jsonBody({ targetType, targetId, ...data }),
       }),
-    onSuccess: () => setOpen(false),
+    onSuccess: () => {
+      setOpen(false);
+      toast.success("Report submitted for review");
+    },
   });
 
   return (
@@ -77,9 +81,6 @@ export function ReportButton({
             <p className="field-error">{mutation.error.message}</p>
           ) : null}
         </form>
-      ) : null}
-      {mutation.isSuccess ? (
-        <p role="status">Report submitted for review.</p>
       ) : null}
     </div>
   );

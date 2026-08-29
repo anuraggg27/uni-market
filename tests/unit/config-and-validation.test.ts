@@ -11,6 +11,32 @@ describe('security configuration and shared validation', () => {
     const result = listingInputSchema.safeParse({ title: 'A valid title', description: 'A sufficiently descriptive product description', categoryId: crypto.randomUUID(), condition: 'GOOD', priceType: 'RANGE', minimumPrice: 500, maximumPrice: 100, exactPrice: 200, negotiable: true, location: 'Main campus' });
     expect(result.success).toBe(false);
   });
+  it('explains the listing description minimum', () => {
+    const result = listingInputSchema.safeParse({
+      title: 'A valid title',
+      description: 'Too short',
+      categoryId: crypto.randomUUID(),
+      condition: 'GOOD',
+      priceType: 'FIXED',
+      exactPrice: 200,
+      negotiable: true,
+      location: 'Main campus',
+      ownershipAttested: true,
+      usedPhysicalGoodsAttested: true,
+      accurateDescriptionAttested: true,
+      sellerPolicyAccepted: true,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues).toContainEqual(
+        expect.objectContaining({
+          path: ['description'],
+          message: 'Minimum 10 characters required',
+        }),
+      );
+    }
+  });
   it('requires condition explanations for FAIR and POOR products', () => {
     expect(listingInputSchema.safeParse({ title: 'Used chair', description: 'A sufficiently descriptive product description', categoryId: crypto.randomUUID(), condition: 'FAIR', priceType: 'FREE', negotiable: false, location: 'Main campus' }).success).toBe(false);
   });

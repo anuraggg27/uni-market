@@ -1,5 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   ArrowRight,
   CheckCircle2,
@@ -181,7 +182,7 @@ export function MarketplaceDisclosurePage() {
 
 export function GrievancePage() {
   const [receipt, setReceipt] = useState<{ reference: string; trackingSecret: string; acknowledgeDueAt: string; actionDueAt: string }>();
-  const create = useMutation({ mutationFn: (body: unknown) => publicApi<any>("/api/grievances", { method: "POST", ...jsonBody(body) }), onSuccess: setReceipt });
+  const create = useMutation({ mutationFn: (body: unknown) => publicApi<any>("/api/grievances", { method: "POST", ...jsonBody(body) }), onSuccess: (data) => { setReceipt(data); toast.success("Grievance submitted"); } });
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -212,13 +213,12 @@ export function GrievancePage() {
 export function GrievanceTrackPage() {
   const [caseData, setCaseData] = useState<CaseData>();
   const [credentials, setCredentials] = useState<{ reference: string; secret: string }>();
-  const [confirmation, setConfirmation] = useState<string>();
   const track = useMutation({ mutationFn: (body: { reference: string; secret: string }) => publicApi<CaseData>("/api/grievances/track", { method: "POST", ...jsonBody(body) }), onSuccess: (data, values) => { setCaseData(data); setCredentials(values); } });
-  const followUp = useMutation({ mutationFn: (message: string) => publicApi(`/api/grievances/${encodeURIComponent(credentials!.reference)}/messages`, { method: "POST", ...jsonBody({ secret: credentials!.secret, message }) }), onSuccess: () => { setConfirmation("Your follow-up was added to the case."); if (credentials) track.mutate(credentials); } });
-  const appeal = useMutation({ mutationFn: (reason: string) => publicApi(`/api/grievances/${encodeURIComponent(credentials!.reference)}/appeal`, { method: "POST", ...jsonBody({ secret: credentials!.secret, reason }) }), onSuccess: () => { setConfirmation("Your appeal was submitted for further review."); if (credentials) track.mutate(credentials); } });
+  const followUp = useMutation({ mutationFn: (message: string) => publicApi(`/api/grievances/${encodeURIComponent(credentials!.reference)}/messages`, { method: "POST", ...jsonBody({ secret: credentials!.secret, message }) }), onSuccess: () => { toast.success("Follow-up added to the case"); if (credentials) track.mutate(credentials); } });
+  const appeal = useMutation({ mutationFn: (reason: string) => publicApi(`/api/grievances/${encodeURIComponent(credentials!.reference)}/appeal`, { method: "POST", ...jsonBody({ secret: credentials!.secret, reason }) }), onSuccess: () => { toast.success("Review request submitted"); if (credentials) track.mutate(credentials); } });
   return <div className="page grievance-page grievance-track-page">
     <header className="grievance-masthead"><h1>Track a Grievance</h1><p>Enter the reference and private tracking secret from your receipt. These credentials keep your case private.</p></header>
-    <form className="case-access-form" onSubmit={(event) => { event.preventDefault(); setConfirmation(undefined); const form = new FormData(event.currentTarget); track.mutate({ reference: String(form.get("reference")), secret: String(form.get("secret")) }); }}>
+    <form className="case-access-form" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); track.mutate({ reference: String(form.get("reference")), secret: String(form.get("secret")) }); }}>
       <LockKeyhole aria-hidden="true" /><div className="form-grid"><label className="field"><span>Reference</span><input name="reference" required autoComplete="off" spellCheck={false} /></label><label className="field"><span>Tracking secret</span><input name="secret" type="password" autoComplete="off" required spellCheck={false} /></label></div><SubmitButton pending={track.isPending}>View Case Status</SubmitButton>{track.error ? <p className="field-error" role="alert">{track.error.message}</p> : null}
     </form>
     {caseData ? <div className="case-workspace">
@@ -227,7 +227,6 @@ export function GrievanceTrackPage() {
       <div className="case-actions"><form className="compliance-form" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); followUp.mutate(String(form.get("message"))); event.currentTarget.reset(); }}><h2>Add Information</h2><label className="field"><span>Additional factual information</span><textarea name="message" minLength={2} maxLength={5000} required placeholder="Add relevant details without reproducing harmful material…" /></label><SubmitButton pending={followUp.isPending}>Send Follow-up</SubmitButton>{followUp.error ? <p className="field-error" role="alert">{followUp.error.message}</p> : null}</form>
       {caseData.resolvedAt ? <form className="compliance-form" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); appeal.mutate(String(form.get("reason"))); }}><h2>Request Another Review</h2><p>Explain why the decision should receive another internal review.</p><label className="field"><span>Reason for review</span><textarea name="reason" minLength={10} maxLength={5000} required placeholder="Explain what should be reconsidered…" /></label><SubmitButton pending={appeal.isPending}>Request Review</SubmitButton>{appeal.error ? <p className="field-error" role="alert">{appeal.error.message}</p> : null}</form> : null}</div>
       <p className="gac-notice">If you disagree with a decision, or the grievance is not resolved within the applicable deadline, you may file an external appeal with India’s <a href="https://gac.gov.in" target="_blank" rel="noreferrer">Grievance Appellate Committee</a>. Appeals should normally be filed within 30 days.</p>
-      {confirmation ? <p className="case-confirmation" role="status" aria-live="polite">{confirmation}</p> : null}
     </div> : null}
   </div>;
 }

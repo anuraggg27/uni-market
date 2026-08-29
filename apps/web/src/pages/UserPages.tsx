@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { io, type Socket } from "socket.io-client";
 import {
   Link,
@@ -218,6 +219,7 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
             ...jsonBody(values),
           });
       if (images.length) await uploadFiles(listing.id);
+      toast.success(edit ? "Listing updated" : "Draft saved");
       navigate(`/listing/${listing.id}`);
     } catch (error: any) {
       setServerError(error.message);
@@ -569,13 +571,21 @@ export function MyListingsPage() {
   const action = useMutation({
     mutationFn: ({ id, type }: { id: string; type: string }) =>
       api(`/api/listings/${id}/${type}`, { method: "POST" }),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["my-listings"] }),
+    onSuccess: (_data, variables) => {
+      const messages: Record<string, string> = {
+        submit: "Submitted for review",
+        withdraw: "Listing withdrawn",
+        duplicate: "Draft duplicated",
+      };
+      toast.success(messages[variables.type] ?? "Listing updated");
+      void client.invalidateQueries({ queryKey: ["my-listings"] });
+    },
   });
   const deleteListing = useMutation({
     mutationFn: (id: string) => api(`/api/listings/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       setListingToDelete(null);
+      toast.success("Listing deleted");
       void client.invalidateQueries({ queryKey: ["my-listings"] });
     },
   });
@@ -1176,12 +1186,15 @@ function ChatPanel({
   const block = useMutation({
     mutationFn: () =>
       api(`/api/blocks/${conversation?.otherUserId}`, { method: "POST" }),
+    onSuccess: () => toast.success("User blocked"),
   });
   const requestReservation = useMutation({
     mutationFn: () =>
       api<TransactionRecord>(`/api/conversations/${id}/reservation-requests`, { method: "POST" }),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["transactions"] }),
+    onSuccess: () => {
+      toast.success("Request sent");
+      void client.invalidateQueries({ queryKey: ["transactions"] });
+    },
   });
 
   const receiveMessage = useCallback((message: ChatMessage) => {
@@ -1664,7 +1677,13 @@ export function RequestsPage() {
   const action = useMutation({
     mutationFn: ({ id, action }: { id: string; action: string }) =>
       api(`/api/transactions/${id}/${action}`, { method: "POST" }),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      const messages: Record<string, string> = {
+        accept: "Request accepted",
+        complete: "Exchange completed",
+        cancel: "Request cancelled",
+      };
+      toast.success(messages[variables.action] ?? "Request updated");
       void client.invalidateQueries({ queryKey: ["transactions"] });
       void client.invalidateQueries({ queryKey: ["conversations"] });
     },
@@ -1683,6 +1702,7 @@ export function RequestsPage() {
         method: "POST",
         ...jsonBody({ rating, text, tags: [] }),
       }),
+    onSuccess: () => toast.success("Review submitted."),
   });
   const completeExchange = useMutation({
     mutationFn: ({ id, code }: { id: string; code: string }) =>
@@ -1691,6 +1711,7 @@ export function RequestsPage() {
         ...jsonBody({ code }),
       }),
     onSuccess: (_data, variables) => {
+      toast.success("Exchange completed");
       setExchangeCodeEntries((current) => {
         const next = { ...current };
         delete next[variables.id];
@@ -1705,8 +1726,10 @@ export function RequestsPage() {
   const rotateExchangeCode = useMutation({
     mutationFn: (id: string) =>
       api(`/api/transactions/${id}/exchange-code/rotate`, { method: "POST" }),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["transactions"] }),
+    onSuccess: () => {
+      toast.success("Exchange code refreshed");
+      void client.invalidateQueries({ queryKey: ["transactions"] });
+    },
   });
   const transactions = query.data ?? emptyTransactions;
   const transactionCounts = useMemo(() => transactions.reduce((counts, transaction) => {
@@ -1902,7 +1925,6 @@ export function RequestsPage() {
       {review.error ? (
         <p className="field-error">{review.error.message}</p>
       ) : null}
-      {review.isSuccess ? <p role="status">Review submitted.</p> : null}
     </div>
   );
 }
@@ -1933,6 +1955,7 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
       }),
     onSuccess: async () => {
       await refresh();
+      toast.success(onboarding ? "Profile setup complete" : "Profile saved");
       if (onboarding) navigate("/settings?verify=eligibility");
     },
   });
@@ -1946,6 +1969,7 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
       setAvatarId(savedAvatarId);
       await refresh();
       setAvatarDialogOpen(false);
+      toast.success("Avatar updated");
     },
   });
 
@@ -2260,7 +2284,10 @@ export function SupportPage() {
   const create = useMutation({
     mutationFn: (data: any) =>
       api<any>("/api/support", { method: "POST", ...jsonBody(data) }),
-    onSuccess: (ticket) => navigate(`/support/${ticket.id}`),
+    onSuccess: (ticket) => {
+      toast.success("Support request created");
+      navigate(`/support/${ticket.id}`);
+    },
   });
   return (
     <div className="page">
@@ -2357,8 +2384,10 @@ export function SupportDetailPage() {
         method: "POST",
         ...jsonBody({ body }),
       }),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["support", ticketId] }),
+    onSuccess: () => {
+      toast.success("Reply sent");
+      void client.invalidateQueries({ queryKey: ["support", ticketId] });
+    },
   });
   if (query.isLoading)
     return (
@@ -2467,7 +2496,10 @@ function EmailPreferencesCard() {
     onError: (_error, _variables, context) => {
       if (context?.previous) client.setQueryData(["email-preferences"], context.previous);
     },
-    onSuccess: (preferences) => client.setQueryData(["email-preferences"], preferences),
+    onSuccess: (preferences) => {
+      client.setQueryData(["email-preferences"], preferences);
+      toast.success("Email preferences updated");
+    },
     onSettled: () => void client.invalidateQueries({ queryKey: ["email-preferences"] }),
   });
   const preferences = query.data;
@@ -2490,7 +2522,6 @@ function EmailPreferencesCard() {
             </div>
           ))}
           <p className="essential-email-note">Verification codes, account security, support replies, and grievance updates remain enabled because they are required to provide those services.</p>
-          {update.isPending ? <p className="settings-save-status" role="status">Saving…</p> : null}
           {update.error ? <p className="field-error" role="alert">{update.error.message}</p> : null}
         </div>
       ) : null}
@@ -2581,6 +2612,7 @@ export function SettingsPage() {
       setCodeSent(true);
       setResendCooldown(retryAfter);
       setRequestId(nextRequestId);
+      toast.success("Verification code sent");
     },
   });
   const verify = useMutation({
@@ -2603,6 +2635,7 @@ export function SettingsPage() {
     onSuccess: async () => {
       detachMsg91Captcha();
       await refresh();
+      toast.success("Phone verified");
     },
   });
   const sendStudentCode = useMutation({
@@ -2643,6 +2676,7 @@ export function SettingsPage() {
       setStudentCodeSent(true);
       setStudentResendCooldown(retryAfter);
       setStudentRequestId(nextRequestId);
+      toast.success("Student email code sent");
     },
   });
   const verifyStudentEmail = useMutation({
@@ -2665,11 +2699,13 @@ export function SettingsPage() {
     onSuccess: async () => {
       detachMsg91Captcha();
       await refresh();
+      toast.success("Student email verified");
     },
   });
   const revokeSessions = useMutation({
     mutationFn: () => api("/api/account/revoke-sessions", { method: "POST" }),
     onSuccess: () => {
+      toast.success("All sessions revoked");
       clearCsrf();
       clearSession();
       navigate("/login");

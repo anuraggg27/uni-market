@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Link,
   NavLink,
@@ -288,7 +289,14 @@ export function AdminListingReview() {
         method: "POST",
         ...jsonBody(data),
       }),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      const messages: Record<string, string> = {
+        APPROVE: "Listing approved",
+        REJECT: "Listing rejected",
+        REQUEST_CHANGES: "Changes requested",
+        REMOVE: "Listing removed",
+      };
+      toast.success(messages[variables.decision] ?? "Decision recorded");
       void client.invalidateQueries({ queryKey: ["admin-pending"] });
       void client.invalidateQueries({ queryKey: ["admin-listing", listingId] });
     },
@@ -296,6 +304,7 @@ export function AdminListingReview() {
   const deleteListing = useMutation({
     mutationFn: () => api(`/api/admin/listings/${listingId}`, { method: "DELETE" }),
     onSuccess: () => {
+      toast.success("Listing deleted");
       void client.invalidateQueries({ queryKey: ["admin-pending"] });
       navigate("/admin/listings/pending");
     },
@@ -426,9 +435,6 @@ export function AdminListingReview() {
         {decision.error ? (
           <p className="field-error">{decision.error.message}</p>
         ) : null}
-        {decision.isSuccess ? (
-          <p role="status">Decision recorded and audited.</p>
-        ) : null}
       </form>
     </div>
   );
@@ -490,8 +496,10 @@ export function AdminReportDetail() {
         method: "POST",
         ...jsonBody(data),
       }),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["admin-reports"] }),
+    onSuccess: () => {
+      toast.success("Report closed");
+      void client.invalidateQueries({ queryKey: ["admin-reports"] });
+    },
   });
   return (
     <QueryView query={query}>
@@ -615,8 +623,10 @@ export function AdminUserDetail() {
         method: "POST",
         ...jsonBody({ reason }),
       }),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["admin-user", userId] }),
+    onSuccess: (_data, variables) => {
+      toast.success(variables.action === "suspend" ? "User suspended" : "Warning recorded");
+      void client.invalidateQueries({ queryKey: ["admin-user", userId] });
+    },
   });
   const roles = useMutation({
     mutationFn: (data: { roles: string[]; reason: string }) =>
@@ -624,8 +634,10 @@ export function AdminUserDetail() {
         method: "PUT",
         ...jsonBody(data),
       }),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["admin-user", userId] }),
+    onSuccess: () => {
+      toast.success("Staff access updated");
+      void client.invalidateQueries({ queryKey: ["admin-user", userId] });
+    },
   });
   return (
     <QueryView query={query}>
@@ -681,9 +693,6 @@ export function AdminUserDetail() {
               {roles.error ? (
                 <p className="field-error">{roles.error.message}</p>
               ) : null}
-              {roles.isSuccess ? (
-                <p role="status">Staff access updated and audited.</p>
-              ) : null}
             </form>
           ) : null}
           <form
@@ -730,8 +739,10 @@ export function AdminReviews() {
         method: "POST",
         ...jsonBody({ reason }),
       }),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["admin-reviews"] }),
+    onSuccess: () => {
+      toast.success("Review hidden");
+      void client.invalidateQueries({ queryKey: ["admin-reviews"] });
+    },
   });
   return (
     <div>
@@ -822,8 +833,10 @@ export function AdminSupportDetail() {
         method: "POST",
         ...jsonBody(data),
       }),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["admin-support", ticketId] }),
+    onSuccess: () => {
+      toast.success("Reply sent");
+      void client.invalidateQueries({ queryKey: ["admin-support", ticketId] });
+    },
   });
   const escalate = useMutation({
     mutationFn: (reason: string) =>
@@ -831,6 +844,7 @@ export function AdminSupportDetail() {
         method: "POST",
         ...jsonBody({ reason }),
       }),
+    onSuccess: () => toast.success("Ticket escalated"),
   });
   return (
     <QueryView query={query}>
@@ -952,8 +966,10 @@ export function AdminCategories() {
   const create = useMutation({
     mutationFn: (data: any) =>
       api("/api/admin/categories", { method: "POST", ...jsonBody(data) }),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["admin-categories"] }),
+    onSuccess: () => {
+      toast.success("Category added");
+      void client.invalidateQueries({ queryKey: ["admin-categories"] });
+    },
   });
   const toggle = useMutation({
     mutationFn: ({ id, active }: { id: string; active: boolean }) =>
@@ -961,8 +977,10 @@ export function AdminCategories() {
         method: "PATCH",
         ...jsonBody({ active }),
       }),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["admin-categories"] }),
+    onSuccess: (_data, variables) => {
+      toast.success(variables.active ? "Category enabled" : "Category disabled");
+      void client.invalidateQueries({ queryKey: ["admin-categories"] });
+    },
   });
   const createTerm = useMutation({
     mutationFn: ({ term, severity }: { term: string; severity: string }) =>
@@ -970,8 +988,10 @@ export function AdminCategories() {
         method: "POST",
         ...jsonBody({ term, severity }),
       }),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["admin-prohibited-terms"] }),
+    onSuccess: () => {
+      toast.success("Prohibited term added");
+      void client.invalidateQueries({ queryKey: ["admin-prohibited-terms"] });
+    },
   });
   const toggleTerm = useMutation({
     mutationFn: ({ id, active }: { id: string; active: boolean }) =>
@@ -979,8 +999,10 @@ export function AdminCategories() {
         method: "PATCH",
         ...jsonBody({ active }),
       }),
-    onSuccess: () =>
-      void client.invalidateQueries({ queryKey: ["admin-prohibited-terms"] }),
+    onSuccess: (_data, variables) => {
+      toast.success(variables.active ? "Term enabled" : "Term disabled");
+      void client.invalidateQueries({ queryKey: ["admin-prohibited-terms"] });
+    },
   });
   return (
     <div className="stack-lg">
@@ -1096,8 +1118,8 @@ export function AdminCategories() {
 export function AdminGrievances() {
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["admin-grievances"], queryFn: () => api<any[]>("/api/admin/grievances"), refetchInterval: 30_000 });
-  const acknowledge = useMutation({ mutationFn: (id: string) => api(`/api/admin/grievances/${id}/acknowledge`, { method: "POST" }), onSuccess: () => void client.invalidateQueries({ queryKey: ["admin-grievances"] }) });
-  const resolve = useMutation({ mutationFn: ({ id, body }: { id: string; body: unknown }) => api(`/api/admin/grievances/${id}/resolve`, { method: "POST", ...jsonBody(body) }), onSuccess: () => void client.invalidateQueries({ queryKey: ["admin-grievances"] }) });
+  const acknowledge = useMutation({ mutationFn: (id: string) => api(`/api/admin/grievances/${id}/acknowledge`, { method: "POST" }), onSuccess: () => { toast.success("Grievance acknowledged"); void client.invalidateQueries({ queryKey: ["admin-grievances"] }); } });
+  const resolve = useMutation({ mutationFn: ({ id, body }: { id: string; body: unknown }) => api(`/api/admin/grievances/${id}/resolve`, { method: "POST", ...jsonBody(body) }), onSuccess: () => { toast.success("Grievance resolved"); void client.invalidateQueries({ queryKey: ["admin-grievances"] }); } });
   return <div><h2>Grievance and emergency-safety queue</h2><p className="lede">Ordered by statutory action target. Overdue cases show an alarm and urgent victim, child-safety, threat, and official-order reports remain separated by category and staff role.</p><QueryView query={query} emptyTitle="No open grievances">{(rows) => <div className="list">{rows.map((row: any) => <article className="panel form" key={row.id}>
     <div className="split"><div><StatusBadge value={row.overdue ? "OVERDUE" : row.priority} /><h3>{row.publicReference}</h3></div><span>{row.category}</span></div>
     <p><strong>{row.reason.replaceAll("_", " ")}</strong> · target {new Date(row.actionDueAt).toLocaleString()}</p><p>{row.targetUrl}</p><p>{row.details}</p>
@@ -1116,10 +1138,10 @@ export function AdminCompliance() {
   const providers = useQuery({ queryKey: ["service-providers"], queryFn: () => api<any[]>("/api/admin/service-providers"), enabled: superAdmin });
   const holds = useQuery({ queryKey: ["legal-holds"], queryFn: () => api<any[]>("/api/admin/legal-holds"), enabled: superAdmin });
   const access = useQuery({ queryKey: ["access-reviews"], queryFn: () => api<any>("/api/admin/access-reviews"), enabled: superAdmin });
-  const createDomain = useMutation({ mutationFn: (body: unknown) => api("/api/admin/academic-domains", { method: "POST", ...jsonBody(body) }), onSuccess: () => void client.invalidateQueries({ queryKey: ["academic-domains"] }) });
-  const reviewProvider = useMutation({ mutationFn: ({ id, body }: { id: string; body: unknown }) => api(`/api/admin/service-providers/${id}`, { method: "PATCH", ...jsonBody(body) }), onSuccess: () => { void client.invalidateQueries({ queryKey: ["service-providers"] }); void client.invalidateQueries({ queryKey: ["compliance-readiness"] }); } });
-  const createHold = useMutation({ mutationFn: (body: unknown) => api("/api/admin/legal-holds", { method: "POST", ...jsonBody(body) }), onSuccess: () => void client.invalidateQueries({ queryKey: ["legal-holds"] }) });
-  const reviewAccess = useMutation({ mutationFn: ({ id, body }: { id: string; body: unknown }) => api(`/api/admin/access-reviews/${id}`, { method: "POST", ...jsonBody(body) }), onSuccess: () => void client.invalidateQueries({ queryKey: ["access-reviews"] }) });
+  const createDomain = useMutation({ mutationFn: (body: unknown) => api("/api/admin/academic-domains", { method: "POST", ...jsonBody(body) }), onSuccess: () => { toast.success("Academic domain added"); void client.invalidateQueries({ queryKey: ["academic-domains"] }); } });
+  const reviewProvider = useMutation({ mutationFn: ({ id, body }: { id: string; body: unknown }) => api(`/api/admin/service-providers/${id}`, { method: "PATCH", ...jsonBody(body) }), onSuccess: () => { toast.success("Provider review saved"); void client.invalidateQueries({ queryKey: ["service-providers"] }); void client.invalidateQueries({ queryKey: ["compliance-readiness"] }); } });
+  const createHold = useMutation({ mutationFn: (body: unknown) => api("/api/admin/legal-holds", { method: "POST", ...jsonBody(body) }), onSuccess: () => { toast.success("Legal hold created"); void client.invalidateQueries({ queryKey: ["legal-holds"] }); } });
+  const reviewAccess = useMutation({ mutationFn: ({ id, body }: { id: string; body: unknown }) => api(`/api/admin/access-reviews/${id}`, { method: "POST", ...jsonBody(body) }), onSuccess: () => { toast.success("Access review recorded"); void client.invalidateQueries({ queryKey: ["access-reviews"] }); } });
   if (!canManageDomains) return <ErrorState error={new Error("This section is available to support and super administrators.")} />;
   return <div className="stack"><div><h2>Compliance registers</h2><p className="lede">Changes are reasoned, attributed, time-stamped, and written to the immutable staff audit log.</p></div>
     {superAdmin && readiness.data ? <section className="panel"><h3>Release readiness</h3><StatusBadge value={readiness.data.ready ? "READY" : "NOT_READY"} /><p>{readiness.data.academicDomains} active academic domains; incomplete providers: {readiness.data.incompleteProviders.join(", ") || "none"}.</p></section> : null}
