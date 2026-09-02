@@ -799,10 +799,17 @@ export function ListingPage() {
     );
   const item = query.data!;
   const owner = user?.id === item.sellerId;
+  const privateDraft = Boolean(
+    owner &&
+      item.lifecycleState === "DRAFT" &&
+      item.moderationState === "PENDING" &&
+      !item.submittedAt,
+  );
   const awaitingReview = Boolean(
     item.ownerPreview &&
       item.lifecycleState === "DRAFT" &&
-      item.moderationState === "PENDING",
+      item.moderationState === "PENDING" &&
+      item.submittedAt,
   );
   const images = Array.isArray(item.images) ? item.images : [];
   const activeImageUrl = images[activeImage]?.url as string | undefined;
@@ -961,6 +968,15 @@ export function ListingPage() {
               role="status"
             >
               Your listing is in review. We’ll notify you as soon as it is approved.
+            </p>
+          ) : null}
+
+          {privateDraft ? (
+            <p
+              className="mb-0 mt-4 rounded-xl border border-line bg-surface-muted px-4 py-3 text-sm leading-relaxed text-ink"
+              role="status"
+            >
+              This private draft has not been submitted for review.
             </p>
           ) : null}
 

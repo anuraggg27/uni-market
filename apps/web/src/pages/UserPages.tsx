@@ -121,6 +121,8 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
   const [images, setImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const createdListingIdRef = useRef<string | null>(null);
+  const uploadedFileKeysRef = useRef(new Set<string>());
   const [uploading, setUploading] = useState(false);
   const [serverError, setServerError] = useState("");
   const form = useForm<
@@ -189,6 +191,8 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
   }
   async function uploadFiles(id: string) {
     for (const file of images) {
+      const fileKey = `${file.name}:${file.size}:${file.lastModified}:${file.type}`;
+      if (uploadedFileKeysRef.current.has(fileKey)) continue;
       const ticket = await api<any>(`/api/uploads/listings/${id}/presign`, {
         method: "POST",
         ...jsonBody({ mimeType: file.type, byteSize: file.size }),
@@ -203,14 +207,15 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
         method: "POST",
         ...jsonBody({ imageId: ticket.imageId }),
       });
+      uploadedFileKeysRef.current.add(fileKey);
     }
   }
   async function submit(values: ListingInput) {
     setServerError("");
     setUploading(true);
     try {
-      const listing = edit
-        ? await api<any>(`/api/listings/${listingId}`, {
+      const listing = edit || createdListingIdRef.current
+        ? await api<any>(`/api/listings/${edit ? listingId : createdListingIdRef.current}`, {
             method: "PATCH",
             ...jsonBody(values),
           })
@@ -218,8 +223,12 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
             method: "POST",
             ...jsonBody(values),
           });
+      if (!edit) createdListingIdRef.current = listing.id;
       if (images.length) await uploadFiles(listing.id);
-      toast.success(edit ? "Listing updated" : "Draft saved");
+      if (!edit) {
+        await api(`/api/listings/${listing.id}/submit`, { method: "POST" });
+      }
+      toast.success(edit ? "Listing updated" : "Listing submitted for review");
       navigate(`/listing/${listing.id}`);
     } catch (error: any) {
       setServerError(error.message);
@@ -245,7 +254,7 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
         <div>
           <h1>{edit ? "Edit your listing" : "List a product"}</h1>
           <p className="lede">
-            One clear page, saved as a private draft. Every submitted listing is
+            Complete the details below. Your listing stays private while it is
             manually reviewed.
           </p>
         </div>
@@ -476,7 +485,7 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
             Cancel
           </Link>
           <SubmitButton pending={form.formState.isSubmitting || uploading}>
-            {edit ? "Save changes" : "Save private draft"}
+            {edit ? "Save changes" : "Submit for review"}
           </SubmitButton>
         </div>
       </form>

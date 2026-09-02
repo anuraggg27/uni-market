@@ -233,16 +233,18 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   await expect(
     page.getByAltText("Selected product image: book.jpg"),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Save private draft" }).click();
+  await page.getByRole("button", { name: "Submit for review" }).click();
   await expect(page).toHaveURL(/listing\//);
+  const listingId = page.url().split("/").pop()!;
   await expect(
     page.getByText(
       "Your listing is in review. We’ll notify you as soon as it is approved.",
     ),
   ).toBeVisible();
-  const listingId = page.url().split("/").pop()!;
+  await expect(
+    page.getByRole("button", { name: "Submit for review" }),
+  ).toHaveCount(0);
   await page.goto(marketplacePath("/my-listings"));
-  await page.getByRole("button", { name: "Submit for review" }).click();
   await expect(page.getByText("PENDING").first()).toBeVisible();
   await page.goto(marketplacePath(`/listing/${listingId}`));
   await expect(

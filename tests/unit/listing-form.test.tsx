@@ -62,6 +62,9 @@ describe("ListingFormPage photos", () => {
       if (path === "/api/uploads/listings/listing-1/finalize") {
         return Promise.resolve({});
       }
+      if (path === "/api/listings/listing-1/submit") {
+        return Promise.resolve({ id: "listing-1", submittedAt: new Date().toISOString() });
+      }
       return Promise.reject(new Error(`Unexpected API call: ${path}`));
     });
   });
@@ -135,7 +138,7 @@ describe("ListingFormPage photos", () => {
     fireEvent.click(screen.getByLabelText(/I own this used physical item/));
     fireEvent.click(screen.getByLabelText(/This listing is accurate and follows the seller rules/));
     fireEvent.click(
-      screen.getByRole("button", { name: "Save private draft" }),
+      screen.getByRole("button", { name: "Submit for review" }),
     );
     await waitFor(() =>
       expect(apiMock).toHaveBeenCalledWith(
@@ -149,6 +152,10 @@ describe("ListingFormPage photos", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "https://uploads.example.test/image",
       expect.objectContaining({ body: book, method: "PUT" }),
+    );
+    expect(apiMock).toHaveBeenCalledWith(
+      "/api/listings/listing-1/submit",
+      expect.objectContaining({ method: "POST" }),
     );
   });
 });
