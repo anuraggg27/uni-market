@@ -1736,6 +1736,8 @@ html.dark .confirm-warning {
   max-width: 400px;
 }
 #google-button {
+  /* Match Google's iframe scheme so dark mode preserves its transparent background. */
+  color-scheme: light;
   min-height: 44px;
   overflow: hidden;
   border-radius: 999px;
