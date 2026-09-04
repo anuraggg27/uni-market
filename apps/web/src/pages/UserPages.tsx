@@ -2480,12 +2480,48 @@ type EmailPreferenceValues = {
   updatedAt: string | null;
 };
 
-const emailPreferenceRows = [
-  { key: "listingUpdates", label: "Listing updates", description: "Approvals, changes requested, removals, and other moderation results." },
-  { key: "transactionUpdates", label: "Requests and exchanges", description: "Reservation requests, confirmations, cancellations, and completed exchanges." },
-  { key: "messageUpdates", label: "New conversations", description: "An email when someone starts a conversation about one of your listings." },
-  { key: "policyReminders", label: "Policy reminders", description: "Occasional reminders when marketplace policies need your attention." },
+const emailPreferenceGroups = [
+  {
+    id: "marketplace-activity",
+    keys: ["listingUpdates", "transactionUpdates"],
+    label: "Marketplace activity",
+    description: "Listing approvals, reservation requests, exchanges, and other marketplace activity.",
+  },
+  {
+    id: "messages",
+    keys: ["messageUpdates"],
+    label: "Messages",
+    description: "Get notified when someone starts a conversation about one of your listings.",
+  },
+  {
+    id: "policy-reminders",
+    keys: ["policyReminders"],
+    label: "Policy & reminders",
+    description: "Important reminders and updates when marketplace policies need your attention.",
+  },
 ] as const;
+
+type EmailPreferenceKey = keyof Omit<EmailPreferenceValues, "updatedAt">;
+type EmailPreferencePatch = Partial<Pick<EmailPreferenceValues, EmailPreferenceKey>>;
+type EmailCategoryPreferenceKey = Exclude<EmailPreferenceKey, "enabled">;
+
+function emailPreferenceGroupPatch(
+  preferences: EmailPreferenceValues,
+  keys: readonly EmailCategoryPreferenceKey[],
+  checked: boolean,
+): EmailPreferencePatch {
+  const patch: EmailPreferencePatch = preferences.enabled
+    ? {}
+    : {
+        enabled: true,
+        listingUpdates: false,
+        transactionUpdates: false,
+        messageUpdates: false,
+        policyReminders: false,
+      };
+  for (const key of keys) patch[key] = !checked;
+  return patch;
+}
 
 function EmailPreferencesCard() {
   const client = useQueryClient();
@@ -2494,12 +2530,12 @@ function EmailPreferencesCard() {
     queryFn: () => api<EmailPreferenceValues>("/api/email-preferences"),
   });
   const update = useMutation({
-    mutationFn: ({ key, value }: { key: keyof Omit<EmailPreferenceValues, "updatedAt">; value: boolean }) =>
-      api<EmailPreferenceValues>("/api/email-preferences", { method: "PATCH", ...jsonBody({ [key]: value }) }),
-    onMutate: async ({ key, value }) => {
+    mutationFn: (patch: EmailPreferencePatch) =>
+      api<EmailPreferenceValues>("/api/email-preferences", { method: "PATCH", ...jsonBody(patch) }),
+    onMutate: async (patch) => {
       await client.cancelQueries({ queryKey: ["email-preferences"] });
       const previous = client.getQueryData<EmailPreferenceValues>(["email-preferences"]);
-      if (previous) client.setQueryData<EmailPreferenceValues>(["email-preferences"], { ...previous, [key]: value });
+      if (previous) client.setQueryData<EmailPreferenceValues>(["email-preferences"], { ...previous, ...patch });
       return { previous };
     },
     onError: (_error, _variables, context) => {
@@ -2519,18 +2555,40 @@ function EmailPreferencesCard() {
         <div><h2 id="email-preferences-title">Email Notifications</h2><p>Choose which marketplace updates arrive in your inbox.</p></div>
       </header>
       {query.isLoading ? <Loading label="Loading email preferences" /> : query.isError ? <ErrorState error={query.error} /> : preferences ? (
-        <div className="email-preference-list">
-          <div className="email-preference-row email-preference-master">
-            <div><strong>Marketplace emails</strong><p>Pause or resume every optional email below.</p></div>
-            <button type="button" className="preference-switch" role="switch" aria-checked={preferences.enabled} aria-label="Marketplace emails" disabled={update.isPending} onClick={() => update.mutate({ key: "enabled", value: !preferences.enabled })}><span /></button>
-          </div>
-          {emailPreferenceRows.map((row) => (
-            <div className="email-preference-row" key={row.key}>
-              <div><strong>{row.label}</strong><p>{row.description}</p></div>
-              <button type="button" className="preference-switch" role="switch" aria-checked={preferences[row.key]} aria-label={row.label} disabled={update.isPending || !preferences.enabled} onClick={() => update.mutate({ key: row.key, value: !preferences[row.key] })}><span /></button>
-            </div>
-          ))}
-          <p className="essential-email-note">Verification codes, account security, support replies, and grievance updates remain enabled because they are required to provide those services.</p>
+        <div className="email-preference-list" aria-busy={update.isPending}>
+          {emailPreferenceGroups.map((group) => {
+            const checked = preferences.enabled && group.keys.every((key) => preferences[key]);
+            const inputId = `email-preference-${group.id}`;
+            const descriptionId = `${inputId}-description`;
+            return (
+              <label className="email-preference-row" htmlFor={inputId} key={group.id}>
+                <span className="email-preference-copy">
+                  <strong>{group.label}</strong>
+                  <span id={descriptionId}>{group.description}</span>
+                </span>
+                <span className="email-preference-control">
+                  <span className="preference-switch-state" aria-hidden="true">{checked ? "On" : "Off"}</span>
+                  <input
+                    id={inputId}
+                    className="preference-switch-input"
+                    type="checkbox"
+                    role="switch"
+                    checked={checked}
+                    aria-checked={checked}
+                    aria-label={group.label}
+                    aria-describedby={descriptionId}
+                    disabled={update.isPending}
+                    onChange={() => update.mutate(emailPreferenceGroupPatch(preferences, group.keys, checked))}
+                  />
+                  <span className="preference-switch" aria-hidden="true"><span /></span>
+                </span>
+              </label>
+            );
+          })}
+          <aside className="required-email-note" aria-labelledby="required-email-title">
+            <h3 id="required-email-title">Required notifications</h3>
+            <p>Verification codes, account security, support replies, and grievance updates are always enabled because they are required to provide these services.</p>
+          </aside>
           {update.error ? <p className="field-error" role="alert">{update.error.message}</p> : null}
         </div>
       ) : null}

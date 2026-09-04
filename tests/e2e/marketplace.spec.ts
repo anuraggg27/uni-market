@@ -489,12 +489,16 @@ test("guest Contact seller resumes into chat and exposes request history and ema
   await expect(page.locator(".mobile-nav").getByRole("link", { name: "Profile" })).toHaveCount(0);
 
   await page.goto(marketplacePath("/settings?section=email"));
-  const marketplaceEmails = page.getByRole("switch", { name: "Marketplace emails" });
-  await expect(marketplaceEmails).toHaveAttribute("aria-checked", "true");
-  await marketplaceEmails.click();
-  await expect(marketplaceEmails).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByRole("switch")).toHaveCount(3);
+  await expect(page.getByRole("switch", { name: "Messages" })).toBeVisible();
+  await expect(page.getByRole("switch", { name: "Policy & reminders" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Required notifications" })).toBeVisible();
+  const marketplaceActivity = page.getByRole("switch", { name: "Marketplace activity" });
+  await expect(marketplaceActivity).toHaveAttribute("aria-checked", "true");
+  await marketplaceActivity.click();
+  await expect(marketplaceActivity).toHaveAttribute("aria-checked", "false");
   await page.reload();
-  await expect(page.getByRole("switch", { name: "Marketplace emails" })).toHaveAttribute("aria-checked", "false");
+  await expect(page.getByRole("switch", { name: "Marketplace activity" })).toHaveAttribute("aria-checked", "false");
 
   await seller.close();
   await moderator.close();

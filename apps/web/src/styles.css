@@ -2226,66 +2226,139 @@ html.dark .confirm-warning {
 }
 .email-preference-list {
   display: grid;
+  gap: 4px;
 }
 .email-preference-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 20px;
-  padding: 18px 0;
+  margin-inline: -10px;
+  padding: 18px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background-color 160ms ease;
 }
-.email-preference-row + .email-preference-row {
-  border-top: 1px solid var(--color-line);
+.email-preference-copy {
+  min-width: 0;
+  display: block;
 }
-.email-preference-row strong {
+.email-preference-copy strong {
   display: block;
   font-size: 0.86rem;
 }
-.email-preference-row p,
-.essential-email-note {
-  margin: 4px 0 0;
+.email-preference-copy > span {
+  display: block;
+  margin-top: 5px;
   color: var(--color-muted);
   font-size: 0.75rem;
   line-height: 1.5;
 }
-.email-preference-master {
-  margin-top: 4px;
+.email-preference-control {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
 }
-.email-preference-master strong {
-  font-size: 0.95rem;
+.preference-switch-state {
+  min-width: 22px;
+  color: var(--color-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: right;
+  text-transform: uppercase;
+}
+.preference-switch-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .preference-switch {
   position: relative;
-  width: 46px;
-  height: 26px;
-  padding: 0;
+  width: 48px;
+  height: 28px;
+  flex: 0 0 48px;
   border: 1px solid var(--color-line);
   border-radius: 999px;
   background: var(--color-surface-muted);
-  cursor: pointer;
-  transition: border-color 160ms ease, background 160ms ease;
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--color-carbon) 12%, transparent);
+  transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
 }
 .preference-switch span {
   position: absolute;
   top: 3px;
   left: 3px;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
-  background: var(--color-surface);
-  box-shadow: 0 1px 4px color-mix(in srgb, var(--color-carbon) 20%, transparent);
-  transition: transform 160ms ease;
+  background: color-mix(in srgb, var(--color-muted) 72%, var(--color-surface));
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--color-carbon) 28%, transparent);
+  transition: background-color 160ms ease, transform 160ms ease;
 }
-.preference-switch[aria-checked="true"] {
-  border-color: var(--color-brand);
-  background: var(--color-brand);
+.preference-switch-input:checked + .preference-switch {
+  border-color: var(--color-accent-strong);
+  background: var(--color-accent);
 }
-.preference-switch[aria-checked="true"] span {
+.preference-switch-input:checked + .preference-switch span {
   transform: translateX(20px);
+  background: var(--color-on-brand);
 }
-.essential-email-note {
-  padding-top: 16px;
-  border-top: 1px solid var(--color-line);
+.preference-switch-input:focus-visible + .preference-switch {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-focus) 14%, transparent);
+}
+.email-preference-control:has(.preference-switch-input:checked) .preference-switch-state {
+  color: var(--color-accent-strong);
+}
+.email-preference-row:has(.preference-switch-input:disabled) {
+  cursor: wait;
+  opacity: 0.65;
+}
+.required-email-note {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--color-line) 82%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-accent) 4%, var(--color-surface-muted));
+}
+.required-email-note h3 {
+  display: block;
+  margin: 0;
+  font-size: 0.82rem;
+}
+.required-email-note p {
+  margin: 5px 0 0;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  line-height: 1.55;
+}
+@media (hover: hover) {
+  .email-preference-row:not(:has(.preference-switch-input:disabled)):hover {
+    background: color-mix(in srgb, var(--color-accent) 5%, transparent);
+  }
+  .email-preference-row:not(:has(.preference-switch-input:disabled)):hover .preference-switch {
+    border-color: color-mix(in srgb, var(--color-accent) 55%, var(--color-line));
+  }
+}
+@media (max-width: 600px) {
+  .email-preference-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding-block: 16px;
+  }
+  .email-preference-control {
+    width: 100%;
+  }
+  .required-email-note {
+    margin-top: 10px;
+    padding: 14px;
+  }
 }
 .settings-card {
   padding: clamp(20px, 3vw, 26px);
@@ -3587,7 +3660,7 @@ html.dark .listing-report-submit:hover {
   height: 36px;
   display: inline-flex;
   align-items: center;
-  gap: 0;
+  gap: 8px;
   border: 1px solid #e5e7eb;
   border-radius: 999px;
   background: rgb(255 255 255 / 0.7);
@@ -3609,6 +3682,22 @@ html.dark .listing-report-submit:hover {
   width: 15px;
   height: 15px;
 }
+.marketplace-search-trigger-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.marketplace-search-trigger-copy > svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+.marketplace-search-trigger kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 .marketplace-search-trigger kbd,
 .marketplace-search-footer kbd {
   border: 1px solid #dfe4e1;
@@ -3623,6 +3712,7 @@ html.dark .listing-report-submit:hover {
 .marketplace-search-trigger.compact {
   width: 32px;
   height: 32px;
+  gap: 0;
   justify-content: center;
   padding: 0;
 }
@@ -4412,12 +4502,34 @@ html.dark [data-site-header] :where(
   grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.8fr);
   gap: 36px;
 }
-.gallery-main {
+.product-gallery-main {
+  min-width: 0;
   width: 100%;
-  aspect-ratio: 4/3;
+  aspect-ratio: 4 / 3;
+}
+
+.product-gallery-main-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+
+.product-gallery-thumbnail {
+  aspect-ratio: 1;
+}
+
+.product-gallery-thumbnail-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
   object-fit: cover;
-  background: #f8faf8;
-  border-radius: 12px;
+  object-position: center;
 }
 .thumbs {
   display: flex;

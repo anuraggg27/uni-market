@@ -901,10 +901,10 @@ export function ListingPage() {
       </nav>
       <div className="grid items-start gap-y-0 lg:grid-cols-[minmax(0,1.16fr)_minmax(400px,0.84fr)] lg:gap-x-14 lg:gap-y-12 xl:gap-x-16">
         <section className="min-w-0" aria-label="Product gallery">
-          <div className="relative grid aspect-[4/3] w-full place-items-center overflow-hidden rounded-2xl border border-line bg-surface-muted">
+          <div className="product-gallery-main relative grid w-full place-items-center overflow-hidden rounded-2xl border border-line bg-surface-muted">
             {activeImageUrl && !imageFailed ? (
               <img
-                className="h-full w-full object-contain"
+                className="product-gallery-main-image"
                 src={activeImageUrl}
                 alt={`${item.title}, image ${activeImage + 1}`}
                 width={960}
@@ -934,7 +934,7 @@ export function ListingPage() {
                     setActiveImage(index);
                     setImageFailed(false);
                   }}
-                  className={`size-16 shrink-0 overflow-hidden rounded-lg border bg-surface-muted p-0.5 transition-colors sm:size-[72px] ${
+                  className={`product-gallery-thumbnail size-16 shrink-0 overflow-hidden rounded-lg border bg-surface-muted p-0.5 transition-colors sm:size-[72px] ${
                     activeImage === index
                       ? "border-ink"
                       : "border-line hover:border-sandalwood"
@@ -943,7 +943,7 @@ export function ListingPage() {
                   aria-pressed={activeImage === index}
                 >
                   <img
-                    className="h-full w-full rounded-[6px] object-cover"
+                    className="product-gallery-thumbnail-image rounded-[6px]"
                     src={image.url}
                     alt=""
                   />

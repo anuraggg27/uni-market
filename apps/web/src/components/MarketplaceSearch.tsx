@@ -88,13 +88,17 @@ export function MarketplaceSearch({
           className={`marketplace-search-trigger ${compact ? "compact" : ""}`}
           aria-label="Search marketplace"
         >
-          <Search aria-hidden="true" />
-          {!compact ? (
+          {compact ? (
+            <Search aria-hidden="true" />
+          ) : (
             <>
-              <span>Search</span>
+              <span className="marketplace-search-trigger-copy">
+                <Search aria-hidden="true" />
+                <span>Search</span>
+              </span>
               <kbd>Ctrl K</kbd>
             </>
-          ) : null}
+          )}
         </button>
       </Dialog.Trigger>
 
