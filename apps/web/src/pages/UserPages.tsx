@@ -1249,11 +1249,18 @@ function ChatPanel({
   });
   const respondToReservation = useMutation({
     mutationFn: ({ requestId, action }: { requestId: string; action: "accept" | "cancel" }) =>
-      api(`/api/transactions/${requestId}/${action}`, { method: "POST" }),
-    onSuccess: (_data, { action }) => {
+      api<TransactionRecord>(`/api/transactions/${requestId}/${action}`, { method: "POST" }),
+    onSuccess: async (updated, { action }) => {
+      // Hide the old request's controls before re-enabling actions. A socket
+      // refetch may still be in flight when the mutation response arrives.
+      await client.cancelQueries({ queryKey: ["transactions"] });
+      client.setQueryData<TransactionRecord[]>(["transactions"], (current) =>
+        current?.map((request) => request.id === updated.id ? { ...request, ...updated } : request),
+      );
       toast.success(action === "accept" ? "Item reserved for this buyer" : "Request declined");
       refreshTransactionViews(client);
     },
+    onError: () => { void client.invalidateQueries({ queryKey: ["transactions"] }); },
   });
 
   const receiveMessage = useCallback((message: ChatMessage) => {
@@ -1502,7 +1509,7 @@ function ChatPanel({
               <strong>{reservationGuidance.title}</strong>
               <p>{reservationGuidance.body}</p>
             </div>
-            <div className="chat-reservation-buttons">
+            <div className="chat-reservation-buttons" key={reservationRequest?.id ?? "no-request"}>
               {isConversationBuyer ? (
                 requestIsActive ? (
                   <Link className={`button ${reservationRequest?.status === "RESERVED" ? "primary" : "secondary"}`} to={requestHref}>

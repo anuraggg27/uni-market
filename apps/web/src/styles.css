@@ -64,6 +64,17 @@ textarea {
 :focus-visible {
   outline: 2px solid var(--color-focus);
 }
+
+/* Status messages must not intercept marketplace controls underneath them.
+   Keep explicit toast actions and the close button interactive. */
+[data-sonner-toaster],
+[data-sonner-toast] {
+  pointer-events: none;
+}
+[data-sonner-toast][data-visible="true"]:not([data-removed="true"]):is([data-front="true"], [data-expanded="true"])
+  :is(button, a, input, select, textarea, [role="button"]) {
+  pointer-events: auto;
+}
 button:disabled {
   cursor: not-allowed;
   opacity: 0.55;

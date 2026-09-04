@@ -311,13 +311,16 @@ test("E2E-02 rejected listing is corrected, resubmitted and approved", async ({
 test("E2E-03 buyer transaction, chat, reservation, completion and reviews", async ({
   browser,
 }) => {
+  // The API persists across Playwright retries/repeats. Use fresh participants
+  // without losing the stable names used by the conversation assertions.
+  const attempt = `${test.info().retry}-${test.info().repeatEachIndex}`;
   const seller = await browser.newContext();
-  const sellerAuth = await signIn(seller, "transaction-seller");
+  const sellerAuth = await signIn(seller, `transaction-seller-${attempt}`);
   const listing = await createListing(sellerAuth, "Graphing calculator");
   const mod = await browser.newContext();
   await approve(mod, listing.id);
   const buyer = await browser.newContext();
-  await signIn(buyer, "transaction-buyer");
+  await signIn(buyer, `transaction-buyer-${attempt}`);
   const buyerPage = await buyer.newPage();
   const sellerPage = await seller.newPage();
   await sellerPage.goto(marketplacePath("/chats"));
@@ -333,6 +336,12 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
   await expect(
     buyerPage.getByText("Saved to your favourites", { exact: true }),
   ).toBeVisible();
+  const successToast = buyerPage.locator('[data-sonner-toast][data-type="success"][data-front="true"]');
+  await expect(successToast).toHaveCSS('pointer-events', 'none');
+  const closeToast = successToast.getByRole('button', { name: 'Close toast' });
+  await expect(closeToast).toHaveCSS('pointer-events', 'auto');
+  await closeToast.click();
+  await expect(buyerPage.getByText('Saved to your favourites', { exact: true })).toBeHidden();
   await buyerPage.getByRole("button", { name: "Unsave item" }).click();
   await expect(
     buyerPage.getByRole("button", { name: "Save", exact: true }),
