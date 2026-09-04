@@ -2255,6 +2255,7 @@ html.dark .confirm-warning {
   line-height: 1.5;
 }
 .email-preference-control {
+  position: relative;
   min-height: 44px;
   display: flex;
   align-items: center;
@@ -2272,11 +2273,15 @@ html.dark .confirm-warning {
 }
 .preference-switch-input {
   position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+  top: 50%;
+  right: 0;
+  z-index: 1;
+  width: 48px;
+  height: 44px;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  transform: translateY(-50%);
 }
 .preference-switch {
   position: relative;
