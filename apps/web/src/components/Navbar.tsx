@@ -526,6 +526,13 @@ export const Navbar = () => {
                   </Accordion>
                   <div className="flex flex-col gap-3 py-2 border-t border-line">
                     <Link
+                      to="/sell"
+                      onClick={() => setOpen(false)}
+                      className="text-[15px] font-normal text-muted hover:text-ink transition-colors py-1"
+                    >
+                      Sell
+                    </Link>
+                    <Link
                       to="/saved"
                       onClick={() => setOpen(false)}
                       className="text-[15px] font-normal text-muted hover:text-ink transition-colors py-1"
@@ -576,7 +583,7 @@ export const Navbar = () => {
                           onClick={() => setOpen(false)}
                           className="text-[15px] font-normal text-muted hover:text-ink transition-colors py-1"
                         >
-                          Profile ({user.displayName})
+                          Profile
                         </Link>
                       </>
                     ) : null}
