@@ -419,9 +419,8 @@ button:disabled {
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: cover;
-  transform: scale(1);
-  transition: transform 230ms ease;
+  object-fit: contain;
+  object-position: center;
 }
 .market-card-image-tint {
   position: absolute;
@@ -648,9 +647,6 @@ button:disabled {
   }
   .market-card:hover::after {
     opacity: 1;
-  }
-  .market-card:hover .market-card-image {
-    transform: scale(1.025);
   }
   .market-card:hover .market-card-cta {
     border-color: rgb(116 224 169 / 0.42);
@@ -1228,14 +1224,8 @@ html.dark .site-footer-utility {
 .my-listing-image img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  transition: transform 180ms ease;
-}
-
-@media (hover: hover) {
-  .my-listing-card:hover .my-listing-image img {
-    transform: scale(1.025);
-  }
+  object-fit: contain;
+  object-position: center;
 }
 
 .my-listing-image > span {
@@ -1636,7 +1626,8 @@ html.dark .confirm-warning {
   display: block;
   width: 100%;
   aspect-ratio: 4/3;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   background: #f8faf8;
   border-radius: 8px;
 }
@@ -3321,7 +3312,8 @@ textarea.control {
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
 }
 .photo-preview figcaption {
   position: absolute;
@@ -3831,7 +3823,8 @@ html.dark .listing-report-submit:hover {
 .marketplace-search-result-image img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
 }
 .marketplace-search-result-image svg {
   width: 18px;
@@ -4491,7 +4484,8 @@ html.dark [data-site-header] :where(
 .list-item img {
   width: 90px;
   aspect-ratio: 4/3;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   border-radius: 6px;
 }
 .list-item h3 {
@@ -4533,7 +4527,7 @@ html.dark [data-site-header] :where(
   height: 100%;
   max-width: 100%;
   max-height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   object-position: center;
 }
 .thumbs {
@@ -4545,7 +4539,8 @@ html.dark [data-site-header] :where(
 .thumbs img {
   width: 88px;
   aspect-ratio: 1;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   border: 2px solid transparent;
   border-radius: 8px;
 }
@@ -4652,7 +4647,8 @@ html.dark [data-site-header] :where(
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   overflow: hidden;
   border-radius: 9px;
   background: var(--color-surface-muted);
@@ -4742,12 +4738,34 @@ html.dark [data-site-header] :where(
   height: 44px;
   display: grid;
   place-items: center;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
   border-radius: 8px;
   background: var(--color-surface-muted);
   color: var(--color-brand);
   font-size: 0.82rem;
   font-weight: 700;
+}
+
+/* Product media must preserve the complete uploaded image at every surface. */
+img.market-card-image,
+.my-listing-image img,
+img.product-image,
+.photo-preview img,
+.marketplace-search-result-image img,
+.list-item img,
+img.product-gallery-main-image,
+img.product-gallery-thumbnail-image,
+.thumbs img,
+img.conversation-image,
+img.chat-listing-image {
+  display: block;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center;
 }
 .chat-context {
   display: grid;
