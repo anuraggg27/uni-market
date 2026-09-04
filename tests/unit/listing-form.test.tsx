@@ -30,6 +30,8 @@ describe("ListingFormPage photos", () => {
   const fetchMock = vi.fn();
 
   beforeEach(() => {
+    apiMock.mockClear();
+    fetchMock.mockClear();
     previewNumber = 0;
     Object.defineProperties(URL, {
       createObjectURL: {
@@ -75,6 +77,27 @@ describe("ListingFormPage photos", () => {
     vi.unstubAllGlobals();
     Reflect.deleteProperty(URL, "createObjectURL");
     Reflect.deleteProperty(URL, "revokeObjectURL");
+  });
+
+  it.each(["Price (₹)", "Minimum (₹)", "Maximum (₹)"])("shows a clear negative-price error for %s without saving", async (label) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><MemoryRouter><ListingFormPage /></MemoryRouter></QueryClientProvider>);
+    await screen.findByRole("option", { name: "Books" });
+    if (label !== "Price (₹)") {
+      fireEvent.click(screen.getByLabelText("Range"));
+      fireEvent.change(screen.getByLabelText("Minimum (₹)"), { target: { value: "1" } });
+      fireEvent.change(screen.getByLabelText("Maximum (₹)"), { target: { value: "10" } });
+    }
+    const input = screen.getByLabelText(label);
+    expect(input).toHaveAttribute("min", "1");
+    expect(input).toHaveAttribute("step", "1");
+    fireEvent.change(input, { target: { value: "-1" } });
+    fireEvent.submit(screen.getByRole("button", { name: "Submit for review" }).closest("form")!);
+    expect(await screen.findByText("Price must be at least ₹1. Choose Free for a giveaway.")).toBeVisible();
+    expect(apiMock.mock.calls.some(([path, options]) => path === "/api/listings" && options?.method === "POST")).toBe(false);
+    fireEvent.click(screen.getByLabelText("Free"));
+    fireEvent.submit(screen.getByRole("button", { name: "Submit for review" }).closest("form")!);
+    await waitFor(() => expect(screen.queryByText("Price must be at least ₹1. Choose Free for a giveaway.")).not.toBeInTheDocument());
   });
 
   it("previews selected files, removes one, and uploads only the remaining file", async () => {

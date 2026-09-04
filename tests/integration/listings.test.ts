@@ -13,6 +13,33 @@ async function moderator(){const mod=await login(ctx.app,'listing-moderator');aw
 async function approve(id:string){const mod=await moderator();return mod.agent.post(`/api/admin/listings/${id}/decision`).set(mod.headers).send({decision:'APPROVE'});}
 
 describe('listing and moderation acceptance',()=>{
+  it.each([
+    ['exactPrice', 'FIXED', -1], ['exactPrice', 'FIXED', 0],
+    ['minimumPrice', 'RANGE', -1], ['minimumPrice', 'RANGE', 0],
+    ['maximumPrice', 'RANGE', -1], ['maximumPrice', 'RANGE', 0],
+  ] as const)('rejects %s of %s %s on creation and editing', async (field, priceType, value) => {
+    const listing = await createDraft(seller, ctx.category.id);
+    const input = { ...listing, conditionExplanation: '', brand: '', defects: '', meetupPoint: '', priceType, exactPrice: priceType === 'FIXED' ? 50 : null, minimumPrice: priceType === 'RANGE' ? 10 : null, maximumPrice: priceType === 'RANGE' ? 50 : null, [field]: value, ownershipAttested: true, usedPhysicalGoodsAttested: true, accurateDescriptionAttested: true, sellerPolicyAccepted: true };
+    for (const response of [
+      await seller.agent.post('/api/listings').set(seller.headers).send(input).expect(400),
+      await seller.agent.patch(`/api/listings/${listing.id}`).set(seller.headers).send(input).expect(400),
+    ]) {
+      expect(response.body.error.fieldErrors[field]).toContain('Price must be at least ₹1. Choose Free for a giveaway.');
+    }
+    const rows = await ctx.db.select().from(schema.listings);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.exactPrice).toBe(450);
+  });
+  it('enforces positive prices in the database and still permits free listings', async () => {
+    const listing = await createDraft(seller, ctx.category.id, { exactPrice: 1 });
+    for (const price of [-1, 0]) {
+      await expect(ctx.db.update(schema.listings).set({ exactPrice: price }).where(eq(schema.listings.id, listing.id))).rejects.toThrow();
+    }
+    await expect(ctx.db.insert(schema.listings).values({ sellerId: seller.user.id, categoryId: ctx.category.id, title: 'Invalid range', description: 'Negative-price range', condition: 'GOOD', priceType: 'RANGE', minimumPrice: -10, maximumPrice: -1, location: 'Campus' })).rejects.toThrow();
+    const free = await createDraft(seller, ctx.category.id, { priceType: 'FREE', exactPrice: null });
+    expect(free.priceType).toBe('FREE');
+    expect(free.exactPrice).toBeNull();
+  });
   it('accepts a ten-character listing description',async()=>{const listing=await createDraft(seller,ctx.category.id,{description:'1234567890'});expect(listing.description).toBe('1234567890');});
   it('LIST-01 creates a private owner-bound draft',async()=>{const listing=await createDraft(seller,ctx.category.id);expect(listing.sellerId).toBe(seller.user.id);expect(listing.lifecycleState).toBe('DRAFT');expect(listing.submittedAt).toBeNull();expect((await request(ctx.app).get('/api/listings')).body.data).toHaveLength(0);const mod=await moderator();expect((await mod.agent.get('/api/admin/listings/pending').expect(200)).body.data).toHaveLength(0);});
   it('LIST-02 submission is pending, private, owner-visible and queued',async()=>{const listing=await draftWithImage();await seller.agent.post(`/api/listings/${listing.id}/submit`).set(seller.headers).expect(200);expect((await request(ctx.app).get('/api/listings')).body.data).toHaveLength(0);await request(ctx.app).get(`/api/listings/${listing.id}`).expect(404);const owner=await seller.agent.get(`/api/listings/${listing.id}`).expect(200);expect(owner.body.data.ownerPreview).toBe(true);expect(owner.body.data.moderationState).toBe('PENDING');expect(owner.body.data.submittedAt).toBeTruthy();await seller.agent.post(`/api/listings/${listing.id}/submit`).set(seller.headers).expect(409);const mod=await moderator();const queue=await mod.agent.get('/api/admin/listings/pending').expect(200);expect(queue.body.data[0].listing.id).toBe(listing.id);});

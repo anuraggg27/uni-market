@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { io, type Socket } from "socket.io-client";
 import {
@@ -51,6 +51,7 @@ import {
 import { ProductCard } from "../components/ProductCard";
 import { AvatarPicker, AvatarPickerDialog } from "../components/AvatarPicker";
 import { UserAvatar } from "../components/UserAvatar";
+import { BuyerReputation } from "../components/BuyerReputation";
 import {
   formatNotificationTime,
   getNotificationIcon,
@@ -385,7 +386,16 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
                 <input
                   type="radio"
                   value={value}
-                  {...form.register("priceType")}
+                  {...form.register("priceType", {
+                    onChange: (event) => {
+                      if (event.target.value !== "FIXED") form.setValue("exactPrice", null);
+                      if (event.target.value !== "RANGE") {
+                        form.setValue("minimumPrice", null);
+                        form.setValue("maximumPrice", null);
+                      }
+                      form.clearErrors(["exactPrice", "minimumPrice", "maximumPrice"]);
+                    },
+                  })}
                 />
                 <span>{value[0] + value.slice(1).toLowerCase()}</span>
               </label>
@@ -401,6 +411,9 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
                     <input
                       aria-label="Price (₹)"
                       type="number"
+                      min={1}
+                      max={10_000_000}
+                      step={1}
                       {...form.register("exactPrice", { valueAsNumber: true })}
                     />
                   </span>
@@ -417,6 +430,9 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
                       <input
                         aria-label="Minimum (₹)"
                         type="number"
+                        min={1}
+                        max={10_000_000}
+                        step={1}
                         {...form.register("minimumPrice", {
                           valueAsNumber: true,
                         })}
@@ -433,11 +449,17 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
                       <input
                         aria-label="Maximum (₹)"
                         type="number"
+                        min={1}
+                        max={10_000_000}
+                        step={1}
                         {...form.register("maximumPrice", {
                           valueAsNumber: true,
                         })}
                       />
                     </span>
+                    <FieldError>
+                      {form.formState.errors.maximumPrice?.message}
+                    </FieldError>
                   </label>
                 </div>
               )}
@@ -951,12 +973,19 @@ type TransactionRecord = {
   status: string;
   createdAt: string;
   updatedAt: string;
+  reviewSubmitted: boolean;
   exchangeCode?: string;
   exchangeCodeLocked?: boolean;
 };
 
 const emptyTransactions: TransactionRecord[] = [];
 const activeRequestStatuses = new Set(["REQUESTED", "ACCEPTED", "RESERVED", "HANDED_OVER"]);
+
+function refreshTransactionViews(client: QueryClient) {
+  for (const key of ["transactions", "conversations", "notifications", "my-listings", "listing", "seller", "buyer-reputation", "leaderboard"]) {
+    void client.invalidateQueries({ queryKey: [key] });
+  }
+}
 
 type ChatMessage = {
   id: string;
@@ -997,6 +1026,7 @@ export function ChatsPage() {
     queryKey: ["transactions"],
     queryFn: () => api<TransactionRecord[]>("/api/transactions"),
     enabled: Boolean(user?.marketplaceEligible),
+    refetchInterval: realtimeState === "connected" ? false : 5_000,
   });
   const selectedConversation = conversations.data?.find(
     (conversation) => conversation.id === conversationId,
@@ -1017,7 +1047,11 @@ export function ChatsPage() {
 
   useEffect(() => {
     const realtime = socket();
-    const connected = () => setRealtimeState("connected");
+    const refreshReservations = () => refreshTransactionViews(client);
+    const connected = () => {
+      setRealtimeState("connected");
+      refreshReservations();
+    };
     const disconnected = () => setRealtimeState("connecting");
     const unavailable = () => setRealtimeState("offline");
     const receive = (message: ChatMessage) => {
@@ -1050,12 +1084,16 @@ export function ChatsPage() {
               item.id === message.conversationId
                 ? {
                     ...item,
-                    lastMessageAt: message.createdAt,
+                    lastMessageAt: new Date(item.lastMessageAt) > new Date(message.createdAt)
+                      ? item.lastMessageAt
+                      : message.createdAt,
                     unread:
                       message.conversationId === openConversation ||
                       message.senderId === user?.id
                         ? 0
-                        : item.unread + 1,
+                        // An inbox fetch can already include this message before
+                        // its socket event arrives. Do not count it twice.
+                        : item.unread + (new Date(item.lastMessageAt) < new Date(message.createdAt) ? 1 : 0),
                   }
                 : item,
             );
@@ -1066,6 +1104,7 @@ export function ChatsPage() {
             );
           },
         );
+        void client.invalidateQueries({ queryKey: ["conversations"] });
       }
     };
 
@@ -1073,6 +1112,7 @@ export function ChatsPage() {
     realtime.on("disconnect", disconnected);
     realtime.on("connect_error", unavailable);
     realtime.on("message:new", receive);
+    realtime.on("transaction:updated", refreshReservations);
     if (realtime.connected) connected();
     else realtime.connect();
 
@@ -1081,6 +1121,7 @@ export function ChatsPage() {
       realtime.off("disconnect", disconnected);
       realtime.off("connect_error", unavailable);
       realtime.off("message:new", receive);
+      realtime.off("transaction:updated", refreshReservations);
       realtime.disconnect();
     };
   }, [client, user?.id]);
@@ -1149,6 +1190,7 @@ export function ChatsPage() {
         </aside>
         {conversationId ? (
           <ChatPanel
+            key={conversationId}
             id={conversationId}
             conversation={selectedConversation}
             reservationRequest={selectedRequest}
@@ -1201,8 +1243,16 @@ function ChatPanel({
     mutationFn: () =>
       api<TransactionRecord>(`/api/conversations/${id}/reservation-requests`, { method: "POST" }),
     onSuccess: () => {
-      toast.success("Request sent");
-      void client.invalidateQueries({ queryKey: ["transactions"] });
+      toast.success("Reservation request sent");
+      refreshTransactionViews(client);
+    },
+  });
+  const respondToReservation = useMutation({
+    mutationFn: ({ requestId, action }: { requestId: string; action: "accept" | "cancel" }) =>
+      api(`/api/transactions/${requestId}/${action}`, { method: "POST" }),
+    onSuccess: (_data, { action }) => {
+      toast.success(action === "accept" ? "Item reserved for this buyer" : "Request declined");
+      refreshTransactionViews(client);
     },
   });
 
@@ -1271,6 +1321,22 @@ function ChatPanel({
   const requestHref = reservationRequest
     ? `/requests?view=${requestView}#transaction-${reservationRequest.id}`
     : "/requests";
+  const reservationGuidance = (() => {
+    if (reservationRequest?.status === "REQUESTED") return isConversationBuyer
+      ? { title: "Waiting for the seller", body: "Your request is sent. Once accepted, your exchange code will be ready." }
+      : { title: "The buyer wants to reserve this item", body: "Accept to hold it for this buyer. They’ll get a code to share with you at pickup." };
+    if (reservationRequest?.status === "RESERVED") return isConversationBuyer
+      ? { title: "Reserved for you", body: "Arrange pickup here. Check the item before sharing your exchange code with the seller." }
+      : { title: "Reserved for this buyer", body: "Arrange pickup here. Enter the buyer’s exchange code at the meetup to mark the item sold." };
+    if (reservationRequest?.status === "COMPLETED") return { title: "Exchange complete", body: reservationRequest.reviewSubmitted ? "The sale is recorded. You’ve already reviewed this exchange." : "The sale is recorded. You can now leave a review." };
+    if (requestIsActive) return { title: "Your exchange is in progress", body: "Open the request to see the next step." };
+    if (conversation?.lifecycleState !== "ACTIVE") return { title: "Item unavailable", body: "This item can’t be reserved right now." };
+    if (reservationRequest?.status.startsWith("CANCELLED_")) return { title: "Reservation request cancelled", body: "Keep chatting if needed. The buyer can send a new request once you both agree." };
+    if (!isConversationBuyer) return { title: "Agree on price and pickup", body: "When you’re both ready, ask the buyer to tap “Ask seller to reserve” here." };
+    return buyerHasMessaged
+      ? { title: "Ready to go ahead?", body: "Ask the seller to hold this item for you. They’ll confirm the reservation here." }
+      : { title: "Start with a message", body: "Agree on the price and pickup here, then ask the seller to reserve the item." };
+  })();
 
   useEffect(() => {
     if (!query.isSuccess) return;
@@ -1403,48 +1469,8 @@ function ChatPanel({
           ) : (
             <span>Loading listing…</span>
           )}
+          {conversation?.sellerId === user?.id && conversation ? <BuyerReputation conversationId={id} /> : null}
         </div>
-        {conversation ? (
-          <div className="chat-reservation-control">
-            {isConversationBuyer ? (
-              requestIsActive ? (
-                <Link className="button small secondary" to={requestHref}>
-                  {reservationRequest?.status === "REQUESTED"
-                    ? "Reservation requested"
-                    : reservationRequest?.status === "RESERVED"
-                      ? "View exchange code"
-                      : "View request"}
-                </Link>
-              ) : reservationRequest?.status === "COMPLETED" ? (
-                <Link className="chat-reservation-state" to={requestHref}>Exchange completed</Link>
-              ) : conversation.lifecycleState === "ACTIVE" ? (
-                <button
-                  className="button small secondary"
-                  type="button"
-                  disabled={!buyerHasMessaged || requestReservation.isPending}
-                  onClick={() => requestReservation.mutate()}
-                  title={buyerHasMessaged ? "Ask the seller to reserve this listing for you" : "Send the seller a message first"}
-                >
-                  {requestReservation.isPending
-                    ? "Requesting…"
-                    : buyerHasMessaged
-                      ? "Request reservation"
-                      : "Message seller first"}
-                </button>
-              ) : (
-                <span className="chat-reservation-state">Unavailable</span>
-              )
-            ) : reservationRequest?.status === "REQUESTED" ? (
-              <Link className="button small primary" to={requestHref}>Review request</Link>
-            ) : reservationRequest?.status === "RESERVED" ? (
-              <Link className="button small secondary" to={requestHref}>Complete exchange</Link>
-            ) : reservationRequest?.status === "COMPLETED" ? (
-              <Link className="chat-reservation-state" to={requestHref}>Exchange completed</Link>
-            ) : conversation.lifecycleState !== "ACTIVE" ? (
-              <span className="chat-reservation-state">Unavailable</span>
-            ) : null}
-          </div>
-        ) : null}
         <details className="chat-actions">
           <summary aria-label="Conversation actions">
             <MoreHorizontal aria-hidden="true" />
@@ -1470,8 +1496,61 @@ function ChatPanel({
             ) : null}
           </div>
         </details>
-        {requestReservation.error ? (
-          <p className="field-error chat-reservation-error" role="alert">{requestReservation.error.message}</p>
+        {conversation ? (
+          <section className="chat-reservation-control" aria-label="Reservation and exchange">
+            <div className="chat-reservation-copy" aria-live="polite" aria-atomic="true">
+              <strong>{reservationGuidance.title}</strong>
+              <p>{reservationGuidance.body}</p>
+            </div>
+            <div className="chat-reservation-buttons">
+              {isConversationBuyer ? (
+                requestIsActive ? (
+                  <Link className={`button ${reservationRequest?.status === "RESERVED" ? "primary" : "secondary"}`} to={requestHref}>
+                    {reservationRequest?.status === "RESERVED" ? "View exchange code" : "View request"}
+                  </Link>
+                ) : reservationRequest?.status === "COMPLETED" ? (
+                  <Link className="button secondary" to={requestHref}>{reservationRequest.reviewSubmitted ? "View exchange" : "Leave a review"}</Link>
+                ) : conversation.lifecycleState === "ACTIVE" ? (
+                  <button
+                    className="button primary"
+                    type="button"
+                    disabled={!buyerHasMessaged || requestReservation.isPending}
+                    onClick={() => requestReservation.mutate()}
+                  >
+                    {requestReservation.isPending ? "Sending request…" : "Ask seller to reserve"}
+                  </button>
+                ) : null
+              ) : reservationRequest?.status === "REQUESTED" ? (
+                <>
+                  <button
+                    className="button primary"
+                    type="button"
+                    disabled={respondToReservation.isPending}
+                    onClick={() => respondToReservation.mutate({ requestId: reservationRequest.id, action: "accept" })}
+                  >
+                    {respondToReservation.isPending && respondToReservation.variables?.action === "accept" ? "Reserving…" : "Accept and reserve"}
+                  </button>
+                  <button
+                    className="button secondary"
+                    type="button"
+                    disabled={respondToReservation.isPending}
+                    onClick={() => respondToReservation.mutate({ requestId: reservationRequest.id, action: "cancel" })}
+                  >
+                    {respondToReservation.isPending && respondToReservation.variables?.action === "cancel" ? "Declining…" : "Decline"}
+                  </button>
+                </>
+              ) : reservationRequest?.status === "RESERVED" ? (
+                <Link className="button primary" to={requestHref}>Complete exchange</Link>
+              ) : reservationRequest?.status === "COMPLETED" ? (
+                <Link className="button secondary" to={requestHref}>{reservationRequest.reviewSubmitted ? "View exchange" : "Leave a review"}</Link>
+              ) : requestIsActive ? (
+                <Link className="button primary" to={requestHref}>View request</Link>
+              ) : null}
+            </div>
+            {requestReservation.error || respondToReservation.error ? (
+              <p className="field-error chat-reservation-error" role="alert">{(requestReservation.error ?? respondToReservation.error)?.message}</p>
+            ) : null}
+          </section>
         ) : null}
       </header>
       <div className="messages-wrap">
@@ -1492,7 +1571,7 @@ function ChatPanel({
           <div className="chat-safety-note" data-slot="chat-marker">
             <ShieldCheck aria-hidden="true" />
             <span>
-              Meet in public, inspect before paying & never share an OTP.
+              Meet in public and inspect before paying. Never share a sign-in or payment OTP.
             </span>
           </div>
           {query.isLoading ? (
@@ -1671,6 +1750,29 @@ function transactionStatusText(transaction: TransactionRecord): string {
 
 export function RequestsPage() {
   const client = useQueryClient();
+  const [realtimeState, setRealtimeState] = useState<RealtimeState>("connecting");
+  useEffect(() => {
+    const realtime = socket();
+    const refresh = () => refreshTransactionViews(client);
+    const connected = () => {
+      setRealtimeState("connected");
+      refresh();
+    };
+    const disconnected = () => setRealtimeState("offline");
+    realtime.on("transaction:updated", refresh);
+    realtime.on("connect", connected);
+    realtime.on("disconnect", disconnected);
+    realtime.on("connect_error", disconnected);
+    if (realtime.connected) connected();
+    else realtime.connect();
+    return () => {
+      realtime.off("transaction:updated", refresh);
+      realtime.off("connect", connected);
+      realtime.off("disconnect", disconnected);
+      realtime.off("connect_error", disconnected);
+      realtime.disconnect();
+    };
+  }, [client]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [exchangeCodeEntries, setExchangeCodeEntries] = useState<Record<string, string>>({});
   const requestedView = searchParams.get("view");
@@ -1682,6 +1784,7 @@ export function RequestsPage() {
   const query = useQuery({
     queryKey: ["transactions"],
     queryFn: () => api<TransactionRecord[]>("/api/transactions"),
+    refetchInterval: realtimeState === "connected" ? false : 5_000,
   });
   const action = useMutation({
     mutationFn: ({ id, action }: { id: string; action: string }) =>
@@ -1711,7 +1814,13 @@ export function RequestsPage() {
         method: "POST",
         ...jsonBody({ rating, text, tags: [] }),
       }),
-    onSuccess: () => toast.success("Review submitted."),
+    onSuccess: (_data, variables) => {
+      client.setQueryData<TransactionRecord[]>(["transactions"], (current) =>
+        current?.map((tx) => tx.id === variables.id ? { ...tx, reviewSubmitted: true } : tx),
+      );
+      toast.success("Review submitted.");
+    },
+    onSettled: () => refreshTransactionViews(client),
   });
   const completeExchange = useMutation({
     mutationFn: ({ id, code }: { id: string; code: string }) =>
@@ -1881,11 +1990,14 @@ export function RequestsPage() {
                   </button>
                 ) : null}
               </div>
-              {tx.status === "COMPLETED" ? (
+              {tx.status === "COMPLETED" && tx.reviewSubmitted ? (
+                <p className="transaction-review-form" role="status">Already reviewed</p>
+              ) : tx.status === "COMPLETED" ? (
                 <form
                   className="form-grid transaction-review-form"
                   onSubmit={(e) => {
                     e.preventDefault();
+                    if (review.isPending) return;
                     const f = new FormData(e.currentTarget);
                     review.mutate({
                       id: tx.id,
@@ -1913,8 +2025,8 @@ export function RequestsPage() {
                       required
                     />
                   </label>
-                  <button className="button secondary">
-                    Leave verified review
+                  <button className="button secondary" disabled={review.isPending}>
+                    {review.isPending && review.variables?.id === tx.id ? "Submitting…" : "Leave verified review"}
                   </button>
                 </form>
               ) : null}
@@ -1996,15 +2108,18 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
 
   return (
     <div className="page narrow profile-page">
-      <div className="page-header">
-        <div>
-          <h1>{onboarding ? "Set up your profile" : "Your profile"}</h1>
-          <p className="lede">
-            {onboarding
-              ? "Choose how you appear, then add your student details."
-              : "Manage how other students see you across Uni Market."}
-          </p>
-        </div>
+      <div className="page-header profile-page-header">
+        <h1>{onboarding ? "Set up your profile" : "Your profile"}</h1>
+        {!onboarding ? (
+          <Link className="button secondary profile-preview-link" to={`/seller/${user.id}`}>
+            View seller profile
+          </Link>
+        ) : null}
+        <p className="lede">
+          {onboarding
+            ? "Choose how you appear, then add your student details."
+            : "Manage how other students see you across Uni Market."}
+        </p>
       </div>
       <form
         className="form panel profile-form"
@@ -2231,7 +2346,7 @@ export function NotificationsPage() {
                     />
                     {unread ? (
                       <span
-                        className="absolute -right-0.5 -top-0.5 size-2.5 rounded-full border-2 border-surface bg-brand"
+                        className="absolute -right-0.5 -top-0.5 size-3 rounded-full border-2 border-surface bg-notification"
                         aria-hidden="true"
                       />
                     ) : null}

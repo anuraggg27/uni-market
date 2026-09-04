@@ -20,6 +20,8 @@ import { AppError, asyncRoute } from "../lib/errors.js";
 import type { StorageService } from "../services/storage.js";
 import { createScamConfirmation, scamRiskCodes, verifyScamConfirmation } from "../services/scam-risk.js";
 import { queueUserEmail } from "../services/email-preferences.js";
+import { notifyNotifications } from "../services/notification-events.js";
+import { getReputation } from "../services/reputation.js";
 
 async function assertConversationMember(
   db: Database,
@@ -77,6 +79,14 @@ export function communicationRouter(
   onMessage?: (conversationId: string, message: unknown) => void,
 ): Router {
   const router = Router();
+
+  router.get('/conversations/:id/buyer-reputation', requireVerified, asyncRoute(async (req, res) => {
+    const conversation = await assertConversationMember(db, idSchema.parse(req.params.id), req.auth!.userId);
+    if (conversation.sellerId !== req.auth!.userId) {
+      throw new AppError(403, 'BUYER_REPUTATION_FORBIDDEN', 'Buyer feedback is available to the seller in this conversation');
+    }
+    res.json({ data: await getReputation(db, conversation.buyerId, 'BUYER') });
+  }));
 
   router.get(
     "/favourites",
@@ -434,6 +444,7 @@ export function communicationRouter(
         return message;
       });
       onMessage?.(id, created);
+      notifyNotifications(req.app.get('io'), [otherId]);
       res.status(201).json({ data: created });
     }),
   );

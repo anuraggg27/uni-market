@@ -50,6 +50,7 @@ import { encryptText, sha256 } from "../lib/crypto.js";
 import { grievanceClock, grievanceTracking } from "../lib/grievance.js";
 import { AppError, asyncRoute } from "../lib/errors.js";
 import { queueUserEmail } from "../services/email-preferences.js";
+import { notifyNotifications } from "../services/notification-events.js";
 
 const reportSchema = z.object({
   targetType: z.enum([
@@ -292,6 +293,7 @@ export function userOperationsRouter(db: Database, config: AppConfig): Router {
           "NOTIFICATION_NOT_FOUND",
           "Notification not found",
         );
+      notifyNotifications(req.app.get('io'), [req.auth!.userId]);
       res.json({ data: updated });
     }),
   );
@@ -308,6 +310,7 @@ export function userOperationsRouter(db: Database, config: AppConfig): Router {
             isNull(notifications.readAt),
           ),
         );
+      notifyNotifications(req.app.get('io'), [req.auth!.userId]);
       res.status(204).end();
     }),
   );
@@ -866,6 +869,7 @@ export function adminRouter(db: Database, config: AppConfig): Router {
         });
         return row;
       });
+      notifyNotifications(req.app.get('io'), [current.sellerId]);
       await audit(db, req, {
         action: `LISTING_${input.decision}`,
         targetType: "LISTING",
@@ -1017,6 +1021,7 @@ export function adminRouter(db: Database, config: AppConfig): Router {
         body: "Your account has been suspended. Contact support for help.",
         href: "/support",
       });
+      notifyNotifications(req.app.get('io'), [id]);
       await audit(db, req, {
         action: "USER_SUSPEND",
         targetType: "USER",
@@ -1043,6 +1048,7 @@ export function adminRouter(db: Database, config: AppConfig): Router {
         body: reason,
         href: "/support",
       });
+      notifyNotifications(req.app.get('io'), [id]);
       await audit(db, req, {
         action: "USER_WARN",
         targetType: "USER",
@@ -1150,6 +1156,7 @@ export function adminRouter(db: Database, config: AppConfig): Router {
         await tx.update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.userId, id));
         await tx.insert(notifications).values({ userId: id, type: 'MODERATION_WARNING', title: 'Staff access changed', body: 'Your account permissions changed. Sign in again to continue.', href: '/login' });
       });
+      notifyNotifications(req.app.get('io'), [id]);
       await audit(db, req, {
         action: "USER_ROLES_UPDATE",
         targetType: "USER",
@@ -1340,6 +1347,7 @@ export function adminRouter(db: Database, config: AppConfig): Router {
         }
         return message;
       });
+      if (!input.internal) notifyNotifications(req.app.get('io'), [ticket.userId]);
       res.status(201).json({ data: message });
     }),
   );

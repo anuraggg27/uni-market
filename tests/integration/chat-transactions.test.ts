@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { io as socketClient } from 'socket.io-client';
 import { eq } from 'drizzle-orm';
+import request from 'supertest';
 import * as schema from '../../apps/api/src/db/schema';
 import { attachSocket } from '../../apps/api/src/socket';
 import { createDraft, login, makeRole, setup, uploadImage, verifyPhone } from './helper';
@@ -12,6 +13,67 @@ beforeEach(async()=>{ctx=await setup();seller=await login(ctx.app,'chat-seller')
 async function conversation(){return (await buyer.agent.post('/api/conversations').set(buyer.headers).send({listingId:listing.id}).expect(201)).body.data;}
 
 describe('chat acceptance',()=>{
+  it('broadcasts reservation changes only to participants, including after reconnect, without leaking exchange codes', async () => {
+    const c = await conversation();
+    await buyer.agent.post(`/api/conversations/${c.id}/messages`).set(buyer.headers)
+      .send({ body: 'I would like to reserve this item.', clientId: crypto.randomUUID() }).expect(201);
+    const outsider = await login(ctx.app, 'reservation-outsider');
+    await verifyPhone(outsider, '9954321098');
+    const server = createServer(ctx.app);
+    const io = attachSocket(server, ctx.db, ctx.config);
+    ctx.app.set('io', io);
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const address = server.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+    const sockets = [buyer, seller, outsider].map((auth) => socketClient(`http://127.0.0.1:${port}`, {
+      extraHeaders: { Cookie: auth.cookie }, transports: ['websocket'], autoConnect: false,
+    }));
+    const events: unknown[][] = [[], [], []];
+    try {
+      await Promise.all(sockets.map((connection, index) => new Promise<void>((resolve, reject) => {
+        connection.on('transaction:updated', (event: unknown) => events[index]!.push(event));
+        connection.once('connect', resolve);
+        connection.once('connect_error', reject);
+        connection.connect();
+      })));
+      const assertEvents = async (count: number) => {
+        await expect.poll(() => events.slice(0, 2).map((received) => received.length)).toEqual([count, count]);
+        for (const event of events.flat()) expect(event).toEqual({ listingId: listing.id });
+        expect(events[2]).toEqual([]);
+      };
+      const request = (await buyer.agent.post(`/api/conversations/${c.id}/reservation-requests`).set(buyer.headers).expect(201)).body.data;
+      await assertEvents(1);
+      const sellerSocket = sockets[1]!;
+      sellerSocket.disconnect();
+      await new Promise<void>((resolve, reject) => {
+        sellerSocket.once('connect', resolve);
+        sellerSocket.once('connect_error', reject);
+        sellerSocket.connect();
+      });
+      await seller.agent.post(`/api/transactions/${request.id}/accept`).set(seller.headers).expect(200);
+      await assertEvents(2);
+      const rotated = await buyer.agent.post(`/api/transactions/${request.id}/exchange-code/rotate`).set(buyer.headers).expect(200);
+      await assertEvents(3);
+      const wrong = rotated.body.data.exchangeCode === '000000' ? '000001' : '000000';
+      for (let attempt = 0; attempt < 5; attempt++) {
+        await seller.agent.post(`/api/transactions/${request.id}/exchange/complete`).set(seller.headers)
+          .send({ code: wrong }).expect(attempt === 4 ? 429 : 400);
+      }
+      await assertEvents(4);
+      await buyer.agent.post(`/api/transactions/${request.id}/cancel`).set(buyer.headers).expect(200);
+      await assertEvents(5);
+      const next = (await buyer.agent.post(`/api/conversations/${c.id}/reservation-requests`).set(buyer.headers).expect(201)).body.data;
+      await seller.agent.post(`/api/transactions/${next.id}/accept`).set(seller.headers).expect(200);
+      const requests = (await buyer.agent.get('/api/transactions').expect(200)).body.data;
+      const code = requests.find((row: { id: string }) => row.id === next.id).exchangeCode;
+      await seller.agent.post(`/api/transactions/${next.id}/exchange/complete`).set(seller.headers).send({ code }).expect(200);
+      await assertEvents(8);
+    } finally {
+      sockets.forEach((connection) => connection.close());
+      await new Promise<void>((resolve) => io.close(() => resolve()));
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
   it('saves favourites idempotently, lists them privately and keeps the listing counter accurate',async()=>{await buyer.agent.post(`/api/favourites/${listing.id}`).set(buyer.headers).expect(201);await buyer.agent.post(`/api/favourites/${listing.id}`).set(buyer.headers).expect(200);const saved=await buyer.agent.get('/api/favourites').expect(200);expect(saved.body.data).toHaveLength(1);expect(saved.body.data[0]).toMatchObject({id:listing.id,favouriteCount:1});expect(saved.body.data[0].coverImageUrl).toContain('/api/uploads/local-read');expect((await ctx.db.select().from(schema.listings).where(eq(schema.listings.id,listing.id)))[0]?.favouriteCount).toBe(1);await buyer.agent.delete(`/api/favourites/${listing.id}`).set(buyer.headers).expect(204);await buyer.agent.delete(`/api/favourites/${listing.id}`).set(buyer.headers).expect(204);expect((await ctx.db.select().from(schema.listings).where(eq(schema.listings.id,listing.id)))[0]?.favouriteCount).toBe(0);expect((await buyer.agent.get('/api/favourites')).body.data).toEqual([]);});
   it('does not allow unavailable drafts to be favourited',async()=>{const draft=await createDraft(seller,ctx.category.id,{title:'Private draft listing'});const response=await buyer.agent.post(`/api/favourites/${draft.id}`).set(buyer.headers).expect(404);expect(response.body.error.code).toBe('LISTING_UNAVAILABLE');expect(await ctx.db.select().from(schema.favourites)).toHaveLength(0);});
   it('CHAT-01 requires phone verification',async()=>{const user=await login(ctx.app,'chat-unverified');await user.agent.post('/api/conversations').set(user.headers).send({listingId:listing.id}).expect(403);});
@@ -79,6 +141,71 @@ describe('transaction and review acceptance',()=>{
     await seller.agent.post(`/api/transactions/${reserved.transaction.id}/exchange/complete`).set(seller.headers).send({code:reserved.code}).expect(200);
     return reserved.transaction;
   }
+  it('separates seller ratings from buyer feedback and exposes buyer feedback only to the conversation seller', async () => {
+    const tx = await completeWithCode();
+    await buyer.agent.post(`/api/transactions/${tx.id}/reviews`).set(buyer.headers).send({ rating: 4, text: 'Accurate listing', tags: [] }).expect(201);
+    const buyerReview = await seller.agent.post(`/api/transactions/${tx.id}/reviews`).set(seller.headers).send({ rating: 5, text: 'Prompt buyer', tags: [] }).expect(201);
+    const sellerProfile = (await request(ctx.app).get(`/api/sellers/${seller.user.id}`).expect(200)).body.data;
+    expect(sellerProfile).toMatchObject({ averageRating: 4, reviewCount: 1 });
+    const buyerAsSeller = (await request(ctx.app).get(`/api/sellers/${buyer.user.id}`).expect(200)).body.data;
+    expect(buyerAsSeller).toMatchObject({ averageRating: 0, reviewCount: 0, recentReviews: [], completedSales: 0 });
+    const buyerListing = await createDraft(buyer, ctx.category.id);
+    expect((await buyer.agent.get(`/api/listings/${buyerListing.id}`).expect(200)).body.data.seller).toMatchObject({ rating: 0, reviewCount: 0 });
+    expect((await seller.agent.get(`/api/listings/${listing.id}`).expect(200)).body.data.seller).toMatchObject({ rating: 4, reviewCount: 1 });
+    const c = (await seller.agent.get('/api/conversations').expect(200)).body.data[0];
+    const path = `/api/conversations/${c.id}/buyer-reputation`;
+    const feedback = (await seller.agent.get(path).expect(200)).body.data;
+    expect(feedback).toMatchObject({ averageRating: 5, reviewCount: 1 });
+    expect(feedback.recentReviews).toEqual([expect.objectContaining({ text: 'Prompt buyer' })]);
+    await buyer.agent.get(path).expect(403);
+    await request(ctx.app).get(path).expect(401);
+    const outsider = await login(ctx.app, 'reputation-outsider');
+    await verifyPhone(outsider, '9954321098');
+    await outsider.agent.get(path).expect(403);
+    await ctx.db.update(schema.reviews).set({ hiddenAt: new Date() }).where(eq(schema.reviews.id, buyerReview.body.data.id));
+    expect((await seller.agent.get(path).expect(200)).body.data).toMatchObject({ averageRating: 0, reviewCount: 0, recentReviews: [] });
+    expect((await seller.agent.get(`/api/sellers/${seller.user.id}`).expect(200)).body.data.averageRating).toBe(4);
+  });
+
+  it('ranks sellers using only their seller reviews and counts repeated star values correctly', async () => {
+    for (const rating of [4, 4, 2]) {
+      const item = await createDraft(seller, ctx.category.id);
+      const [tx] = await ctx.db.insert(schema.transactions).values({ listingId: item.id, sellerId: seller.user.id, buyerId: buyer.user.id, status: 'COMPLETED', completedAt: new Date() }).returning();
+      await ctx.db.insert(schema.reviews).values({ transactionId: tx!.id, reviewerId: buyer.user.id, revieweeId: seller.user.id, rating, text: 'Seller feedback' });
+    }
+    const purchase = await createDraft(buyer, ctx.category.id);
+    const [tx] = await ctx.db.insert(schema.transactions).values({ listingId: purchase.id, sellerId: buyer.user.id, buyerId: seller.user.id, status: 'COMPLETED', completedAt: new Date() }).returning();
+    await ctx.db.insert(schema.reviews).values({ transactionId: tx!.id, reviewerId: buyer.user.id, revieweeId: seller.user.id, rating: 5, text: 'Buyer feedback must not count' });
+    for (const scope of ['monthly', 'all-time']) {
+      const [ranked] = (await request(ctx.app).get(`/api/leaderboard?scope=${scope}`).expect(200)).body.data;
+      expect(ranked.id).toBe(seller.user.id);
+      expect(Number(ranked.completedSales)).toBe(3);
+      expect(Number(ranked.reviewCount)).toBe(3);
+      expect(Number(ranked.averageRating)).toBeCloseTo(10 / 3);
+    }
+    const profile = (await request(ctx.app).get(`/api/sellers/${seller.user.id}`).expect(200)).body.data;
+    expect(profile.averageRating).toBeCloseTo(10 / 3);
+    expect(profile.recentReviews).toHaveLength(3);
+  });
+  it('accepts one simultaneous review and persists each participant’s reviewed state', async () => {
+    const tx = await completeWithCode();
+    const reviewState = async (auth: typeof buyer) => (await auth.agent.get('/api/transactions').expect(200)).body.data.find((row: { id: string }) => row.id === tx.id).reviewSubmitted;
+    expect(await reviewState(buyer)).toBe(false);
+    const results = await Promise.all([5, 4].map((rating) => buyer.agent.post(`/api/transactions/${tx.id}/reviews`).set(buyer.headers).send({ rating, text: 'A smooth exchange', tags: [] })));
+    expect(results.map((response) => response.status).sort()).toEqual([201, 409]);
+    expect(results.find((response) => response.status === 409)?.body.error.code).toBe('DUPLICATE_REVIEW');
+    expect(await ctx.db.select().from(schema.reviews)).toHaveLength(1);
+    expect(await ctx.db.select().from(schema.notifications).where(eq(schema.notifications.type, 'REVIEW_RECEIVED'))).toHaveLength(1);
+    expect(await reviewState(buyer)).toBe(true);
+    expect(await reviewState(seller)).toBe(false);
+    await seller.agent.post(`/api/transactions/${tx.id}/reviews`).set(seller.headers).send({ rating: 5, text: 'Prompt collection', tags: [] }).expect(201);
+    expect(await reviewState(seller)).toBe(true);
+    // Hiding or soft-deleting feedback must not reopen the review slot.
+    await ctx.db.update(schema.reviews).set({ hiddenAt: new Date(), deletedAt: new Date() }).where(eq(schema.reviews.reviewerId, buyer.user.id));
+    expect(await reviewState(buyer)).toBe(true);
+    await buyer.agent.post(`/api/transactions/${tx.id}/reviews`).set(buyer.headers).send({ rating: 5, text: 'Another review', tags: [] }).expect(409);
+    expect(await ctx.db.select().from(schema.reviews)).toHaveLength(2);
+  });
   it('returns monthly and all-time leaderboard results without a timestamp encoding failure',async()=>{
     const [monthly,allTime]=await Promise.all([
       seller.agent.get('/api/leaderboard?scope=monthly').expect(200),

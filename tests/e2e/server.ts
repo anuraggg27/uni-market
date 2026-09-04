@@ -61,7 +61,7 @@ const config = loadConfig({
 });
 const app = createApp({ db, config, googleVerifier: verifier });
 const server = createServer(app);
-attachSocket(server, db, config);
+app.set('io', attachSocket(server, db, config));
 server.listen(apiPort, "127.0.0.1");
 for (const signal of ["SIGINT", "SIGTERM"] as const)
   process.on(signal, () =>

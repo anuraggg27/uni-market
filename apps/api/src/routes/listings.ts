@@ -4,11 +4,13 @@ import { z } from 'zod';
 import { currentPolicyVersion, idSchema, listingInputSchema } from '@campus-market/shared';
 import type { AppConfig } from '../config.js';
 import type { Database } from '../db/client.js';
-import { categories, listingImages, listings, notifications, prohibitedTerms, reviews, users } from '../db/schema.js';
+import { categories, listingImages, listings, notifications, prohibitedTerms, users } from '../db/schema.js';
 import { requireAuth, requireVerified } from '../middleware/auth.js';
 import { AppError, asyncRoute } from '../lib/errors.js';
 import type { StorageService } from '../services/storage.js';
 import { matchProhibitedTerms } from '../services/content-risk.js';
+import { notifyNotifications } from '../services/notification-events.js';
+import { getReviewSummary } from '../services/reputation.js';
 
 const publicListing = and(eq(listings.moderationState, 'APPROVED'), inArray(listings.lifecycleState, ['ACTIVE', 'RESERVED', 'SOLD']), isNull(listings.deletedAt));
 
@@ -67,11 +69,11 @@ export function listingsRouter(db: Database, config: AppConfig, storage: Storage
     if (!privileged && !(listing.listing.moderationState === 'APPROVED' && ['ACTIVE', 'RESERVED', 'SOLD'].includes(listing.listing.lifecycleState))) throw new AppError(404, 'LISTING_UNAVAILABLE', 'This listing is unavailable');
     const [images, rating] = await Promise.all([
       db.select().from(listingImages).where(and(eq(listingImages.listingId, id), isNull(listingImages.deletedAt))).orderBy(asc(listingImages.position)),
-      db.select({ average: sql<number>`coalesce(avg(${reviews.rating}), 0)`, count: sql<number>`count(*)` }).from(reviews).where(and(eq(reviews.revieweeId, listing.listing.sellerId), isNull(reviews.hiddenAt), isNull(reviews.deletedAt)))
+      getReviewSummary(db, listing.listing.sellerId, 'SELLER'),
     ]);
     if (!privileged && images.some((image) => image.syntheticStatus !== 'NOT_SYNTHETIC')) throw new AppError(404, 'LISTING_UNAVAILABLE', 'This listing is unavailable');
     if (!privileged) await db.update(listings).set({ viewCount: sql`${listings.viewCount} + 1` }).where(eq(listings.id, id));
-    res.json({ data: { ...listing.listing, priceLabel: priceLabel(listing.listing), seller: { ...listing.seller, email: undefined, phone: undefined, rating: Number(rating[0]?.average ?? 0), reviewCount: Number(rating[0]?.count ?? 0) }, images: await Promise.all(images.filter((image) => image.objectKey).map(async (image) => ({ id: image.id, position: image.position, width: image.width, height: image.height, url: await storage.signedReadUrl(image.objectKey!) }))), ownerPreview: privileged && listing.listing.moderationState !== 'APPROVED' } });
+    res.json({ data: { ...listing.listing, priceLabel: priceLabel(listing.listing), seller: { ...listing.seller, email: undefined, phone: undefined, rating: rating.averageRating, reviewCount: rating.reviewCount }, images: await Promise.all(images.filter((image) => image.objectKey).map(async (image) => ({ id: image.id, position: image.position, width: image.width, height: image.height, url: await storage.signedReadUrl(image.objectKey!) }))), ownerPreview: privileged && listing.listing.moderationState !== 'APPROVED' } });
   }));
 
   router.patch('/listings/:id', requireVerified, asyncRoute(async (req, res) => {
@@ -103,6 +105,7 @@ export function listingsRouter(db: Database, config: AppConfig, storage: Storage
       await tx.insert(notifications).values({ userId: req.auth!.userId, type: 'LISTING_SUBMITTED', title: 'Listing submitted', body: 'Your listing is waiting for manual review', href: `/listing/${id}` });
       return row;
     });
+    notifyNotifications(req.app.get('io'), [req.auth!.userId]);
     res.json({ data: updated });
   }));
 

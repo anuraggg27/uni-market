@@ -2,6 +2,7 @@ import { lazy, type ComponentType } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AuthProvider, RequireAuth } from "./auth";
 import { Layout } from "./components/Layout";
+import { NotificationUpdates } from "./components/NotificationUpdates";
 
 function lazyNamed<Props = Record<string, never>>(
   loader: () => Promise<any>,
@@ -75,6 +76,7 @@ function LegacyTransactionsRedirect() {
 export function App() {
   return (
     <AuthProvider>
+      <NotificationUpdates />
       <Routes>
           <Route element={<Layout />}>
             <Route index element={<HomePage />} />

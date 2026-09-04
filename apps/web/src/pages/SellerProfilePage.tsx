@@ -124,9 +124,11 @@ export function SellerProfilePage() {
               </p>
             ) : null}
             <p className="seller-profile-rating">
-              <strong>{rating.toFixed(1)}</strong>
-              <Star aria-hidden="true" />
-              <span>from {seller.reviewCount} {seller.reviewCount === 1 ? "review" : "reviews"}</span>
+              {seller.reviewCount ? <>
+                <strong>{rating.toFixed(1)}</strong>
+                <Star aria-hidden="true" />
+                <span>from {seller.reviewCount} seller {seller.reviewCount === 1 ? "review" : "reviews"}</span>
+              </> : <span>No seller reviews yet</span>}
             </p>
           </div>
         </div>
@@ -181,7 +183,7 @@ export function SellerProfilePage() {
               <SellerStat icon={<ShoppingBag />} value={seller.completedSales} label="Completed sales" />
               <SellerStat icon={<PackageCheck />} value={listingCount} label="Active listings" />
               <SellerStat icon={<Eye />} value={totalViews} label="Total views" />
-              <SellerStat icon={<Star />} value={rating.toFixed(1)} label="Average rating" />
+              <SellerStat icon={<Star />} value={seller.reviewCount ? rating.toFixed(1) : "—"} label="Seller rating" />
             </div>
           </section>
 
@@ -207,7 +209,7 @@ export function SellerProfilePage() {
           </section>
 
           <section className="seller-profile-card seller-reviews-card" aria-labelledby="seller-reviews-heading">
-            <h2 id="seller-reviews-heading">Recent verified reviews</h2>
+            <h2 id="seller-reviews-heading">Reviews from buyers</h2>
             {seller.recentReviews.length ? (
               <div className="seller-review-list">
                 {seller.recentReviews.map((review) => (
@@ -246,8 +248,8 @@ export function SellerProfilePage() {
             ) : (
               <SellerEmpty
                 icon={<PackageCheck />}
-                title="No reviews yet"
-                body="Reviews appear after completed exchanges."
+                title="No seller reviews yet"
+                body="Reviews from buyers appear after completed sales."
                 reviews
               />
             )}

@@ -195,6 +195,7 @@ export const listings = pgTable('listings', {
   index('listings_public_idx').on(table.moderationState, table.lifecycleState, table.approvedAt),
   index('listings_category_idx').on(table.categoryId), index('listings_seller_idx').on(table.sellerId),
   index('listings_location_idx').on(table.location), index('listings_price_idx').on(table.exactPrice, table.minimumPrice, table.maximumPrice),
+  check('listing_prices_positive', sql`(${table.exactPrice} is null or ${table.exactPrice} >= 1) and (${table.minimumPrice} is null or ${table.minimumPrice} >= 1) and (${table.maximumPrice} is null or ${table.maximumPrice} >= 1)`),
   check('listing_price_shape', sql`(${table.priceType} = 'FREE' and ${table.exactPrice} is null and ${table.minimumPrice} is null and ${table.maximumPrice} is null) or (${table.priceType} = 'FIXED' and ${table.exactPrice} is not null and ${table.minimumPrice} is null and ${table.maximumPrice} is null) or (${table.priceType} = 'RANGE' and ${table.exactPrice} is null and ${table.minimumPrice} is not null and ${table.maximumPrice} is not null and ${table.minimumPrice} <= ${table.maximumPrice})`)
 ]);
 

@@ -364,6 +364,7 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
   await expect(sellerPage.getByLabel("2 unread messages")).toBeVisible();
   await sellerPage.getByRole("link", { name: /transaction-buyer/ }).click();
   await expect(sellerPage).toHaveURL(new RegExp(`${conversationPath}$`));
+  await expect(sellerPage.getByText("No buyer reviews yet", { exact: true })).toBeVisible();
   await expect(
     sellerPage.getByText("I can bring the exact amount if it is available."),
   ).toBeVisible();
@@ -387,18 +388,30 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
         document.documentElement.clientWidth,
     ),
   ).toBe(false);
-  await buyerPage.getByRole("button", { name: "Request reservation" }).click();
-  await expect(buyerPage.getByRole("link", { name: "Reservation requested" })).toBeVisible();
-  await sellerPage.goto(marketplacePath("/requests?view=received"));
+  await expect(buyerPage.getByText("Ready to go ahead?", { exact: true })).toBeVisible();
+  await buyerPage.getByRole("button", { name: "Ask seller to reserve" }).click();
+  await expect(buyerPage.getByText("Waiting for the seller", { exact: true })).toBeVisible();
+  // The seller stays in the open chat: the request must arrive without navigation or refresh.
+  await expect(sellerPage.getByText("The buyer wants to reserve this item", { exact: true })).toBeVisible();
+  await sellerPage.getByRole("button", { name: "Decline", exact: true }).click();
+  await expect(buyerPage.getByText("Reservation request cancelled", { exact: true })).toBeVisible();
+  await buyerPage.getByRole("button", { name: "Ask seller to reserve" }).click();
+  await expect(sellerPage.getByText("The buyer wants to reserve this item", { exact: true })).toBeVisible();
   await sellerPage.getByRole("button", { name: "Accept and reserve" }).click();
-  await buyerPage.goto(marketplacePath("/requests?view=sent"));
+  await expect(buyerPage.getByRole("link", { name: "View exchange code" })).toBeVisible();
+  await expect(sellerPage.getByRole("link", { name: "Complete exchange" })).toBeVisible();
+  await buyerPage.getByRole("link", { name: "View exchange code" }).click();
+  await sellerPage.getByRole("link", { name: "Complete exchange" }).click();
   const exchangeCode = (await buyerPage.locator(".exchange-code-value").textContent())?.trim();
   expect(exchangeCode).toMatch(/^\d{6}$/);
   await sellerPage.getByLabel("6-digit exchange code").fill(exchangeCode!);
   await sellerPage.getByRole("button", { name: "Complete sale" }).click();
   await expect(sellerPage.getByText("COMPLETED", { exact: true })).toBeVisible();
-  await buyerPage.reload();
+  // The buyer's Requests page must also update live after the seller completes the sale.
   await expect(buyerPage.getByText("COMPLETED", { exact: true })).toBeVisible();
+  const buyerReviewTab = await buyer.newPage();
+  await buyerReviewTab.goto(marketplacePath("/requests?view=sent"));
+  await expect(buyerReviewTab.getByRole("button", { name: "Leave verified review" })).toBeVisible();
   await buyerPage
     .getByLabel("Short review")
     .fill("Exactly as described and easy meetup.");
@@ -406,6 +419,25 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
     .getByRole("button", { name: "Leave verified review" })
     .click();
   await expect(buyerPage.getByText("Review submitted.")).toBeVisible();
+  await expect(buyerPage.getByText("Already reviewed", { exact: true })).toBeVisible();
+  await expect(buyerPage.getByRole("button", { name: "Leave verified review" })).toHaveCount(0);
+  await expect(buyerReviewTab.getByText("Already reviewed", { exact: true })).toBeVisible();
+  await buyerPage.reload();
+  await expect(buyerPage.getByText("Already reviewed", { exact: true })).toBeVisible();
+  await expect(buyerPage.getByLabel("Short review")).toHaveCount(0);
+  await expect(sellerPage.getByRole("button", { name: "Leave verified review" })).toBeVisible();
+  await sellerPage.getByLabel("Short review").fill("Prompt buyer and easy pickup.");
+  await sellerPage.getByRole("button", { name: "Leave verified review" }).click();
+  await expect(sellerPage.getByText("Already reviewed", { exact: true })).toBeVisible();
+  await sellerPage.goto(conversationPath);
+  await sellerPage.getByText("Buyer rating: 5.0 · 1 review", { exact: true }).click();
+  await expect(sellerPage.getByRole("region", { name: "Buyer reviews from sellers" })).toContainText("Prompt buyer and easy pickup.");
+  await buyerPage.goto(conversationPath);
+  await expect(buyerPage.getByText("Buyer rating: 5.0 · 1 review", { exact: true })).toHaveCount(0);
+  const buyerIdentity = (await (await buyer.request.get(`${API}/api/auth/session`)).json()).data;
+  await buyerPage.goto(marketplacePath(`/seller/${buyerIdentity.id}`));
+  await expect(buyerPage.locator('.seller-profile-rating')).toHaveText('No seller reviews yet');
+  await expect(buyerPage.getByText('Prompt buyer and easy pickup.', { exact: true })).toHaveCount(0);
   await seller.close();
   await buyer.close();
   await mod.close();
@@ -432,20 +464,33 @@ test("E2E-04 report, removal, seller notification and audit trail", async ({
   const moderator = await mod.newPage();
   await moderator.goto(marketplacePath("/admin/reports"));
   await expect(moderator.getByText("MISLEADING INFORMATION")).toBeVisible();
+  const sellerPage = await seller.newPage();
+  await sellerPage.setViewportSize({ width: 390, height: 844 });
+  await sellerPage.goto(marketplacePath("/profile"));
+  await sellerPage.getByRole("button", { name: /^Notifications/ }).click();
+  const tray = sellerPage.getByRole("dialog", { name: "Notifications" });
+  await tray.getByRole("button", { name: "Mark all read" }).click();
+  await expect(sellerPage.getByRole("button", { name: "Notifications", exact: true })).toBeVisible();
+  const historyPage = await seller.newPage();
+  await historyPage.goto(marketplacePath("/notifications"));
+  await expect(historyPage.getByRole("button", { name: "Mark all as read", exact: true })).toBeDisabled();
   await approve(
     mod,
     listing.id,
     "REMOVE",
     "Removed after a confirmed misleading listing report.",
   );
+  // Neither the open mobile tray nor the notification history navigates or refreshes.
+  await expect(tray.getByRole("link", { name: /^Listing removed/ })).toBeVisible();
+  await expect(sellerPage.getByRole("button", { name: "Notifications, 1 unread", exact: true })).toBeVisible();
+  await expect(historyPage.getByRole("heading", { name: "Listing removed Unread", exact: true })).toBeVisible();
+  await historyPage.getByRole("button", { name: "Mark all as read", exact: true }).click();
+  await expect(sellerPage.getByRole("button", { name: "Notifications", exact: true })).toBeVisible();
   const guest = await browser.newContext();
   await (await guest.newPage()).goto(marketplacePath(`/listing/${listing.id}`));
   await expect(
     (await guest.pages())[0].getByText("This listing is unavailable"),
   ).toBeVisible();
-  const sellerPage = await seller.newPage();
-  await sellerPage.goto(marketplacePath("/notifications"));
-  await expect(sellerPage.getByText("Listing removed")).toBeVisible();
   await moderator.goto(marketplacePath("/admin/audit-logs"));
   await expect(moderator.getByText("LISTING_REMOVE")).toBeVisible();
   await seller.close();
@@ -471,11 +516,11 @@ test("guest Contact seller resumes into chat and exposes request history and ema
   await signIn(buyer, "resume-buyer");
   await page.goto(marketplacePath(`/listing/${listing.id}`));
   await expect(page).toHaveURL(/\/chats\//);
-  await expect(page.getByRole("button", { name: "Message seller first" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Ask seller to reserve" })).toBeDisabled();
   await page.getByLabel("Message").fill("Is this desk lamp still available?");
   await page.getByRole("button", { name: "Send" }).click();
-  await page.getByRole("button", { name: "Request reservation" }).click();
-  await expect(page.getByRole("link", { name: "Reservation requested" })).toBeVisible();
+  await page.getByRole("button", { name: "Ask seller to reserve" }).click();
+  await expect(page.getByText("Waiting for the seller", { exact: true })).toBeVisible();
 
   await page.goto(marketplacePath("/requests?view=sent"));
   await expect(page.getByRole("link", { name: "Resume conversation desk lamp" })).toBeVisible();

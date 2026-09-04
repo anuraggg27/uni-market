@@ -46,6 +46,12 @@ export const defaultAvatarId: AvatarId = 'avatar-01';
 export const idSchema = z.string().uuid();
 export const phoneSchema = z.string().regex(/^\+91[6-9]\d{9}$/, 'Enter a valid Indian mobile number');
 
+const listingPriceSchema = z.number()
+  .int({ error: 'Enter a price in whole rupees' })
+  .min(1, { error: 'Price must be at least ₹1. Choose Free for a giveaway.' })
+  .max(10_000_000, { error: 'Price must not exceed ₹1,00,00,000' })
+  .nullable().optional();
+
 export const listingInputSchema = z.object({
   title: z.string().trim().min(4).max(100),
   description: z.string().trim().min(10, { error: 'Minimum 10 characters required' }).max(5000),
@@ -53,9 +59,9 @@ export const listingInputSchema = z.object({
   condition: z.enum(conditions),
   conditionExplanation: z.string().trim().max(1000).optional().default(''),
   priceType: z.enum(priceTypes),
-  exactPrice: z.number().int().min(1).max(10_000_000).nullable().optional(),
-  minimumPrice: z.number().int().min(1).max(10_000_000).nullable().optional(),
-  maximumPrice: z.number().int().min(1).max(10_000_000).nullable().optional(),
+  exactPrice: listingPriceSchema,
+  minimumPrice: listingPriceSchema,
+  maximumPrice: listingPriceSchema,
   negotiable: z.boolean().default(false),
   location: z.string().trim().min(2).max(120),
   brand: z.string().trim().max(100).optional().default(''),

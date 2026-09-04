@@ -87,6 +87,7 @@ export function NotificationTray({ mobile = false }: { mobile?: boolean }) {
     }
     if (closeTimerRef.current) window.clearTimeout(closeTimerRef.current);
     setMounted(true);
+    void query.refetch();
     frameRef.current = window.requestAnimationFrame(() => setOpen(true));
   }
 
@@ -145,7 +146,7 @@ export function NotificationTray({ mobile = false }: { mobile?: boolean }) {
         <Bell className="m-auto size-4" aria-hidden="true" />
         {unreadCount ? (
           <span
-            className="absolute right-1.5 top-1.5 size-2 rounded-full border-2 border-surface bg-brand"
+            className="absolute right-0.5 top-0.5 size-3 rounded-full border-2 border-surface bg-notification"
             aria-hidden="true"
           />
         ) : null}
@@ -254,7 +255,7 @@ export function NotificationTray({ mobile = false }: { mobile?: boolean }) {
                           </strong>
                           {unread ? (
                             <span
-                              className="mt-1.5 size-1.5 shrink-0 rounded-full bg-brand"
+                              className="mt-1.5 size-2 shrink-0 rounded-full bg-notification"
                               aria-hidden="true"
                             />
                           ) : null}

@@ -11,10 +11,31 @@ import { logger } from './lib/logger.js';
 import { currentPolicyVersion, requiredOnboardingPolicies } from '@campus-market/shared';
 import { createScamConfirmation, scamRiskCodes, verifyScamConfirmation } from './services/scam-risk.js';
 import { queueUserEmail } from './services/email-preferences.js';
+import { notifyNotifications } from './services/notification-events.js';
 
 export function attachSocket(server: HttpServer, db: Database, config: AppConfig): Server {
   const io = new Server(server, { cors: { origin: config.CLIENT_URL, credentials: true }, maxHttpBufferSize: 20_000, transports: ['websocket', 'polling'] });
   const buckets = new Map<string, number[]>();
+  // Notifications are available to every signed-in user, independently of
+  // the stricter marketplace verification needed for chat and reservations.
+  const notificationChannel = io.of('/notifications');
+  notificationChannel.use(async (socket, next) => {
+    try {
+      const raw = parseCookie(socket.handshake.headers.cookie ?? '').campus_session;
+      if (!raw) return next(new Error('Authentication required'));
+      const [session] = await db.select({ userId: sessions.userId }).from(sessions)
+        .innerJoin(users, eq(users.id, sessions.userId))
+        .where(and(eq(sessions.tokenHash, sha256(`${raw}:${config.SESSION_SECRET}`)),
+          gt(sessions.expiresAt, new Date()), isNull(sessions.revokedAt),
+          isNull(users.closedAt), isNull(users.deletedAt))).limit(1);
+      if (!session) return next(new Error('Authentication required'));
+      socket.data.userId = session.userId;
+      next();
+    } catch { next(new Error('Authentication failed')); }
+  });
+  notificationChannel.on('connection', (socket) => {
+    void socket.join(`user:${socket.data.userId as string}`);
+  });
   io.use(async (socket, next) => {
     try {
       const raw = parseCookie(socket.handshake.headers.cookie ?? '').campus_session;
@@ -70,6 +91,7 @@ export function attachSocket(server: HttpServer, db: Database, config: AppConfig
           if (!conversation.firstMessageEmailQueuedAt) { await tx.update(conversations).set({ firstMessageEmailQueuedAt: new Date() }).where(and(eq(conversations.id, conversation.id), isNull(conversations.firstMessageEmailQueuedAt))); await queueUserEmail(tx, { recipientUserId: otherId, template: 'first-conversation-message', payload: { conversationId: conversation.id }, dedupeKey: `first-conversation-message:${conversation.id}` }); }
           return message;
         });
+        notifyNotifications(io, [otherId]);
         io.to(`conversation:${conversation.id}`)
           .to(`user:${conversation.buyerId}`)
           .to(`user:${conversation.sellerId}`)

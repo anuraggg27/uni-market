@@ -1,0 +1,1 @@
+ALTER TABLE "listings" ADD CONSTRAINT "listing_prices_positive" CHECK (("listings"."exact_price" is null or "listings"."exact_price" >= 1) and ("listings"."minimum_price" is null or "listings"."minimum_price" >= 1) and ("listings"."maximum_price" is null or "listings"."maximum_price" >= 1));

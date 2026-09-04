@@ -14,7 +14,7 @@ const config = loadConfig();
 const database = createDatabase(config);
 const app = createApp({ db: database.db, config, googleVerifier: new ProductionGoogleVerifier(config) });
 const server = createServer(app);
-attachSocket(server, database.db, config);
+app.set('io', attachSocket(server, database.db, config));
 const emailWorker = new EmailWorker(database.db, config); emailWorker.start();
 const retentionWorker = new RetentionWorker(database.db, config, new StorageService(config)); retentionWorker.start();
 const grievanceMonitor = new GrievanceMonitor(database.db, config); grievanceMonitor.start();

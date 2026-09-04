@@ -27,6 +27,7 @@
   --color-focus: #48252f;
   --color-soft: #f1e7da;
   --color-success: #2f7652;
+  --color-notification: #b23a55;
 }
 
 * {
@@ -3981,6 +3982,7 @@ html.dark {
   --color-focus: #c997a4;
   --color-soft: #1d1f1d;
   --color-success: #76c598;
+  --color-notification: #f2a1b4;
   color-scheme: dark;
   background: var(--color-canvas);
 }
@@ -4713,7 +4715,7 @@ html.dark [data-site-header] :where(
   z-index: 3;
   min-height: 74px;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
@@ -4792,28 +4794,116 @@ img.chat-listing-image {
   color: var(--color-brand-dark);
   text-decoration: underline;
 }
-.chat-reservation-control {
-  display: flex;
-  justify-content: flex-end;
+.buyer-reputation {
+  position: relative;
   min-width: 0;
-}
-.chat-reservation-control .button,
-.chat-reservation-state {
-  white-space: nowrap;
-}
-.chat-reservation-state {
   color: var(--color-muted);
-  font-size: 0.76rem;
+  font-size: 0.78rem;
+}
+.buyer-reputation summary {
+  width: fit-content;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.buyer-reputation-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  width: min(320px, calc(100vw - 110px));
+  max-height: min(280px, 40dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  box-shadow: 0 8px 24px #0002;
+}
+.buyer-reputation-panel h3 {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+}
+.buyer-reputation-panel article + article {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-line);
+}
+.buyer-reputation-panel article > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+.buyer-reputation-panel p {
+  margin: 6px 0 0;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.buyer-reputation-retry {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  text-align: left;
+  cursor: pointer;
+}
+.chat-reservation-control {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px 20px;
+  min-width: 0;
+  margin: 4px -14px -10px;
+  padding: 16px;
+  border-top: 1px solid var(--color-line);
+  background: var(--color-surface-muted);
+}
+.chat-reservation-copy strong {
+  display: block;
+  font-size: 0.86rem;
   font-weight: 650;
 }
-a.chat-reservation-state:hover {
-  color: var(--color-brand-dark);
-  text-decoration: underline;
+.chat-reservation-copy p {
+  margin: 5px 0 0;
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+.chat-reservation-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chat-reservation-buttons:empty {
+  display: none;
+}
+.chat-reservation-buttons .button {
+  min-height: 44px;
+  padding: 8px 14px;
+  font-size: 0.84rem;
+  text-align: center;
 }
 .chat-reservation-error {
   grid-column: 1 / -1;
-  margin: -2px 0 2px;
+  margin: 0;
   font-size: 0.76rem;
+}
+@media (max-width: 1100px) {
+  .chat-reservation-control {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .chat-reservation-buttons .button {
+    flex: 1;
+  }
+  .chat-reservation-buttons .button.primary {
+    flex: 2;
+  }
 }
 .chat-actions {
   position: relative;
@@ -6271,7 +6361,7 @@ html.dark .site-footer-wordmark:hover > span:first-child {
     border-radius: 0;
   }
   .chat-shell.has-conversation {
-    height: calc(100dvh - 56px);
+    height: calc(100dvh - 60px);
   }
   .chat-shell.has-conversation .conversation-list {
     display: none;
@@ -6311,12 +6401,10 @@ html.dark .site-footer-wordmark:hover > span:first-child {
     grid-row: 1;
   }
   .chat-reservation-control {
-    grid-column: 2 / 5;
+    grid-column: 1 / -1;
     grid-row: 2;
-    justify-self: end;
-  }
-  .chat-reservation-error {
-    grid-row: 3;
+    margin: 0 -9px -7px;
+    padding: 12px;
   }
   .chat-actions-menu {
     right: -2px;
@@ -8195,6 +8283,38 @@ html.dark .hero-campus-background {
   height: 100%;
   display: block;
   object-fit: cover;
+}
+
+.profile-page-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 16px;
+}
+.profile-page-header .lede {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.profile-page-header .profile-preview-link {
+  justify-self: end;
+  min-height: 40px;
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+@media (max-width: 480px) {
+  .profile-page-header {
+    column-gap: 12px;
+  }
+  .profile-page-header .profile-preview-link {
+    padding: 8px 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    font-size: 0.72rem;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
 }
 
 .profile-form {
