@@ -17,6 +17,7 @@ import {
   ArrowLeft,
   Bell,
   CalendarDays,
+  Camera,
   Check,
   CheckCircle2,
   ChevronRight,
@@ -125,6 +126,7 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
   const [images, setImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const createdListingIdRef = useRef<string | null>(null);
   const uploadedFileKeysRef = useRef(new Set<string>());
   const [uploading, setUploading] = useState(false);
@@ -183,10 +185,23 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
     return () => previews.forEach((preview) => URL.revokeObjectURL(preview));
   }, [images]);
   function addImages(files: FileList | null) {
-    if (!files?.length) return;
-    const selectedFiles = Array.from(files);
+    if (!files?.length || uploading) return;
+    const selectedFiles = Array.from(files).filter((file) => {
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        toast.error(`${file.name}: please use a JPG, PNG or WebP photo.`);
+        return false;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`${file.name}: photos must be 5 MB or smaller.`);
+        return false;
+      }
+      return true;
+    });
+    if (!selectedFiles.length) return;
+    if (images.length + selectedFiles.length > 8) {
+      toast.error("You can add up to 8 photos. Extra photos were not added.");
+    }
     setImages((current) => [...current, ...selectedFiles].slice(0, 8));
-    if (fileInputRef.current) fileInputRef.current.value = "";
   }
   function removeImage(index: number) {
     setImages((current) =>
@@ -278,9 +293,29 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
               type="file"
               accept="image/jpeg,image/png,image/webp"
               multiple
-              onChange={(event) => addImages(event.target.files)}
+              tabIndex={-1}
+              disabled={uploading || images.length >= 8}
+              onChange={(event) => {
+                addImages(event.currentTarget.files);
+                event.currentTarget.value = "";
+              }}
             />
-            <label className="photo-upload-label" htmlFor="listing-images">
+            <input
+              ref={cameraInputRef}
+              id="listing-camera"
+              className="listing-file-input"
+              aria-label="Take a product photo"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              tabIndex={-1}
+              disabled={uploading || images.length >= 8}
+              onChange={(event) => {
+                addImages(event.currentTarget.files);
+                event.currentTarget.value = "";
+              }}
+            />
+            <div className="photo-upload-label">
               <span className="photo-upload-icon" aria-hidden="true">
                 <ImagePlus />
               </span>
@@ -288,8 +323,26 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
                 <strong>Upload photos</strong>
                 <span>PNG, JPG or WebP · Up to 8 images, 5 MB each</span>
               </span>
-              <span className="photo-upload-action">Choose photos</span>
-            </label>
+              <div className="photo-upload-actions">
+                <button
+                  type="button"
+                  className="photo-upload-action"
+                  disabled={uploading || images.length >= 8}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Choose photos
+                </button>
+                <button
+                  type="button"
+                  className="photo-upload-action"
+                  disabled={uploading || images.length >= 8}
+                  onClick={() => cameraInputRef.current?.click()}
+                >
+                  <Camera size={18} aria-hidden="true" />
+                  Take photo
+                </button>
+              </div>
+            </div>
             <p className="hint">
               Metadata is removed.{" "}
               {edit

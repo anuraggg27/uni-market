@@ -11,6 +11,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { toast } from "sonner";
 
 const { apiMock } = vi.hoisted(() => ({ apiMock: vi.fn() }));
 
@@ -30,6 +31,7 @@ describe("ListingFormPage photos", () => {
   const fetchMock = vi.fn();
 
   beforeEach(() => {
+    vi.spyOn(toast, "error").mockReturnValue('photo-error');
     apiMock.mockClear();
     fetchMock.mockClear();
     previewNumber = 0;
@@ -100,7 +102,64 @@ describe("ListingFormPage photos", () => {
     await waitFor(() => expect(screen.queryByText("Price must be at least ₹1. Choose Free for a giveaway.")).not.toBeInTheDocument());
   });
 
-  it("previews selected files, removes one, and uploads only the remaining file", async () => {
+  it("opens the rear-camera picker without submitting and keeps the gallery separate", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><MemoryRouter><ListingFormPage /></MemoryRouter></QueryClientProvider>);
+    await screen.findByRole("option", { name: "Books" });
+    const camera = screen.getByLabelText("Take a product photo");
+    const gallery = screen.getByLabelText("Product images");
+    const cameraClick = vi.spyOn(camera, "click");
+    const galleryClick = vi.spyOn(gallery, "click");
+    expect(camera).toHaveAttribute("capture", "environment");
+    expect(camera).toHaveAttribute("accept", "image/*");
+    expect(camera).not.toHaveAttribute("multiple");
+    expect(gallery).not.toHaveAttribute("capture");
+    expect(gallery).toHaveAttribute("multiple");
+    const button = screen.getByRole("button", { name: "Take photo" });
+    expect(button).toHaveAttribute("type", "button");
+    fireEvent.click(button);
+    expect(cameraClick).toHaveBeenCalledOnce();
+    expect(galleryClick).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Choose photos" }));
+    expect(galleryClick).toHaveBeenCalledOnce();
+    expect(apiMock.mock.calls.some(([, options]) => options?.method === 'POST')).toBe(false);
+  });
+
+  it("appends camera photos, keeps selections on cancel and enforces the shared limit", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><MemoryRouter><ListingFormPage /></MemoryRouter></QueryClientProvider>);
+    await screen.findByRole("option", { name: "Books" });
+    const camera = screen.getByLabelText("Take a product photo");
+    const gallery = screen.getByLabelText("Product images");
+    const files = Array.from({ length: 7 }, (_, index) => new File(['photo'], `photo-${index}.jpg`, { type: 'image/jpeg' }));
+    fireEvent.change(gallery, { target: { files } });
+    fireEvent.change(camera, { target: { files: [] } });
+    expect(screen.getAllByAltText(/^Selected product image:/)).toHaveLength(7);
+    fireEvent.change(camera, { target: { files: [new File(['camera'], 'camera.jpg', { type: 'image/jpeg' })] } });
+    expect(screen.getAllByAltText(/^Selected product image:/)).toHaveLength(8);
+    expect(screen.getByRole('button', { name: 'Take photo' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Choose photos' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove camera.jpg' }));
+    expect(screen.getByRole('button', { name: 'Take photo' })).toBeEnabled();
+    fireEvent.change(camera, { target: { files: [new File(['again'], 'camera.jpg', { type: 'image/jpeg' })] } });
+    expect(screen.getByAltText('Selected product image: camera.jpg')).toBeVisible();
+    expect(camera).toHaveValue('');
+  });
+
+  it("rejects unsupported or oversized captures with clear feedback", async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><MemoryRouter><ListingFormPage /></MemoryRouter></QueryClientProvider>);
+    await screen.findByRole("option", { name: "Books" });
+    const huge = new File(['photo'], 'large.jpg', { type: 'image/jpeg' });
+    Object.defineProperty(huge, 'size', { value: 5 * 1024 * 1024 + 1 });
+    const camera = screen.getByLabelText("Take a product photo");
+    fireEvent.change(camera, { target: { files: [new File(['photo'], 'photo.heic', { type: 'image/heic' }), huge] } });
+    expect(toast.error).toHaveBeenCalledWith('photo.heic: please use a JPG, PNG or WebP photo.');
+    expect(toast.error).toHaveBeenCalledWith('large.jpg: photos must be 5 MB or smaller.');
+    expect(screen.queryAllByAltText(/^Selected product image:/)).toHaveLength(0);
+  });
+
+  it("previews camera and gallery files, removes one, and uploads only the remaining file", async () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
@@ -118,7 +177,10 @@ describe("ListingFormPage photos", () => {
       type: "image/jpeg",
     });
     fireEvent.change(screen.getByLabelText("Product images"), {
-      target: { files: [book, detail] },
+      target: { files: [detail] },
+    });
+    fireEvent.change(screen.getByLabelText("Take a product photo"), {
+      target: { files: [book] },
     });
 
     expect(

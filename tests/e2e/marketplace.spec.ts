@@ -212,12 +212,29 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   })
     .jpeg()
     .toBuffer();
+  for (const width of [320, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const name of ['Choose photos', 'Take photo']) {
+      const button = page.getByRole('button', { name, exact: true });
+      await expect(button).toBeVisible();
+      const bounds = await button.boundingBox();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+      expect(bounds!.height).toBeGreaterThanOrEqual(44);
+    }
+    await page.locator('.photo-uploader').screenshot({ path: test.info().outputPath(`photo-uploader-${width}.png`) });
+  }
   await page
     .getByLabel(/Product images/)
     .setInputFiles([
-      { name: "book.jpg", mimeType: "image/jpeg", buffer: image },
       { name: "book-detail.jpg", mimeType: "image/jpeg", buffer: image },
     ]);
+  const cameraPicker = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Take photo', exact: true }).click();
+  const camera = await cameraPicker;
+  expect(await camera.element().getAttribute('capture')).toBe('environment');
+  expect(camera.isMultiple()).toBe(false);
+  await camera.setFiles({ name: 'book.jpg', mimeType: 'image/jpeg', buffer: image });
   await expect(
     page.getByAltText("Selected product image: book.jpg"),
   ).toBeVisible();

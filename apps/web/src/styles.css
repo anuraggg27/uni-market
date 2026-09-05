@@ -3705,7 +3705,7 @@ textarea.control {
   display: flex;
   align-items: center;
   gap: 16px;
-  cursor: pointer;
+  cursor: default;
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 .photo-upload-label:hover {
@@ -3756,6 +3756,22 @@ textarea.control {
   font-size: 0.84rem;
   font-weight: 600;
   white-space: nowrap;
+}
+.photo-upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+.photo-upload-actions .photo-upload-action {
+  min-height: 44px;
+  margin: 0;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.photo-upload-actions .photo-upload-action:disabled {
+  cursor: not-allowed;
 }
 .photo-preview-grid {
   margin-top: 18px;
@@ -4014,10 +4030,12 @@ html.dark .listing-report-submit:hover {
     align-items: flex-start;
     flex-wrap: wrap;
   }
-  .photo-upload-action {
+  .photo-upload-actions {
     width: 100%;
     margin: 4px 0 0;
-    justify-content: center;
+  }
+  .photo-upload-actions .photo-upload-action {
+    flex: 1;
   }
   .photo-preview-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
