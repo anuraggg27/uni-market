@@ -9,7 +9,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 
@@ -241,6 +241,105 @@ describe("ListingFormPage photos", () => {
     expect(apiMock).toHaveBeenCalledWith(
       "/api/listings/listing-1/submit",
       expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("shows existing edit photos and removes a selected photo when changes are saved", async () => {
+    const retainedImageId = "22222222-2222-4222-8222-222222222222";
+    const removedImageId = "33333333-3333-4333-8333-333333333333";
+    apiMock.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === "/api/categories") {
+        return Promise.resolve([
+          { id: "11111111-1111-4111-8111-111111111111", name: "Books" },
+        ]);
+      }
+      if (path === "/api/listings/listing-1" && !options?.method) {
+        return Promise.resolve({
+          id: "listing-1",
+          title: "Art of Artist",
+          description: "A complete description of this second-hand art book.",
+          categoryId: "11111111-1111-4111-8111-111111111111",
+          condition: "GOOD",
+          conditionExplanation: "",
+          priceType: "FIXED",
+          exactPrice: 650,
+          minimumPrice: null,
+          maximumPrice: null,
+          negotiable: true,
+          location: "Main campus",
+          brand: "",
+          defects: "",
+          meetupPoint: "",
+          images: [
+            {
+              id: retainedImageId,
+              position: 0,
+              url: "https://images.example.test/art-book.webp",
+            },
+            {
+              id: removedImageId,
+              position: 1,
+              url: "https://images.example.test/art-book-back.webp",
+            },
+          ],
+        });
+      }
+      if (path === "/api/listings/listing-1" && options?.method === "PATCH") {
+        return Promise.resolve({ id: "listing-1" });
+      }
+      if (
+        path === `/api/uploads/listings/listing-1/${removedImageId}` &&
+        options?.method === "DELETE"
+      ) {
+        return Promise.resolve(undefined);
+      }
+      return Promise.reject(new Error(`Unexpected API call: ${path}`));
+    });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/listing/listing-1/edit"]}>
+          <Routes>
+            <Route
+              path="/listing/:listingId/edit"
+              element={<ListingFormPage edit />}
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findByAltText("Existing product image 1")).toHaveAttribute(
+      "src",
+      "https://images.example.test/art-book.webp",
+    );
+    expect(screen.getByAltText("Existing product image 2")).toHaveAttribute(
+      "src",
+      "https://images.example.test/art-book-back.webp",
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Remove existing product image 2" }),
+    );
+    expect(screen.queryByAltText("Existing product image 2")).not.toBeInTheDocument();
+    expect(screen.getByAltText("Existing product image 1")).toBeVisible();
+    expect(apiMock).not.toHaveBeenCalledWith(
+      `/api/uploads/listings/listing-1/${removedImageId}`,
+      expect.anything(),
+    );
+
+    fireEvent.click(screen.getByLabelText(/I own this used physical item/));
+    fireEvent.click(
+      screen.getByLabelText(/This listing is accurate and follows the seller rules/),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() =>
+      expect(apiMock).toHaveBeenCalledWith(
+        `/api/uploads/listings/listing-1/${removedImageId}`,
+        expect.objectContaining({ method: "DELETE" }),
+      ),
     );
   });
 });

@@ -53,6 +53,7 @@ import {
   verifyMsg91Otp,
 } from "../msg91";
 import { ProductCard } from "../components/ProductCard";
+import { ProfileModeSwitcher } from "../components/ProfileModeSwitcher";
 import { AvatarPicker, AvatarPickerDialog } from "../components/AvatarPicker";
 import { UserAvatar } from "../components/UserAvatar";
 import { BuyerReputation } from "../components/BuyerReputation";
@@ -125,6 +126,7 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
   });
   const [images, setImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [removedExistingImageIds, setRemovedExistingImageIds] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const createdListingIdRef = useRef<string | null>(null);
@@ -179,6 +181,13 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
   }, [existing.data, form]);
   const priceType = form.watch("priceType");
   const condition = form.watch("condition");
+  const retainedExistingImages = useMemo(
+    () =>
+      (existing.data?.images ?? []).filter(
+        (image: { id: string }) => !removedExistingImageIds.includes(image.id),
+      ) as Array<{ id: string; url: string; position: number }>,
+    [existing.data?.images, removedExistingImageIds],
+  );
   useEffect(() => {
     const previews = images.map((file) => URL.createObjectURL(file));
     setImagePreviews(previews);
@@ -198,14 +207,22 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
       return true;
     });
     if (!selectedFiles.length) return;
-    if (images.length + selectedFiles.length > 8) {
+    const availableNewImageSlots = Math.max(0, 8 - retainedExistingImages.length);
+    if (images.length + selectedFiles.length > availableNewImageSlots) {
       toast.error("You can add up to 8 photos. Extra photos were not added.");
     }
-    setImages((current) => [...current, ...selectedFiles].slice(0, 8));
+    setImages((current) =>
+      [...current, ...selectedFiles].slice(0, availableNewImageSlots),
+    );
   }
   function removeImage(index: number) {
     setImages((current) =>
       current.filter((_, imageIndex) => imageIndex !== index),
+    );
+  }
+  function removeExistingImage(imageId: string) {
+    setRemovedExistingImageIds((current) =>
+      current.includes(imageId) ? current : [...current, imageId],
     );
   }
   async function uploadFiles(id: string) {
@@ -233,6 +250,9 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
     setServerError("");
     setUploading(true);
     try {
+      if (edit && retainedExistingImages.length + images.length === 0) {
+        throw new Error("Keep or add at least one product image.");
+      }
       const listing = edit || createdListingIdRef.current
         ? await api<any>(`/api/listings/${edit ? listingId : createdListingIdRef.current}`, {
             method: "PATCH",
@@ -243,6 +263,11 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
             ...jsonBody(values),
           });
       if (!edit) createdListingIdRef.current = listing.id;
+      for (const imageId of removedExistingImageIds) {
+        await api(`/api/uploads/listings/${listing.id}/${imageId}`, {
+          method: "DELETE",
+        });
+      }
       if (images.length) await uploadFiles(listing.id);
       if (!edit) {
         await api(`/api/listings/${listing.id}/submit`, { method: "POST" });
@@ -294,7 +319,7 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
               accept="image/jpeg,image/png,image/webp"
               multiple
               tabIndex={-1}
-              disabled={uploading || images.length >= 8}
+              disabled={uploading || retainedExistingImages.length + images.length >= 8}
               onChange={(event) => {
                 addImages(event.currentTarget.files);
                 event.currentTarget.value = "";
@@ -309,7 +334,7 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
               accept="image/*"
               capture="environment"
               tabIndex={-1}
-              disabled={uploading || images.length >= 8}
+              disabled={uploading || retainedExistingImages.length + images.length >= 8}
               onChange={(event) => {
                 addImages(event.currentTarget.files);
                 event.currentTarget.value = "";
@@ -327,7 +352,7 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
                 <button
                   type="button"
                   className="photo-upload-action"
-                  disabled={uploading || images.length >= 8}
+                  disabled={uploading || retainedExistingImages.length + images.length >= 8}
                   onClick={() => fileInputRef.current?.click()}
                 >
                   Choose photos
@@ -335,7 +360,7 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
                 <button
                   type="button"
                   className="photo-upload-action"
-                  disabled={uploading || images.length >= 8}
+                  disabled={uploading || retainedExistingImages.length + images.length >= 8}
                   onClick={() => cameraInputRef.current?.click()}
                 >
                   <Camera size={18} aria-hidden="true" />
@@ -350,8 +375,25 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
                 : "At least one photo is required before submission."}
             </p>
           </div>
-          {images.length ? (
+          {retainedExistingImages.length || images.length ? (
             <div className="photo-preview-grid" aria-live="polite">
+              {retainedExistingImages.map((image, index) => (
+                <figure className="photo-preview" key={image.id}>
+                  <img
+                    src={image.url}
+                    alt={`Existing product image ${index + 1}`}
+                  />
+                  {index === 0 ? <figcaption>Cover</figcaption> : null}
+                  <button
+                    type="button"
+                    className="photo-remove"
+                    onClick={() => removeExistingImage(image.id)}
+                    aria-label={`Remove existing product image ${index + 1}`}
+                  >
+                    <X aria-hidden="true" />
+                  </button>
+                </figure>
+              ))}
               {images.map((file, index) => (
                 <figure
                   className="photo-preview"
@@ -361,7 +403,7 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
                     src={imagePreviews[index]}
                     alt={`Selected product image: ${file.name}`}
                   />
-                  {index === 0 ? <figcaption>Cover</figcaption> : null}
+                  {retainedExistingImages.length === 0 && index === 0 ? <figcaption>Cover</figcaption> : null}
                   <button
                     type="button"
                     className="photo-remove"
@@ -2201,17 +2243,17 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
   return (
     <div className="page narrow profile-page">
       <div className="page-header profile-page-header">
-        <h1>{onboarding ? "Set up your profile" : "Your profile"}</h1>
+        <div className="profile-page-heading-copy">
+          <h1>{onboarding ? "Set up your profile" : "Your profile"}</h1>
+          <p className="lede">
+            {onboarding
+              ? "Choose how you appear, then add your student details."
+              : "Manage how other students see you across Uni Market."}
+          </p>
+        </div>
         {!onboarding ? (
-          <Link className="button secondary profile-preview-link" to={`/seller/${user.id}`}>
-            View seller profile
-          </Link>
+          <ProfileModeSwitcher activeMode="user" sellerId={user.id} />
         ) : null}
-        <p className="lede">
-          {onboarding
-            ? "Choose how you appear, then add your student details."
-            : "Manage how other students see you across Uni Market."}
-        </p>
       </div>
       <form
         className="form panel profile-form"

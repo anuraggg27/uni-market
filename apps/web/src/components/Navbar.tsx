@@ -569,24 +569,6 @@ export const Navbar = () => {
                         Admin
                       </Link>
                     ) : null}
-                    {user ? (
-                      <>
-                        <Link
-                          to="/notifications"
-                          onClick={() => setOpen(false)}
-                          className="text-[15px] font-normal text-muted hover:text-ink transition-colors py-1"
-                        >
-                          Notifications
-                        </Link>
-                        <Link
-                          to="/profile"
-                          onClick={() => setOpen(false)}
-                          className="text-[15px] font-normal text-muted hover:text-ink transition-colors py-1"
-                        >
-                          Profile
-                        </Link>
-                      </>
-                    ) : null}
                   </div>
                 </div>
               </SheetContent>

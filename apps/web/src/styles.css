@@ -8768,33 +8768,117 @@ html.dark .hero-campus-background {
 
 .profile-page-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(310px, 350px);
+  align-items: end;
+  gap: 18px;
 }
-.profile-page-header .lede {
-  grid-column: 1 / -1;
-  margin: 0;
+.profile-page-heading-copy {
+  min-width: 0;
 }
-.profile-page-header .profile-preview-link {
+.profile-page-heading-copy .lede {
+  margin: 8px 0 0;
+}
+
+.profile-mode-switcher {
+  width: min(100%, 350px);
   justify-self: end;
-  min-height: 40px;
-  padding: 8px 14px;
-  font-size: 0.8rem;
-  white-space: nowrap;
 }
-@media (max-width: 480px) {
+
+.profile-mode-label {
+  display: block;
+  margin: 0 0 7px 3px;
+  color: var(--color-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.profile-mode-control {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  background: var(--color-surface);
+}
+
+.profile-mode-control a {
+  min-width: 0;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  font-weight: 550;
+  white-space: nowrap;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.profile-mode-control a:hover {
+  background: var(--color-surface-muted);
+  color: var(--color-ink);
+}
+
+.profile-mode-control a.is-active {
+  border-color: color-mix(in srgb, var(--color-accent) 72%, var(--color-line));
+  background: var(--color-brand);
+  color: var(--color-on-brand);
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-on-brand) 12%, transparent);
+}
+
+.profile-mode-control svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+}
+
+.seller-profile-page-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(310px, 350px);
+  align-items: end;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.seller-profile-page-header h1 {
+  font-size: clamp(1.9rem, 3.5vw, 2.55rem);
+}
+
+.seller-profile-page-header p {
+  margin: 8px 0 0;
+  color: var(--color-muted);
+}
+
+@media (max-width: 720px) {
   .profile-page-header {
-    column-gap: 12px;
+    grid-template-columns: 1fr;
+    align-items: start;
   }
-  .profile-page-header .profile-preview-link {
-    padding: 8px 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    font-size: 0.72rem;
-    text-decoration: underline;
-    text-underline-offset: 4px;
+
+  .seller-profile-page-header {
+    grid-template-columns: 1fr;
+    align-items: start;
+    gap: 18px;
+    margin-bottom: 22px;
+  }
+
+  .profile-mode-switcher {
+    width: 100%;
+    max-width: none;
+    justify-self: stretch;
+  }
+}
+
+@media (max-width: 380px) {
+  .profile-mode-control a {
+    gap: 6px;
+    padding: 0 8px;
+    font-size: 0.74rem;
   }
 }
 

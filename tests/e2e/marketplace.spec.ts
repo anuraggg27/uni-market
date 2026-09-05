@@ -473,8 +473,27 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
   await expect(buyerPage.getByText("Buyer rating: 5.0 · 1 review", { exact: true })).toHaveCount(0);
   const buyerIdentity = (await (await buyer.request.get(`${API}/api/auth/session`)).json()).data;
   await buyerPage.goto(marketplacePath(`/seller/${buyerIdentity.id}`));
+  await buyerPage.reload();
+  await buyerPage.setViewportSize({ width: 390, height: 844 });
+  let profileMode = buyerPage.getByRole("navigation", { name: "Profile mode" });
+  await expect(profileMode.getByRole("link", { name: "Seller profile" })).toHaveAttribute("aria-current", "page");
+  const userModeBox = await profileMode.getByRole("link", { name: "User profile" }).boundingBox();
+  const sellerModeBox = await profileMode.getByRole("link", { name: "Seller profile" }).boundingBox();
+  expect(Math.abs((userModeBox?.width ?? 0) - (sellerModeBox?.width ?? 0))).toBeLessThan(2);
+  expect(await buyerPage.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+  await profileMode.getByRole("link", { name: "User profile" }).click();
+  await expect(buyerPage).toHaveURL(new RegExp(`${marketplacePath("/profile")}$`));
+  await buyerPage.reload();
+  profileMode = buyerPage.getByRole("navigation", { name: "Profile mode" });
+  await expect(profileMode.getByRole("link", { name: "User profile" })).toHaveAttribute("aria-current", "page");
+  expect(await buyerPage.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+  await profileMode.getByRole("link", { name: "Seller profile" }).click();
+  await expect(buyerPage).toHaveURL(new RegExp(`${marketplacePath(`/seller/${buyerIdentity.id}`)}$`));
   await expect(buyerPage.locator('.seller-profile-rating')).toHaveText('No seller reviews yet');
   await expect(buyerPage.getByText('Prompt buyer and easy pickup.', { exact: true })).toHaveCount(0);
+  const sellerIdentity = (await (await seller.request.get(`${API}/api/auth/session`)).json()).data;
+  await buyerPage.goto(marketplacePath(`/seller/${sellerIdentity.id}`));
+  await expect(buyerPage.getByRole("navigation", { name: "Profile mode" })).toHaveCount(0);
   await seller.close();
   await buyer.close();
   await mod.close();
@@ -567,8 +586,14 @@ test("guest Contact seller resumes into chat and exposes request history and ema
   await expect(page).toHaveURL(/\/requests\?view=sent#transaction-test$/);
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator(".mobile-nav").getByRole("link", { name: "Chats" })).toBeVisible();
+  await expect(page.locator(".mobile-nav").getByRole("link", { name: "My listings" })).toBeVisible();
   await expect(page.locator(".mobile-nav").getByRole("link", { name: "Requests" })).toBeVisible();
+  await expect(page.locator(".mobile-nav").getByRole("link", { name: "Browse" })).toHaveCount(0);
   await expect(page.locator(".mobile-nav").getByRole("link", { name: "Profile" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Open menu" }).click();
+  await expect(page.getByRole("dialog").getByRole("link", { name: "Profile" })).toHaveCount(0);
+  await expect(page.getByRole("dialog").getByRole("link", { name: "Notifications" })).toHaveCount(0);
 
   await page.goto(marketplacePath("/settings?section=email"));
   await expect(page.getByRole("switch")).toHaveCount(3);

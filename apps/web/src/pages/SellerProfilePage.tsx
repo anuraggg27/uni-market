@@ -19,6 +19,7 @@ import { Link, useParams } from "react-router-dom";
 import { api } from "../api";
 import { useAuth } from "../auth";
 import { ReportButton } from "../components/ReportButton";
+import { ProfileModeSwitcher } from "../components/ProfileModeSwitcher";
 import { ErrorState, Loading } from "../components/UI";
 import { UserAvatar } from "../components/UserAvatar";
 
@@ -83,6 +84,7 @@ export function SellerProfilePage() {
   const rating = Number(seller.averageRating ?? 0);
   const location = [seller.institution, seller.campus].filter(Boolean).join(" \u00b7 ");
   const isNewSeller = Number(seller.completedSales) === 0;
+  const isOwnSellerProfile = user?.id === seller.id;
   const memberSince = new Date(seller.createdAt).toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
@@ -91,6 +93,15 @@ export function SellerProfilePage() {
 
   return (
     <main className="page seller-profile-page">
+      {isOwnSellerProfile ? (
+        <header className="seller-profile-page-header">
+          <div>
+            <h1>Seller profile</h1>
+            <p>Manage your seller profile, listings, and track your sales on Uni Market.</p>
+          </div>
+          <ProfileModeSwitcher activeMode="seller" sellerId={seller.id} />
+        </header>
+      ) : null}
       <section className="seller-profile-hero">
         <div className="seller-profile-identity">
           <UserAvatar

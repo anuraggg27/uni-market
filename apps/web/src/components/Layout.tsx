@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { Home, ListPlus, MessageCircle, ReceiptText, Search } from 'lucide-react';
+import { ClipboardList, Home, ListPlus, MessageCircle, ReceiptText } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Navbar } from './Navbar';
 import { RouteScrollRestoration } from './RouteScrollRestoration';
@@ -7,9 +7,9 @@ import { RouteLoading } from './LoadingSkeletons';
 
 const mobileLinks = [
   { to: '/', label: 'Home', icon: Home },
-  { to: '/browse', label: 'Browse', icon: Search },
-  { to: '/sell', label: 'Sell', icon: ListPlus },
   { to: '/chats', label: 'Chats', icon: MessageCircle },
+  { to: '/sell', label: 'Sell', icon: ListPlus },
+  { to: '/my-listings', label: 'My listings', icon: ClipboardList },
   { to: '/requests', label: 'Requests', icon: ReceiptText },
 ];
 
