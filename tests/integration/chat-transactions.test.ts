@@ -13,6 +13,21 @@ beforeEach(async()=>{ctx=await setup();seller=await login(ctx.app,'chat-seller')
 async function conversation(){return (await buyer.agent.post('/api/conversations').set(buyer.headers).send({listingId:listing.id}).expect(201)).body.data;}
 
 describe('chat acceptance',()=>{
+  it('returns loadable request cover images to both participants and omits deleted images', async () => {
+    const c = await conversation();
+    await buyer.agent.post(`/api/conversations/${c.id}/messages`).set(buyer.headers)
+      .send({ body: 'I would like to reserve this item.', clientId: crypto.randomUUID() }).expect(201);
+    await buyer.agent.post(`/api/conversations/${c.id}/reservation-requests`).set(buyer.headers).expect(201);
+    for (const participant of [buyer, seller]) {
+      const rows = (await participant.agent.get('/api/transactions').expect(200)).body.data;
+      const url = new URL(rows[0].coverImageUrl);
+      const image = await participant.agent.get(`${url.pathname}${url.search}`).expect(200);
+      expect(image.headers['content-type']).toMatch(/^image\//);
+    }
+    await ctx.db.update(schema.listingImages).set({ deletedAt: new Date() }).where(eq(schema.listingImages.listingId, listing.id));
+    const rows = (await buyer.agent.get('/api/transactions').expect(200)).body.data;
+    expect(rows[0].coverImageUrl).toBeNull();
+  });
   it('broadcasts reservation changes only to participants, including after reconnect, without leaking exchange codes', async () => {
     const c = await conversation();
     await buyer.agent.post(`/api/conversations/${c.id}/messages`).set(buyer.headers)

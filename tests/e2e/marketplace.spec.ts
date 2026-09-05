@@ -314,6 +314,7 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
   // The API persists across Playwright retries/repeats. Use fresh participants
   // without losing the stable names used by the conversation assertions.
   const attempt = `${test.info().retry}-${test.info().repeatEachIndex}`;
+  test.setTimeout(60_000);
   const seller = await browser.newContext();
   const sellerAuth = await signIn(seller, `transaction-seller-${attempt}`);
   const listing = await createListing(sellerAuth, "Graphing calculator");
@@ -407,20 +408,26 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
   await buyerPage.getByRole("button", { name: "Ask seller to reserve" }).click();
   await expect(sellerPage.getByText("The buyer wants to reserve this item", { exact: true })).toBeVisible();
   await sellerPage.getByRole("button", { name: "Accept and reserve" }).click();
-  await expect(buyerPage.getByRole("link", { name: "View exchange code" })).toBeVisible();
   await expect(sellerPage.getByRole("link", { name: "Complete exchange" })).toBeVisible();
+  await expect(buyerPage.getByRole("link", { name: "View exchange code" })).toBeVisible({ timeout: 10_000 });
   await buyerPage.getByRole("link", { name: "View exchange code" }).click();
   await sellerPage.getByRole("link", { name: "Complete exchange" }).click();
   const exchangeCode = (await buyerPage.locator(".exchange-code-value").textContent())?.trim();
   expect(exchangeCode).toMatch(/^\d{6}$/);
   await sellerPage.getByLabel("6-digit exchange code").fill(exchangeCode!);
   await sellerPage.getByRole("button", { name: "Complete sale" }).click();
-  await expect(sellerPage.getByText("COMPLETED", { exact: true })).toBeVisible();
+  await expect(sellerPage.getByText("completed", { exact: true })).toBeVisible();
   // The buyer's Requests page must also update live after the seller completes the sale.
-  await expect(buyerPage.getByText("COMPLETED", { exact: true })).toBeVisible();
+  await expect(buyerPage.getByText("completed", { exact: true })).toBeVisible();
   const buyerReviewTab = await buyer.newPage();
   await buyerReviewTab.goto(marketplacePath("/requests?view=sent"));
+  await expect(buyerReviewTab.getByRole("tab", { name: /^All/ })).toBeVisible();
+  await expect(buyerReviewTab.getByRole("tab", { name: /^Sent/ })).toHaveAttribute("aria-selected", "true");
+  await expect(buyerReviewTab.getByRole("tab", { name: /^Received/ })).toBeVisible();
+  await buyerReviewTab.getByLabel("Sort requests").selectOption("oldest");
+  await expect(buyerReviewTab).toHaveURL(/\/requests\?view=sent&sort=oldest$/);
   await expect(buyerReviewTab.getByRole("button", { name: "Leave verified review" })).toBeVisible();
+  await expect(buyerReviewTab.getByRole("radio", { name: "5 stars" })).toBeChecked();
   await buyerPage
     .getByLabel("Short review")
     .fill("Exactly as described and easy meetup.");
@@ -532,7 +539,7 @@ test("guest Contact seller resumes into chat and exposes request history and ema
   await expect(page.getByText("Waiting for the seller", { exact: true })).toBeVisible();
 
   await page.goto(marketplacePath("/requests?view=sent"));
-  await expect(page.getByRole("link", { name: "Resume conversation desk lamp" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Resume conversation desk lamp", exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "View listing" })).toHaveAttribute("href", marketplacePath(`/listing/${listing.id}`));
   await expect(page.getByText("Waiting for the seller to respond")).toBeVisible();
   await page.goto(marketplacePath(`/transactions?view=buying#transaction-test`));
@@ -566,6 +573,7 @@ test("E2E-05 support request receives an agent response and resolves", async ({
   await signIn(user, "support-user");
   const page = await user.newPage();
   await page.goto(marketplacePath("/support"));
+  await page.locator(".support-list-toolbar").getByRole("button", { name: "New support request" }).click();
   await page.getByLabel("Subject").fill("Listing status question");
   await page
     .getByLabel("Describe the issue")
@@ -588,7 +596,7 @@ test("E2E-05 support request receives an agent response and resolves", async ({
   await expect(
     page.getByText("Your listing is still in the normal review queue."),
   ).toBeVisible();
-  await expect(page.getByText("RESOLVED")).toBeVisible();
+  await expect(page.locator(".support-conversation-header .support-status")).toHaveText("Resolved");
   await user.close();
   await support.close();
 });

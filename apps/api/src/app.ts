@@ -209,7 +209,7 @@ export function createApp(deps: {
     }),
     communicationRouter(db, storage, config, deps.onMessage),
   );
-  app.use("/api", transactionsRouter(db, config));
+  app.use("/api", transactionsRouter(db, config, storage));
   app.use("/api", reputationRouter(db));
   app.use("/api", userOperationsRouter(db, config));
   app.use("/api/admin", grievanceAdminRouter(db, config));

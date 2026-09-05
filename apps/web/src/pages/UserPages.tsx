@@ -16,11 +16,13 @@ import {
   ArrowDown,
   ArrowLeft,
   Bell,
+  CalendarDays,
   Check,
   CheckCircle2,
   ChevronRight,
   Circle,
   Download,
+  ExternalLink,
   ImagePlus,
   KeyRound,
   LogOut,
@@ -31,6 +33,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   Smartphone,
+  Star,
   Trash2,
   X,
 } from "lucide-react";
@@ -974,6 +977,7 @@ type TransactionRecord = {
   createdAt: string;
   updatedAt: string;
   reviewSubmitted: boolean;
+  coverImageUrl?: string | null;
   exchangeCode?: string;
   exchangeCodeLocked?: boolean;
 };
@@ -1735,6 +1739,7 @@ function ChatPanel({
 }
 
 type TransactionView = "all" | "sent" | "received";
+type TransactionSort = "newest" | "oldest";
 
 const transactionDateFormatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
@@ -1782,12 +1787,14 @@ export function RequestsPage() {
   }, [client]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [exchangeCodeEntries, setExchangeCodeEntries] = useState<Record<string, string>>({});
+  const [reviewDrafts, setReviewDrafts] = useState<Record<string, string>>({});
   const requestedView = searchParams.get("view");
   const view: TransactionView = requestedView === "sent" || requestedView === "buying"
     ? "sent"
     : requestedView === "received" || requestedView === "selling"
       ? "received"
       : "all";
+  const sort: TransactionSort = searchParams.get("sort") === "oldest" ? "oldest" : "newest";
   const query = useQuery({
     queryKey: ["transactions"],
     queryFn: () => api<TransactionRecord[]>("/api/transactions"),
@@ -1862,13 +1869,25 @@ export function RequestsPage() {
     counts[transaction.role === "BUYER" ? "sent" : "received"] += 1;
     return counts;
   }, { all: 0, sent: 0, received: 0 }), [transactions]);
-  const visibleTransactions = useMemo(() => view === "all"
-    ? transactions
-    : transactions.filter((transaction) => transaction.role === (view === "sent" ? "BUYER" : "SELLER")), [transactions, view]);
+  const visibleTransactions = useMemo(() => {
+    const filtered = view === "all"
+      ? transactions
+      : transactions.filter((transaction) => transaction.role === (view === "sent" ? "BUYER" : "SELLER"));
+    return [...filtered].sort((left, right) => {
+      const difference = new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime();
+      return sort === "newest" ? difference : -difference;
+    });
+  }, [sort, transactions, view]);
   function selectView(nextView: TransactionView) {
     const next = new URLSearchParams(searchParams);
     if (nextView === "all") next.delete("view");
     else next.set("view", nextView);
+    setSearchParams(next, { replace: true });
+  }
+  function selectSort(nextSort: TransactionSort) {
+    const next = new URLSearchParams(searchParams);
+    if (nextSort === "newest") next.delete("sort");
+    else next.set("sort", nextSort);
     setSearchParams(next, { replace: true });
   }
   return (
@@ -1879,35 +1898,67 @@ export function RequestsPage() {
           <p>Track reservation requests you sent and received.</p>
         </div>
       </div>
-      <div className="transaction-filters" role="tablist" aria-label="Request view">
-        {(["all", "sent", "received"] as const).map((filter) => (
-          <button type="button" role="tab" aria-selected={view === filter} className={view === filter ? "is-active" : ""} key={filter} onClick={() => selectView(filter)}>
-            {filter === "all" ? "All" : filter === "sent" ? "Sent" : "Received"}
-            <span>{transactionCounts[filter]}</span>
-          </button>
-        ))}
+      <div className="request-controls">
+        <div className="transaction-filters" role="tablist" aria-label="Request view">
+          {(["all", "sent", "received"] as const).map((filter) => (
+            <button type="button" role="tab" aria-selected={view === filter} className={view === filter ? "is-active" : ""} key={filter} onClick={() => selectView(filter)}>
+              {filter === "all" ? "All" : filter === "sent" ? "Sent" : "Received"}
+              <span>{transactionCounts[filter]}</span>
+            </button>
+          ))}
+        </div>
+        <label className="request-sort-control">
+          <span>Sort by</span>
+          <span className="request-sort-select">
+            <select aria-label="Sort requests" value={sort} onChange={(event) => selectSort(event.target.value as TransactionSort)}>
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+            </select>
+            <ArrowDown aria-hidden="true" />
+          </span>
+        </label>
       </div>
       {query.isLoading ? (
         <Loading label="Loading requests" />
       ) : query.isError ? (
         <ErrorState error={query.error} />
       ) : !visibleTransactions.length ? (
-        <EmptyState
-          title={view === "received" ? "No received requests" : view === "sent" ? "No sent requests" : "No requests yet"}
-          body={view === "received" ? "Reservation requests from interested students will appear here." : "Start a conversation, send a message, and then request a reservation."}
-        />
+        <div className="request-empty-state">
+          <EmptyState
+            title={view === "received" ? "No received requests" : view === "sent" ? "No sent requests" : "No requests yet"}
+            body={view === "received" ? "Reservation requests from interested students will appear here." : "Start a conversation, send a message, and then request a reservation."}
+          />
+        </div>
       ) : (
         <div className="transaction-list section">
           {visibleTransactions.map((tx) => (
             <article className="panel transaction-card" id={`transaction-${tx.id}`} key={tx.id}>
               <div className="transaction-card-header">
-                <div className="transaction-card-copy">
-                  <h2><Link to={`/listing/${tx.listingId}`}>{tx.listingTitle}</Link></h2>
-                  <p className="transaction-card-meta"><span>{tx.listingPrice}</span><span>{tx.role === "BUYER" ? "Sent" : "Received"}</span><span>Requested {transactionDateFormatter.format(new Date(tx.createdAt))}</span></p>
-                  <p className="transaction-status-copy">{transactionStatusText(tx)}</p>
+                <div className="transaction-card-main">
+                  <Link className="request-product-thumbnail" to={`/listing/${tx.listingId}`} aria-label={`View ${tx.listingTitle}`}>
+                    {tx.coverImageUrl ? <img src={tx.coverImageUrl} alt="" /> : <ImagePlus aria-hidden="true" />}
+                  </Link>
+                  <div className="transaction-card-copy">
+                    <span className={`request-direction request-direction-${tx.role.toLowerCase()}`}>{tx.role === "BUYER" ? "Sent" : "Received"}</span>
+                    <h2><Link to={`/listing/${tx.listingId}`}>{tx.listingTitle}</Link></h2>
+                    <strong className="transaction-card-price">{tx.listingPrice}</strong>
+                    <div className="transaction-card-meta">
+                      <CalendarDays aria-hidden="true" />
+                      <time dateTime={new Date(tx.createdAt).toISOString()}>Requested {transactionDateFormatter.format(new Date(tx.createdAt))}</time>
+                    </div>
+                  </div>
                 </div>
-                <StatusBadge value={tx.status} />
-              </div>
+                <div className="transaction-card-side">
+                  <div className="transaction-card-status">
+                    <StatusBadge value={tx.status === "REQUESTED" ? "pending" : tx.status.toLowerCase()} />
+                    <p className="transaction-status-copy">{transactionStatusText(tx)}</p>
+                  </div>
+                  <div className="transaction-card-actions">
+                    <Link className="button secondary" to={`/listing/${tx.listingId}`}>View listing <ExternalLink aria-hidden="true" /></Link>
+                    {tx.role === "SELLER" && tx.status === "REQUESTED" ? <button className="button primary" onClick={() => action.mutate({ id: tx.id, action: "accept" })}>Accept and reserve</button> : null}
+                    {tx.role === "BUYER" && tx.status === "HANDED_OVER" ? <button className="button primary" onClick={() => action.mutate({ id: tx.id, action: "complete" })}>Confirm receipt</button> : null}
+                    {["REQUESTED", "ACCEPTED", "RESERVED"].includes(tx.status) ? <button className="button danger" onClick={() => action.mutate({ id: tx.id, action: "cancel" })}>Cancel</button> : null}
+                  </div>
               {tx.role === "BUYER" && tx.status === "RESERVED" && tx.exchangeCode ? (
                 <div className={`exchange-code-panel${tx.exchangeCodeLocked ? " is-locked" : ""}`}>
                   <div>
@@ -1964,44 +2015,15 @@ export function RequestsPage() {
                   </div>
                 </form>
               ) : null}
-              <div className="transaction-card-actions">
-                <Link className="button secondary" to={`/listing/${tx.listingId}`}>View listing</Link>
-                {tx.role === "SELLER" && tx.status === "REQUESTED" ? (
-                  <button
-                    className="button primary"
-                    onClick={() =>
-                      action.mutate({ id: tx.id, action: "accept" })
-                    }
-                  >
-                    Accept and reserve
-                  </button>
-                ) : null}
-                {tx.role === "BUYER" && tx.status === "HANDED_OVER" ? (
-                  <button
-                    className="button primary"
-                    onClick={() =>
-                      action.mutate({ id: tx.id, action: "complete" })
-                    }
-                  >
-                    Confirm receipt
-                  </button>
-                ) : null}
-                {["REQUESTED", "ACCEPTED", "RESERVED"].includes(tx.status) ? (
-                  <button
-                    className="button danger"
-                    onClick={() =>
-                      action.mutate({ id: tx.id, action: "cancel" })
-                    }
-                  >
-                    Cancel
-                  </button>
-                ) : null}
-              </div>
               {tx.status === "COMPLETED" && tx.reviewSubmitted ? (
-                <p className="transaction-review-form" role="status">Already reviewed</p>
+                <div className="transaction-review-summary" role="status">
+                  <div className="transaction-review-heading"><strong>Your review</strong><CheckCircle2 aria-hidden="true" /></div>
+                  <span className="sr-only">Already reviewed</span>
+                  <p>Verified feedback submitted</p>
+                </div>
               ) : tx.status === "COMPLETED" ? (
                 <form
-                  className="form-grid transaction-review-form"
+                  className="transaction-review-form"
                   onSubmit={(e) => {
                     e.preventDefault();
                     if (review.isPending) return;
@@ -2013,30 +2035,40 @@ export function RequestsPage() {
                     });
                   }}
                 >
-                  <label className="field">
-                    <span>Rating</span>
-                    <select name="rating">
-                      {[5, 4, 3, 2, 1].map((n) => (
-                        <option key={n} value={n}>
-                          {n} stars
-                        </option>
+                  <div className="transaction-review-heading"><strong>Leave a verified review</strong><span>Helps build a trusted community</span></div>
+                  <fieldset className="request-rating-field">
+                    <legend className="sr-only">Rating</legend>
+                    <div className="request-star-rating">
+                      {[1, 2, 3, 4, 5].map((rating) => (
+                        <label key={rating}>
+                          <input type="radio" name="rating" value={rating} defaultChecked={rating === 5} aria-label={`${rating} star${rating === 1 ? "" : "s"}`} />
+                          <Star aria-hidden="true" />
+                        </label>
                       ))}
-                    </select>
-                  </label>
-                  <label className="field">
-                    <span>Short review</span>
-                    <input
+                    </div>
+                  </fieldset>
+                  <label className="field request-review-text">
+                    <span className="sr-only">Short review</span>
+                    <textarea
                       name="text"
                       minLength={2}
                       maxLength={1000}
+                      rows={3}
+                      value={reviewDrafts[tx.id] ?? ""}
+                      onChange={(event) => setReviewDrafts((current) => ({ ...current, [tx.id]: event.target.value }))}
+                      aria-describedby={`review-count-${tx.id}`}
                       required
+                      placeholder="How did the exchange go?"
                     />
                   </label>
-                  <button className="button secondary" disabled={review.isPending}>
+                  <span className="request-review-count" id={`review-count-${tx.id}`}>{reviewDrafts[tx.id]?.length ?? 0} / 1000 characters</span>
+                  <button type="submit" className="button primary" disabled={review.isPending}>
                     {review.isPending && review.variables?.id === tx.id ? "Submitting…" : "Leave verified review"}
                   </button>
                 </form>
               ) : null}
+                </div>
+              </div>
             </article>
           ))}
         </div>
@@ -2406,192 +2438,7 @@ export function NotificationsPage() {
   );
 }
 
-export function SupportPage() {
-  const navigate = useNavigate();
-  const query = useQuery({
-    queryKey: ["support"],
-    queryFn: () => api<any[]>("/api/support"),
-  });
-  const create = useMutation({
-    mutationFn: (data: any) =>
-      api<any>("/api/support", { method: "POST", ...jsonBody(data) }),
-    onSuccess: (ticket) => {
-      toast.success("Support request created");
-      navigate(`/support/${ticket.id}`);
-    },
-  });
-  return (
-    <div className="page">
-      <div className="page-header">
-        <div>
-          <h1>Support</h1>
-        </div>
-      </div>
-      <div className="detail-grid">
-        <section>
-          <h2>Your requests</h2>
-          {query.isLoading ? (
-            <Loading label="Loading support requests" />
-          ) : query.isError ? (
-            <ErrorState error={query.error} />
-          ) : !query.data?.length ? (
-            <EmptyState
-              title="No support requests"
-              body="Open a request and the team will respond here."
-            />
-          ) : (
-            <div className="list">
-              {query.data.map((t) => (
-                <Link className="list-item" key={t.id} to={`/support/${t.id}`}>
-                  <div />
-                  <div>
-                    <h3>{t.subject}</h3>
-                    <p>{t.category}</p>
-                  </div>
-                  <StatusBadge value={t.status} />
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
-        <form
-          className="panel form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const f = new FormData(e.currentTarget);
-            create.mutate({
-              category: String(f.get("category")),
-              subject: String(f.get("subject")),
-              description: String(f.get("description")),
-            });
-          }}
-        >
-          <h2>Open a support request</h2>
-          <label className="field">
-            <span>Category</span>
-            <select name="category">
-              <option value="ACCOUNT">Account</option>
-              <option value="LISTING">Listing</option>
-              <option value="TRANSACTION">Transaction</option>
-              <option value="SAFETY">Safety</option>
-              <option value="TECHNICAL">Technical</option>
-              <option value="OTHER">Other</option>
-            </select>
-          </label>
-          <label className="field">
-            <span>Subject</span>
-            <input name="subject" minLength={4} maxLength={120} required />
-          </label>
-          <label className="field">
-            <span>Describe the issue</span>
-            <textarea
-              name="description"
-              minLength={20}
-              maxLength={5000}
-              required
-            />
-          </label>
-          <SubmitButton pending={create.isPending}>Open request</SubmitButton>
-          {create.error ? (
-            <p className="field-error">{create.error.message}</p>
-          ) : null}
-        </form>
-      </div>
-    </div>
-  );
-}
-
-export function SupportDetailPage() {
-  const { ticketId } = useParams();
-  const { user } = useAuth();
-  const client = useQueryClient();
-  const query = useQuery({
-    queryKey: ["support", ticketId],
-    queryFn: () => api<any>(`/api/support/${ticketId}`),
-  });
-  const reply = useMutation({
-    mutationFn: (body: string) =>
-      api(`/api/support/${ticketId}/messages`, {
-        method: "POST",
-        ...jsonBody({ body }),
-      }),
-    onSuccess: () => {
-      toast.success("Reply sent");
-      void client.invalidateQueries({ queryKey: ["support", ticketId] });
-    },
-  });
-  if (query.isLoading)
-    return (
-      <div className="page">
-        <Loading label="Loading support request" />
-      </div>
-    );
-  if (query.isError)
-    return (
-      <div className="page">
-        <ErrorState error={query.error} />
-      </div>
-    );
-  const t = query.data;
-  return (
-    <div className="page narrow">
-      <Link to="/support">← All support requests</Link>
-      <div className="page-header">
-        <div>
-          <h1>{t.subject}</h1>
-          <p>{t.description}</p>
-        </div>
-        <StatusBadge value={t.status} />
-      </div>
-      <div className="stack">
-        {t.messages.length ? (
-          t.messages.map((m: any) => (
-            <article className="panel" key={m.id}>
-              <strong>{m.senderName}</strong>
-              <p>{m.body}</p>
-              <span className="meta">
-                {new Date(m.createdAt).toLocaleString()}
-              </span>
-              {m.senderId !== user?.id ? (
-                <ReportButton
-                  targetType="SUPPORT_RESPONSE"
-                  targetId={m.id}
-                  label="Report response"
-                />
-              ) : null}
-            </article>
-          ))
-        ) : (
-          <EmptyState
-            title="No replies yet"
-            body="Your request is queued. You do not need to keep this page open."
-          />
-        )}
-      </div>
-      {t.status !== "CLOSED" ? (
-        <form
-          className="composer panel section"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const input = e.currentTarget.elements.namedItem(
-              "body",
-            ) as HTMLTextAreaElement;
-            reply.mutate(input.value);
-            input.value = "";
-          }}
-        >
-          <textarea
-            name="body"
-            required
-            maxLength={5000}
-            placeholder="Add a reply"
-          />
-          <button className="button primary">Reply</button>
-        </form>
-      ) : null}
-    </div>
-  );
-}
+export { SupportPage, SupportDetailPage } from "./SupportPages";
 
 type EmailPreferenceValues = {
   enabled: boolean;

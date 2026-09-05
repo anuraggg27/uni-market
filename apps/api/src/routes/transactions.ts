@@ -1,11 +1,12 @@
 import { Router, type Request } from 'express';
 import type { Server } from 'socket.io';
-import { and, desc, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { idSchema, reviewSchema } from '@campus-market/shared';
 import { z } from 'zod';
 import type { AppConfig } from '../config.js';
 import type { Database } from '../db/client.js';
-import { blocks, conversations, listings, messages, notifications, reviews, transactions, users } from '../db/schema.js';
+import { blocks, conversations, listingImages, listings, messages, notifications, reviews, transactions, users } from '../db/schema.js';
+import type { StorageService } from '../services/storage.js';
 import { requireVerified } from '../middleware/auth.js';
 import { keyedHash, safeEqual } from '../lib/crypto.js';
 import { AppError, asyncRoute } from '../lib/errors.js';
@@ -56,12 +57,21 @@ function publicTransaction(transaction: TransactionRow, userId: string, config: 
   };
 }
 
-export function transactionsRouter(db: Database, config: AppConfig): Router {
+export function transactionsRouter(db: Database, config: AppConfig, storage: StorageService): Router {
   const router = Router();
 
   router.get('/transactions', requireVerified, asyncRoute(async (req, res) => {
     const rows = await db.select({ transaction: transactions, reviewId: reviews.id, listing: { title: listings.title, priceType: listings.priceType, exactPrice: listings.exactPrice, minimumPrice: listings.minimumPrice, maximumPrice: listings.maximumPrice } }).from(transactions).innerJoin(listings, eq(listings.id, transactions.listingId)).leftJoin(reviews, and(eq(reviews.transactionId, transactions.id), eq(reviews.reviewerId, req.auth!.userId))).where(or(eq(transactions.buyerId, req.auth!.userId), eq(transactions.sellerId, req.auth!.userId))).orderBy(desc(transactions.updatedAt));
-    res.json({ data: rows.map((row) => ({ ...publicTransaction(row.transaction, req.auth!.userId, config, { title: row.listing.title, priceLabel: listingPriceLabel(row.listing) }), reviewSubmitted: row.reviewId !== null })) });
+    const listingIds = [...new Set(rows.map((row) => row.transaction.listingId))];
+    const images = listingIds.length ? await db.select({ listingId: listingImages.listingId, objectKey: listingImages.objectKey })
+      .from(listingImages).where(and(inArray(listingImages.listingId, listingIds), isNull(listingImages.deletedAt), isNotNull(listingImages.finalizedAt), isNotNull(listingImages.objectKey)))
+      .orderBy(asc(listingImages.position)) : [];
+    const covers = new Map<string, string>();
+    for (const image of images) {
+      if (image.objectKey && !covers.has(image.listingId)) covers.set(image.listingId, image.objectKey);
+    }
+    const coverUrls = new Map(await Promise.all([...covers].map(async ([listingId, key]) => [listingId, await storage.signedReadUrl(key)] as const)));
+    res.json({ data: rows.map((row) => ({ ...publicTransaction(row.transaction, req.auth!.userId, config, { title: row.listing.title, priceLabel: listingPriceLabel(row.listing) }), coverImageUrl: coverUrls.get(row.transaction.listingId) ?? null, reviewSubmitted: row.reviewId !== null })) });
   }));
 
   router.post('/conversations/:id/reservation-requests', requireVerified, asyncRoute(async (req, res) => {

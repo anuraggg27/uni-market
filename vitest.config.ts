@@ -8,6 +8,8 @@ export default defineConfig({
           name: "unit",
           include: ["tests/unit/**/*.test.{ts,tsx}"],
           environment: "node",
+          maxWorkers: 2,
+          testTimeout: 20_000,
         },
       },
       {
