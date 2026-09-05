@@ -13,6 +13,9 @@ export default defineConfig({
       "Referrer-Policy": "no-referrer-when-downgrade",
     },
     proxy: {
+      "/robots.txt": { target: "http://localhost:4000", changeOrigin: true },
+      "/sitemap": { target: "http://localhost:4000", changeOrigin: true },
+      "/media/listings": { target: "http://localhost:4000", changeOrigin: true },
       "/api": { target: "http://localhost:4000", changeOrigin: true },
       "/socket.io": { target: "ws://localhost:4000", ws: true },
     },

@@ -6,6 +6,7 @@ import { rateLimit } from "express-rate-limit";
 import pinoHttp from "pino-http";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import type { AppConfig } from "./config.js";
 import type { Database } from "./db/client.js";
 import { csrfProtection, sessionMiddleware } from "./middleware/auth.js";
@@ -27,6 +28,7 @@ import { eligibilityRouter } from "./routes/eligibility.js";
 import { grievanceAdminRouter, grievanceRouter } from "./routes/grievances.js";
 import { complianceAdminRouter } from "./routes/compliance-admin.js";
 import { privacyRouter } from "./routes/privacy.js";
+import { marketplaceHtmlRouter, seoRouter } from "./routes/seo.js";
 
 function r2ConnectSources(config: AppConfig): string[] {
   const endpoint =
@@ -55,6 +57,7 @@ export function createApp(deps: {
   config: AppConfig;
   googleVerifier: GoogleVerifier;
   onMessage?: (conversationId: string, message: unknown) => void;
+  webIndexHtml?: string;
 }) {
   const { db, config, googleVerifier } = deps;
   const storage = new StorageService(config);
@@ -153,6 +156,8 @@ export function createApp(deps: {
   app.use(csrfProtection(db, config));
   app.use(express.json({ limit: "128kb", strict: true }));
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
+  app.use('/api', (_req, res, next) => { res.set('X-Robots-Tag', 'noindex'); next(); });
+  app.use(seoRouter(db, config, storage));
   app.use("/api", uploadsRouter(db, config, storage));
   app.use(
     "/api/auth/google",
@@ -215,10 +220,8 @@ export function createApp(deps: {
   app.use("/api/admin", grievanceAdminRouter(db, config));
   app.use("/api/admin", complianceAdminRouter(db));
   app.use("/api/admin", adminRouter(db, config));
-  if (config.NODE_ENV === "production") {
+  if (config.NODE_ENV === "production" || deps.webIndexHtml !== undefined) {
     const webRoot = fileURLToPath(new URL("../../web/dist", import.meta.url));
-    const sendMarketplace = (_req: express.Request, res: express.Response) =>
-      res.sendFile(join(webRoot, "index.html"));
     app.get("/", (_req, res) => res.redirect(302, MARKETPLACE_BASE_PATH));
     app.use(
       MARKETPLACE_BASE_PATH,
@@ -228,8 +231,9 @@ export function createApp(deps: {
         redirect: false,
       }),
     );
-    app.get(MARKETPLACE_BASE_PATH, sendMarketplace);
-    app.get(`${MARKETPLACE_BASE_PATH}/{*path}`, sendMarketplace);
+    // Read the immutable built template once, not once per visitor.
+    const template = deps.webIndexHtml ?? readFileSync(join(webRoot, 'index.html'), 'utf8');
+    app.use(marketplaceHtmlRouter(db, config, template));
   }
   app.use(notFound);
   app.use(errorHandler);

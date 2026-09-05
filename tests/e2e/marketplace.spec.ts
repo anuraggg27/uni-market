@@ -236,6 +236,7 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   await page.getByRole("button", { name: "Submit for review" }).click();
   await expect(page).toHaveURL(/listing\//);
   const listingId = page.url().split("/").pop()!;
+  await expect(page.locator('head meta[name="robots"]')).toHaveAttribute('content', /^noindex/);
   await expect(
     page.getByText(
       "Your listing is in review. We’ll notify you as soon as it is approved.",
@@ -258,6 +259,9 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   await expect(
     page.getByRole("heading", { name: "Engineering mechanics book", level: 1 }),
   ).toBeVisible();
+  await expect(page).toHaveTitle('Engineering mechanics book | Uni Marketplace');
+  await expect(page.locator('head meta[name="robots"]')).toHaveAttribute('content', /^index/);
+  await expect(page.locator('head meta[property="og:image"]')).toHaveAttribute('content', new RegExp(`/media/listings/${listingId}/`));
   const guest = await browser.newContext();
   const guestPage = await guest.newPage();
   await guestPage.goto(marketplacePath("/browse"));

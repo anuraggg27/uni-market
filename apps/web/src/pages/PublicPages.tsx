@@ -26,7 +26,7 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { api, ApiError, jsonBody } from "../api";
-import { reportReasons } from "@campus-market/shared";
+import { marketplaceHeroDescription, reportReasons } from "@campus-market/shared";
 import { useAuth } from "../auth";
 import { postLoginDestination } from "../auth-routing";
 import {
@@ -131,8 +131,7 @@ export function HomePage() {
           </h1>
           {/* Supporting text */}
           <p className="home-hero-copy mb-10 max-w-2xl text-lg sm:text-[20px] text-muted">
-            The student marketplace for peer-to-peer textbook, tech, cycle, and
-            room essentials exchanges.
+            {marketplaceHeroDescription}
           </p>
           {/* Search Pill Component */}
           <form

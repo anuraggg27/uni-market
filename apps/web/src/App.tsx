@@ -1,8 +1,9 @@
 import { lazy, type ComponentType } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AuthProvider, RequireAuth } from "./auth";
 import { Layout } from "./components/Layout";
 import { NotificationUpdates } from "./components/NotificationUpdates";
+import { PageSeo } from "./components/PageSeo";
 
 function lazyNamed<Props = Record<string, never>>(
   loader: () => Promise<any>,
@@ -76,6 +77,7 @@ function LegacyTransactionsRedirect() {
 export function App() {
   return (
     <AuthProvider>
+      <PageSeo />
       <NotificationUpdates />
       <Routes>
           <Route element={<Layout />}>
@@ -307,7 +309,7 @@ export function App() {
                 }
               />
             </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<section className="page"><h1>Page not found</h1><p>This page is unavailable.</p><Link className="button secondary" to="/browse">Browse products</Link></section>} />
           </Route>
       </Routes>
     </AuthProvider>
