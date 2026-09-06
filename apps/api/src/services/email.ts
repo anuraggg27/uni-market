@@ -7,21 +7,35 @@ import { logger } from '../lib/logger.js';
 import { decryptText } from '../lib/crypto.js';
 import { allowsEmail, emailCategory } from './email-preferences.js';
 import { renderEmail } from './email-templates.js';
+import { operationalMetrics } from './operational-metrics.js';
 
 export class EmailWorker {
   private timer?: NodeJS.Timeout;
+  private running = false;
   private static readonly claimLeaseMs = 5 * 60_000;
   constructor(private db: Database, private config: AppConfig) {}
 
   start(): void {
     if (!this.config.SMTP_HOST) { logger.warn('SMTP is not configured; email outbox will remain queued'); return; }
-    this.timer = setInterval(() => void this.runOnce(), 10_000); this.timer.unref(); void this.runOnce();
+    this.timer = setInterval(() => void this.tick(), 10_000); this.timer.unref(); void this.tick();
   }
   stop(): void { if (this.timer) clearInterval(this.timer); }
 
+  private async tick(): Promise<void> {
+    if (this.running) return;
+    this.running = true;
+    try {
+      await this.runOnce();
+      operationalMetrics.record('email_worker', true);
+    } catch {
+      operationalMetrics.record('email_worker', false);
+      logger.error('Email worker failed; it will retry on its next tick');
+    } finally { this.running = false; }
+  }
+
   async runOnce(): Promise<void> {
     if (!this.config.SMTP_HOST) return;
-    const transport = nodemailer.createTransport({ host: this.config.SMTP_HOST, port: this.config.SMTP_PORT, secure: this.config.SMTP_SECURE, auth: this.config.SMTP_USER ? { user: this.config.SMTP_USER, pass: this.config.SMTP_PASSWORD } : undefined });
+    const transport = nodemailer.createTransport({ host: this.config.SMTP_HOST, port: this.config.SMTP_PORT, secure: this.config.SMTP_SECURE, auth: this.config.SMTP_USER ? { user: this.config.SMTP_USER, pass: this.config.SMTP_PASSWORD } : undefined, connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 30_000 });
     const jobs = await this.claimJobs();
     for (const { job, recipient, displayName, preferences } of jobs) {
       try {
@@ -37,7 +51,9 @@ export class EmailWorker {
         const rendered = renderEmail({ template: job.template, payload, displayName, config: this.config });
         await transport.sendMail({ from: `"${this.config.SMTP_FROM_NAME}" <${this.config.SMTP_FROM_EMAIL}>`, to, ...rendered });
         await this.db.update(emailOutbox).set({ sentAt: new Date() }).where(eq(emailOutbox.id, job.id));
+        operationalMetrics.record('email_delivery', true);
       } catch (error) {
+        operationalMetrics.record('email_delivery', false);
         await this.db.update(emailOutbox).set({ lastError: error instanceof Error ? error.message.slice(0, 500) : 'SMTP error', ...(job.attempts >= 5 ? { failedAt: new Date() } : { availableAt: new Date(Date.now() + 2 ** job.attempts * 60_000) }) }).where(eq(emailOutbox.id, job.id));
         logger.error({ jobId: job.id, err: error }, 'email outbox delivery failed');
       }

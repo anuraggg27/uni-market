@@ -21,6 +21,7 @@ const schema = z
     PORT: z.coerce.number().int().min(1).max(65535).default(4000),
     CLIENT_URL: z.string().url().default("http://localhost:5173"),
     API_URL: z.string().url().default("http://localhost:4000"),
+    MONITORING_TOKEN: z.union([z.literal(''), z.string().regex(/^[a-fA-F0-9]{64}$/)]).default(''),
     DATABASE_URL: z.string().default("pglite://.data/marketplace"),
     GOOGLE_CLIENT_ID: z.string().default(""),
     GOOGLE_CLIENT_SECRET: z.string().default(""),

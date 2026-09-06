@@ -1,0 +1,96 @@
+# Recovery and operational alerts
+
+## Ownership and activation status
+
+The platform admins have confirmed that they will handle listing approvals, customer-care/support messages and grievance deadlines. They also own incident acknowledgement, escalation and recovery. Assign a primary and backup admin for each day's coverage; software alerts do not replace checking the queues and published mailboxes.
+
+Scheduled runs are **off until configured**. Explicit manual runs on `main` are allowed before activation so the setup can be tested without enabling the schedule. Shipping the code is not evidence that a production backup restored or that an admin received an alert. Record the successful production backup run and an acknowledged notification test before signing off those release checks.
+
+Activation progress, **2026-09-06**: GitHub repository variables `R2_BACKUP_ENDPOINT` and `R2_BACKUP_BUCKET=uni-market-backups` are configured. The enabled `uni-market-database-backups-14-days` lifecycle rule was applied and read back from Cloudflare: it expires only `database-backups/` objects after 14 days and aborts incomplete multipart uploads under that prefix after one day. The bucket's existing default multipart rule was preserved; no objects were removed by this setup.
+
+The admin supplied dedicated R2 writer and reader credentials after the CLI's token-administration request was denied. Both keys were tested: the writer uploads, the monitor reads but cannot write, and neither can access production listing-photo objects. The temporary credential-check objects were removed. The four R2 secrets, a separate backup encryption key, the direct read-only database URL and the monitoring token are now configured in GitHub. Production login `uni_market_backup` has SELECT access to all 34 application/migration tables and sequences, future-object read grants for the migration owner, no write privileges on application tables and no administrative memberships. Source rows and application credentials were not changed. Operational issues are assigned to `rustedshader` and `Satyam-Jhinkwan`.
+
+An independent, owner-only local recovery copy of the backup encryption key is saved outside the repository under `~/.config/uni-market/operations/backup-encryption-key.hex`. Transfer it into the admins' password manager; do not rely on GitHub being available during recovery. The Git-ignored `.env.operations` hand-off stays owner-only. The production backup run, deployment and alert test must pass before turning on the schedule. Billing usage could not be checked with the current GitHub token; no billing limits or spending settings were changed.
+
+## What runs
+
+| Check | Schedule / trigger | Incident condition |
+| --- | --- | --- |
+| Public health and marketplace page | External GitHub runner, every 30 minutes | Either endpoint fails two bounded checks |
+| Database | Protected operations probe | Email-queue query cannot complete successfully |
+| Droplet space and inodes | Protected operations probe | At least 85% used, or less than 1 GiB available |
+| MSG91 server verification | Aggregate previous hour | At least one provider/network failure; invalid customer codes are not counted |
+| Browser MSG91 widget | Aggregate previous hour | At least three reported failures, and at least half of observed outcomes fail |
+| SMTP delivery and worker | Aggregate previous hour | At least one delivery or worker failure |
+| Email queue | Database-backed, survives app restarts | Pending email older than 15 minutes, or exhausted retries in the last 24 hours |
+| Database backup and restore | Daily, 21:47 UTC / 03:17 IST | Dump, encryption, restore, R2 upload or read-back verification fails |
+| Backup freshness | External check every 30 minutes | No successful restore-tested backup with matching private R2 objects in 30 hours |
+
+Incidents create GitHub issues titled `[Operations] Production health` or `[Operations] Database backup`. Repeated identical observations do not create more issues/comments. Changed conditions update the issue; successful checks close it with a recovery comment. Notifications go through GitHub, not the application's SMTP/outbox. If issue delivery fails, the workflow fails as a separate signal.
+
+This is lightweight scheduled monitoring, **not a real-time or guaranteed-delivery paging service**. GitHub schedules can be delayed or dropped; workflows and notifications depend on GitHub and the admins' notification settings. An outage shorter than the polling interval may not be observed. See [GitHub schedule limitations](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule). Use a separately hosted uptime/paging service if faster or independent-of-GitHub coverage is required. The 30-minute schedule uses roughly 1,440 runner jobs/month plus backups and CI; check the repository's Actions minutes, storage allowance and spending limit before enabling it.
+
+OTP and delivery counters have fixed memory bounds and expire after an hour; they reset when the application restarts. Browser reports are authenticated and rate-limited but are untrusted operational signals, not proof of provider failure. They include only success/failure, never email addresses, phone numbers, codes, tokens, provider responses or error text. No synthetic SMS/email is sent by a probe, so mailbox delivery and mobile delivery still need a real-device/provider check. `/health` remains a liveness endpoint; database health is checked separately by the protected probe.
+
+On this production Docker deployment, `statfs('/')` observes the app overlay filesystem backed by the droplet root disk. Confirm its space/inode readings against `df -h /` and `df -i /` on first activation. A different Docker storage layout may need a dedicated host agent. Neither backup nor monitoring accumulates backup files on the droplet. Existing Docker/Caddy log rotation remains unchanged.
+
+## Configure without putting secrets in the repository
+
+Use **repository-level** GitHub secrets (the scheduled jobs do not wait for production-environment approval):
+
+- `MONITORING_TOKEN`: an independent random 32-byte token encoded as 64 hex characters. The normal deployment securely injects the same repository secret into the API. The private endpoint returns 404 when it is unset or the bearer token is incorrect. It is never a frontend/Vite variable.
+- `BACKUP_DATABASE_URL`: the direct, non-pooler Neon connection string for the application database. Use a dedicated read-only login with connection, schema usage and SELECT access to all application tables, including future tables and `drizzle.__drizzle_migrations`; enable TLS. The snapshot transaction and `pg_dump` are read-only regardless of the login's privileges. No restore operation targets this URL.
+- `BACKUP_ENCRYPTION_KEY`: a separate random 32-byte/64-hex encryption key, **not** `DATA_ENCRYPTION_KEY`, a mailbox password or the monitoring token. Escrow this key in the admins' password manager outside GitHub and R2. Retain previous backup keys until their associated backups expire.
+- `R2_BACKUP_ACCESS_KEY_ID` and `R2_BACKUP_SECRET_ACCESS_KEY`: dedicated **Object Read & Write** credentials scoped only to the private backup bucket. These are used by the daily backup job; they are not the application's photo credentials and cannot manage bucket settings.
+- `R2_BACKUP_READ_ACCESS_KEY_ID` and `R2_BACKUP_READ_SECRET_ACCESS_KEY`: separate **Object Read only** credentials for the same backup bucket, used by the external monitor. The monitor never receives the backup encryption key or database credentials.
+
+Use repository variables:
+
+- `OPS_ALERT_ASSIGNEES`: comma-separated GitHub usernames of the platform admins who have access to this repository. Leave empty only if admins explicitly subscribe to repository issue notifications.
+- `R2_BACKUP_ENDPOINT`: the account's HTTPS R2 S3 API endpoint, for example `https://<account-id>.r2.cloudflarestorage.com` (use the correct jurisdiction-specific endpoint if applicable).
+- `R2_BACKUP_BUCKET`: a **separate private bucket**, for example `uni-market-backups`. The tool requires `backup` or `backups` in the bucket name to prevent an accidental switch to the listing-photo bucket. It never falls back to the application's R2 variables.
+- `OPERATIONS_ENABLED=true`: activate only after all configuration, notification subscriptions and the processing/storage review below are complete. Until then the scheduled jobs are visibly skipped and offer **no production protection**.
+
+Keep each admin subscribed to the repository's Issues and Actions failures and enable the desired GitHub email/mobile notifications. GitHub cannot guarantee someone reads an alert. An admin must acknowledge the test issue before this item is considered complete.
+
+Create the dedicated R2 bucket with **r2.dev public access disabled, no custom domain, no browser CORS rules and no application Worker binding**. Use Standard storage. Configure an enabled object lifecycle rule for the exact `database-backups/` prefix to expire objects after **14 days**, and abort incomplete multipart uploads after one day. The S3 lifecycle configuration is in `infra/operations/r2-lifecycle.json`; apply it only to the dedicated backup bucket using bucket-administration credentials or create the matching rule in the Cloudflare dashboard. This file is a configuration template, not an automatically applied rule. Do not give those administration credentials to a daily job. Confirm the saved rule before activation; the upload job does not manage bucket settings. R2 lifecycle deletion is asynchronous, not an exact 14-day erasure guarantee. See [Cloudflare object lifecycle behavior](https://developers.cloudflare.com/r2/buckets/object-lifecycles/).
+
+Deploy the API with `MONITORING_TOKEN` first. With schedules still off, run **Verified database backup** manually and confirm its successful restore report and R2 receipt. Run **Production operations** with `test_alert=true`; an admin should acknowledge receipt and close the test issue. Run it normally to check the website, protected metrics and R2 backup freshness together, then set `OPERATIONS_ENABLED=true` after successful technical checks. Alert delivery remains an outstanding human sign-off until an admin confirms receipt. Investigate any incident instead of silently disabling the workflow. Keep the first successful run links in the internal operations record.
+
+Production configuration and enablement are separate from code implementation; never rotate unrelated application secrets merely to enable these checks.
+
+## Live R2 fixture test
+
+On **2026-09-06 at 09:32 UTC**, a real upload/download/restore test passed against the newly created private `uni-market-backups` bucket. The test used current application migrations and synthetic user/outbox records, not the production database. Both AES-256-GCM files (97,378 encrypted bytes combined) were uploaded and downloaded with matching SHA-256 checksums. Those downloaded files restored successfully into a second disposable PostgreSQL 18 cluster: all **34 table counts** matched and the fixture records were checked.
+
+Public `r2.dev` access was confirmed disabled, no custom domain was attached, and an unsigned S3 download was rejected. R2 reports a missing authorization header as HTTP 400 with `InvalidArgument` / `Authorization`; the test accepts that specific response as well as HTTP 401/403, not arbitrary errors. The three synthetic objects under `database-backups/1788687115908421231-1/` were deleted afterward and their absence confirmed. An earlier attempt's three test objects were also cleaned up. This bucket is not a retained production backup; its test encryption key was ephemeral.
+
+The opt-in test is `tests/operations/backup-smoke.sh --r2`, run inside the disposable backup-tool container as the `postgres` user. Pass `R2_BACKUP_LIVE_TEST=true` and the four explicit writer configuration variables (`R2_BACKUP_ENDPOINT`, `R2_BACKUP_BUCKET`, `R2_BACKUP_ACCESS_KEY_ID`, `R2_BACKUP_SECRET_ACCESS_KEY`) using a private environment file or inherited environment variables, never literal secret arguments. It creates two local PostgreSQL clusters, uses a unique test prefix, and cleans up only its own objects. Without `--r2`, CI remains entirely local and needs no cloud credentials. The test does not create buckets, change permissions or enable workflows.
+
+This initial one-off check used existing authorized S3 access only in memory. No production application settings, GitHub secrets or schedules were changed by that fixture test; subsequent production configuration is recorded in the activation section above.
+
+## What is backed up and how it is verified
+
+The daily workflow uses a consistent read-only PostgreSQL snapshot. It captures the application's `public` and `drizzle` schemas, records every table's count from that same snapshot, and uses `pg_dump`'s custom format. Both the dump and manifest are encrypted with AES-256-GCM and independent random nonces. The authenticated manifest binds the dump's SHA-256 hash, snapshot time, schema/table inventory and source commit. The workflow decrypts **those exact encrypted files**, restores them with `pg_restore --exit-on-error --single-transaction` into a new empty local PostgreSQL database, and checks every table count. Schema restoration also rebuilds indexes, constraints and migration history.
+
+The restore tool only accepts loopback, the fixed `uni_restore_check` database name and explicit isolation confirmation. It refuses a non-empty destination and has no `DROP`, `--clean`, remote restore target or production restore mode. Backup source credentials are never used by `pg_restore`. PostgreSQL tools run with timeouts; raw database diagnostics, row values, URLs and passwords are not printed into Actions logs. The smoke test in CI runs current migrations, seeds fake data and exercises the same encrypted backup/restore code in a disposable PostgreSQL container without any production credentials.
+
+After restore verification, `database.dump.enc` and `manifest.json.enc` are uploaded to private R2 under `database-backups/<GitHub-run-id>-<attempt>/`. Uploads stream with explicit sizes and refuse to overwrite existing keys. Each object is downloaded again and its length and SHA-256 are checked against the local encrypted file. Only after both match does the job publish `verified.json`, a small non-customer-data completion receipt. Failed/partial uploads have no valid completed receipt and expire under the same lifecycle rule; the tool never deletes a previous backup. Each file currently has a conservative 4 GiB upload cap; exceeding it fails visibly and requires a reviewed multipart implementation.
+
+Find backups under **Cloudflare Dashboard → R2 → the private backup bucket → `database-backups/`**. There are **no database backup artifacts stored in GitHub Actions** and no backup copies on the production droplet. GitHub still schedules the jobs and records their sanitized results. The monitor checks a recent successful workflow run, its R2 receipt and both objects' stored sizes/checksum metadata using read-only credentials. Full download verification happens during the daily upload, not every monitoring poll. This is not immutable storage: separately review bucket locks or an additional isolated copy for protection against a compromised storage administrator.
+
+Retention is provided by the configured **14-day R2 lifecycle rule**. Plaintext exists temporarily on the ephemeral GitHub runner/tool container and in its isolated restore database; these are discarded with the job. Do not upload workspace directories, plaintext dumps, restore databases or environment files. Review both GitHub Actions for temporary processing and Cloudflare R2 for backup storage, including regions and retained-data implications, before activation. Encryption does not remove those review obligations. Review Actions minutes and R2 storage/operations budgets as well.
+
+This is an **application database recovery test**, not a complete disaster-recovery certification. It does not back up R2 photo bytes, SMTP mailboxes, Neon account/project configuration, PostgreSQL roles or infrastructure secrets. Keep `DATA_ENCRYPTION_KEY` and its version history separately recoverable: the database dump contains application-encrypted fields, and restoring the database alone cannot decrypt them. Keep source/deployment configuration recoverable, confirm the Neon native recovery window independently, and arrange a separately reviewed image/object backup before claiming protection against accidental R2 deletion. Do not disable Neon point-in-time recovery because this job exists. A daily logical backup can lose up to a day's new data; no recovery-time guarantee is claimed.
+
+## Restore drill / an actual incident
+
+1. Find a **successful** backup workflow run and its matching `database-backups/<run-id>-<attempt>/` folder in the private R2 bucket. Download `database.dump.enc` and `manifest.json.enc` from that same folder (which must also contain `verified.json`). Obtain the matching backup encryption key from escrow. Never create public bucket access or post files/keys in an issue or chat.
+2. Provision a disposable local PostgreSQL 18 instance and an empty database named `uni_restore_check`. Use the checked-in `backup.Dockerfile` for the matching PostgreSQL client version. Bind the instance only to loopback, not a public interface.
+3. Mount the downloaded encrypted-backup directory read-only into the tool and set `BACKUP_INPUT_DIR`, `BACKUP_ENCRYPTION_KEY`, `BACKUP_RESTORE_ISOLATED=true`, `BACKUP_RESTORE_PASSWORD` and optional `BACKUP_RESTORE_PORT` through a private environment file. Run `node infra/operations/backup.mjs --verify-existing` with PostgreSQL 18 tools available. Never put secrets into shell history/command arguments.
+4. Inspect the restored data with restricted access. Verify representative listings, conversations, review links, consent records and encrypted grievance fields using the correct application encryption key. Keep email/retention/background workers disabled; a recovery drill must not send historical notifications or delete data.
+5. Record the R2 folder/run, snapshot time, drill result, elapsed recovery time and reviewing admin. Production cutover is a separate, explicitly approved incident action, never something this script performs automatically. Before a cutover, account for changes after the snapshot and revoke restored sessions as appropriate.
+
+For a disk alert, inspect bounded logs and application-owned Docker build cache before removing anything. Never use broad volume/image pruning on the shared droplet. For email/OTP alerts, check provider status, configuration/balance and failed outbox entries without copying customer data into GitHub. Requeue only reviewed legitimate jobs and avoid duplicate notifications.
+
+References: [PostgreSQL consistent logical dumps](https://www.postgresql.org/docs/current/app-pgdump.html), [PostgreSQL restore safety](https://www.postgresql.org/docs/current/app-pgrestore.html), [Cloudflare R2 SDK setup](https://developers.cloudflare.com/r2/examples/aws/aws-sdk-js-v3/), [R2 lifecycle rules](https://developers.cloudflare.com/r2/buckets/object-lifecycles/).

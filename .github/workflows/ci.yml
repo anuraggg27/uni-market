@@ -30,6 +30,12 @@ jobs:
       - run: LOG_LEVEL=silent npm run test:integration
       - run: npm run build
       - run: npm audit --omit=dev --audit-level=high
+      - name: Verify encrypted backup and isolated PostgreSQL restore
+        run: |
+          docker build -f infra/operations/backup.Dockerfile -t uni-market-backup-tool infra/operations
+          docker run --rm --user postgres --tmpfs /tmp:rw,size=512m \
+            --mount "type=bind,source=$GITHUB_WORKSPACE,target=/workspace,readonly" \
+            --entrypoint bash uni-market-backup-tool tests/operations/backup-smoke.sh
 
   browser:
     runs-on: ubuntu-latest
@@ -97,6 +103,7 @@ jobs:
           LOG_REGION: ${{ vars.LOG_REGION }}
           RETENTION_MODE: ${{ vars.RETENTION_MODE }}
           GRIEVANCE_RETENTION_DAYS: ${{ vars.GRIEVANCE_RETENTION_DAYS }}
+          MONITORING_TOKEN: ${{ secrets.MONITORING_TOKEN }}
         run: |
           for name in MSG91_WIDGET_ID MSG91_OTP_LENGTH MSG91_TOKEN_AUTH MSG91_AUTH_KEY SMTP_HOST SMTP_PORT SMTP_SECURE SMTP_USER SMTP_PASSWORD SMTP_FROM_NAME SMTP_FROM_EMAIL DATA_ENCRYPTION_KEY CUSTOMER_CARE_EMAIL GRIEVANCE_EMAIL PRIVACY_EMAIL LEGAL_POLICY_VERSION EMAIL_PROVIDER_NAME EMAIL_PROVIDER_REGION DATABASE_REGION OBJECT_STORAGE_REGION LOG_REGION RETENTION_MODE GRIEVANCE_RETENTION_DAYS; do
             if [[ -z "${!name}" ]]; then
@@ -110,6 +117,7 @@ jobs:
             printf '%s\n' "$DATA_ENCRYPTION_KEY" "$CUSTOMER_CARE_EMAIL" "$GRIEVANCE_EMAIL" "$PRIVACY_EMAIL" "$LEGAL_POLICY_VERSION"
             printf '%s\n' "$EMAIL_PROVIDER_NAME" "$EMAIL_PROVIDER_REGION" "$DATABASE_REGION" "$OBJECT_STORAGE_REGION" "$LOG_REGION"
             printf '%s\n' "$RETENTION_MODE" "$GRIEVANCE_RETENTION_DAYS"
+            printf '%s\n' "${MONITORING_TOKEN:-disabled}"
           } | base64 | tr -d '\n')"
           ssh -i "$HOME/.ssh/id_ed25519" -o BatchMode=yes -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" "deploy-with-release-env:$RELEASE_PAYLOAD"
       - name: Verify production health

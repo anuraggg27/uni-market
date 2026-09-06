@@ -8,6 +8,7 @@ export default tseslint.config(
   { ignores: ['**/dist/**', '**/coverage/**', '**/playwright-report/**', '**/test-results/**', '**/.data/**'] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  { files: ['infra/**/*.mjs', 'tests/operations/**/*.mjs'], languageOptions: { globals: globals.node } },
   {
     files: ['**/*.{ts,tsx}'],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },

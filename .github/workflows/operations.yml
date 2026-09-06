@@ -1,0 +1,45 @@
+name: Production operations
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_alert:
+        description: Create a test incident to verify admin notification delivery
+        type: boolean
+        default: false
+  schedule:
+    # Offset from the hour to reduce scheduler contention. Not a real-time pager.
+    - cron: '13,43 * * * *'
+
+concurrency:
+  group: uni-market-operational-alerts
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  monitor:
+    if: github.ref == 'refs/heads/main' && (vars.OPERATIONS_ENABLED == 'true' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Check production and reconcile incident issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MONITORING_TOKEN: ${{ secrets.MONITORING_TOKEN }}
+          OPS_ALERT_ASSIGNEES: ${{ vars.OPS_ALERT_ASSIGNEES }}
+          OPS_TEST_ALERT: ${{ inputs.test_alert }}
+          R2_BACKUP_ENDPOINT: ${{ vars.R2_BACKUP_ENDPOINT }}
+          R2_BACKUP_BUCKET: ${{ vars.R2_BACKUP_BUCKET }}
+          R2_BACKUP_READ_ACCESS_KEY_ID: ${{ secrets.R2_BACKUP_READ_ACCESS_KEY_ID }}
+          R2_BACKUP_READ_SECRET_ACCESS_KEY: ${{ secrets.R2_BACKUP_READ_SECRET_ACCESS_KEY }}
+        run: node infra/operations/monitor.mjs

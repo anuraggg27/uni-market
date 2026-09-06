@@ -1,3 +1,15 @@
+import { api, jsonBody } from './api';
+
+// Best-effort aggregate telemetry only. Never send identifiers, codes, tokens,
+// provider responses or error messages; reporting must not delay verification.
+function recordProviderOutcome(success: boolean): void {
+  try {
+    void api('/api/operations/otp-event', {
+      method: 'POST', ...jsonBody({ success }), signal: AbortSignal.timeout(5_000),
+    }).catch(() => undefined);
+  } catch { /* Unsupported browser telemetry must not interfere with OTP callbacks. */ }
+}
+
 type Msg91Callback = (data: unknown) => void;
 
 type Msg91Configuration = {
@@ -156,6 +168,7 @@ export function initializeMsg91(input: {
     await waitForMethods();
     initializationComplete = true;
   })().catch((error) => {
+    recordProviderOutcome(false);
     if (initializationKey === nextKey) {
       initializationPromise = null;
       initializationKey = null;
@@ -181,6 +194,7 @@ function providerError(value: unknown): Error {
 
 function callbackResult(
   invoke: (resolve: Msg91Callback, reject: Msg91Callback) => void,
+  verification = false,
 ): Promise<unknown> {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -191,6 +205,8 @@ function callbackResult(
       callback(value);
     };
     const timeout = window.setTimeout(() => {
+      if (settled) return;
+      recordProviderOutcome(false);
       finish(
         reject,
         new Error("Verification provider did not respond. Please try again."),
@@ -198,10 +214,17 @@ function callbackResult(
     }, CALLBACK_TIMEOUT_MS);
     try {
       invoke(
-        (value) => finish(resolve, value),
-        (error) => finish(reject, providerError(error)),
+        (value) => {
+          if (!settled && !verification) recordProviderOutcome(true);
+          finish(resolve, value);
+        },
+        (error) => {
+          if (!settled && !verification) recordProviderOutcome(false);
+          finish(reject, providerError(error));
+        },
       );
     } catch (error) {
+      if (!settled && !verification) recordProviderOutcome(false);
       finish(reject, providerError(error));
     }
   });
@@ -233,7 +256,7 @@ export function verifyMsg91Otp(
   if (!window.verifyOtp)
     return Promise.reject(new Error("Verification is not ready"));
   return callbackResult((resolve, reject) =>
-    window.verifyOtp!(otp, resolve, reject, requestId),
+    window.verifyOtp!(otp, resolve, reject, requestId), true,
   );
 }
 

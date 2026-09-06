@@ -1,13 +1,18 @@
 // @vitest-environment jsdom
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   initializeMsg91,
   msg91AccessToken,
   msg91Identifier,
   msg91RequestId,
   sendMsg91Otp,
+  verifyMsg91Otp,
 } from "../../apps/web/src/msg91";
+
+const { telemetryApi } = vi.hoisted(() => ({ telemetryApi: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../../apps/web/src/api', () => ({ api: telemetryApi, jsonBody: (value: unknown) => ({ body: JSON.stringify(value) }) }));
+beforeEach(() => { telemetryApi.mockReset().mockResolvedValue(undefined); });
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -109,8 +114,23 @@ describe("MSG91 client response handling", () => {
       await vi.advanceTimersByTimeAsync(30_000);
 
       await rejection;
+      expect(telemetryApi).toHaveBeenCalledWith('/api/operations/otp-event', expect.objectContaining({ body: '{"success":false}' }));
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('reports only an aggregate outcome, never the identifier or provider error', async () => {
+    window.sendOtp = (_identifier, _success, failure) => failure?.({ message: 'Private provider diagnostic for student@example.edu' });
+    await expect(sendMsg91Otp('student@example.edu')).rejects.toThrow();
+    expect(telemetryApi).toHaveBeenCalledOnce();
+    expect(telemetryApi.mock.calls[0][1].body).toBe('{"success":false}');
+    expect(JSON.stringify(telemetryApi.mock.calls)).not.toContain('student@example.edu');
+  });
+
+  it('does not treat an incorrect customer OTP as a provider outage', async () => {
+    window.verifyOtp = (_otp, _success, failure) => failure?.({ message: 'Invalid OTP' });
+    await expect(verifyMsg91Otp('1234')).rejects.toThrow('Invalid OTP');
+    expect(telemetryApi).not.toHaveBeenCalled();
   });
 });

@@ -17,6 +17,8 @@ At the owner's direction, the public application and deployment configuration do
 
 ## Daily grievance and safety operations
 
+The platform admins have confirmed ownership of listing approvals, support/customer-care messages and grievance deadlines. Assign primary and backup coverage internally. Recovery/alert setup and its separate production activation checks are documented in [Recovery and operational alerts](recovery-and-alerts.md).
+
 - Keep **Admin → Grievances & safety** open during staffed hours and monitor overdue alarms. The queue is ordered by action due time.
 - The public queue contains only case summaries. Opening a case decrypts its complaint text and Uni Market link for an authorised staff member and records that access in the admin audit log.
 - Acknowledge each complaint after confirming the category and target URL. Do not ask a reporter to reproduce child-safety, intimate, or other unlawful material in the platform.

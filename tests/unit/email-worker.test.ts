@@ -80,6 +80,18 @@ describe("EmailWorker", () => {
     expect(db.select).not.toHaveBeenCalled();
   });
 
+  it('survives a failed worker tick and retries without an unhandled rejection', async () => {
+    vi.useFakeTimers();
+    const { db } = fakeDatabase([]);
+    const worker = new EmailWorker(db, smtpConfig());
+    const run = vi.spyOn(worker, 'runOnce').mockRejectedValueOnce(new Error('database unavailable')).mockResolvedValue(undefined);
+    try {
+      worker.start();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(run).toHaveBeenCalledTimes(2);
+    } finally { worker.stop(); vi.useRealTimers(); run.mockRestore(); }
+  });
+
   it("delivers queued mail and marks it sent after one attempt", async () => {
     const { db, updates, forUpdate } = fakeDatabase([
       {
@@ -97,6 +109,9 @@ describe("EmailWorker", () => {
       port: 2525,
       secure: false,
       auth: { user: "smtp-user", pass: "smtp-password" },
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 30_000,
     });
     expect(sendMail).toHaveBeenCalledWith(
       expect.objectContaining({

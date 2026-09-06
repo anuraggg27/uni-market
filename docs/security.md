@@ -61,6 +61,8 @@ Tune with observed legitimate traffic and key authenticated limits on a trusted 
 
 ## Operational checklist
 
+See [Recovery and operational alerts](recovery-and-alerts.md) for encrypted daily backups with isolated restore verification, protected health metrics, external incident alerts, thresholds, notification tests and production activation gates. The workflows remain disabled until repository configuration is complete; code alone is not evidence of a successful production recovery drill.
+
 - Keep all secrets server-only and scan the built web assets before release.
 - Run migrations on a Neon branch and back up before production changes.
 - Rotate R2/SMTP/OTP credentials on suspected exposure.

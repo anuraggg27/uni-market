@@ -1,0 +1,11 @@
+{
+  "Rules": [
+    {
+      "ID": "uni-market-database-backups-14-days",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "database-backups/" },
+      "Expiration": { "Days": 14 },
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 1 }
+    }
+  ]
+}
