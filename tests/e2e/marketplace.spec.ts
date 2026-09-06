@@ -521,11 +521,13 @@ test("E2E-04 report, removal, seller notification and audit trail", async ({
   await page.getByRole("button", { name: "Submit report" }).click();
   const moderator = await mod.newPage();
   await moderator.goto(marketplacePath("/admin/reports"));
+  const reportRow = moderator
+    .getByRole("table", { name: "Reports" })
+    .getByRole("row")
+    .filter({ hasText: listing.title });
   await expect(
-    moderator.locator(".admin-report-reason strong", {
-      hasText: "Misleading Information",
-    }),
-  ).toBeVisible();
+    reportRow.locator(".admin-report-reason strong"),
+  ).toHaveText("Misleading Information");
   const sellerPage = await seller.newPage();
   await sellerPage.setViewportSize({ width: 390, height: 844 });
   await sellerPage.goto(marketplacePath("/profile"));
@@ -554,7 +556,19 @@ test("E2E-04 report, removal, seller notification and audit trail", async ({
     (await guest.pages())[0].getByText("This listing is unavailable"),
   ).toBeVisible();
   await moderator.goto(marketplacePath("/admin/audit-logs"));
-  await expect(moderator.getByText("LISTING_REMOVE")).toBeVisible();
+  const listingReference = listing.id
+    .replaceAll("-", "")
+    .slice(0, 8)
+    .toUpperCase();
+  const auditRow = moderator
+    .getByRole("table", { name: "Audit logs" })
+    .getByRole("row")
+    .filter({ hasText: listingReference });
+  await expect(
+    auditRow
+      .locator(".admin-audit-action-name strong")
+      .filter({ hasText: /^LISTING_REMOVE$/ }),
+  ).toBeVisible();
   await seller.close();
   await reporter.close();
   await mod.close();
