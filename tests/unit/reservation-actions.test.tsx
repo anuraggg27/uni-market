@@ -28,8 +28,8 @@ it("removes declined request actions before a delayed refresh and accepts only t
   let releaseRefresh!: (rows: typeof oldRequest[]) => void;
   const delayedRefresh = new Promise<typeof oldRequest[]>((resolve) => { releaseRefresh = resolve; });
   apiMock.mockImplementation((path: string) => {
-    if (path === "/api/conversations") return Promise.resolve([{ id: "conversation", listingId: "listing", listingTitle: "Textbook", lifecycleState: "ACTIVE", buyerId: "buyer", sellerId: "seller", otherUserId: "buyer", otherName: "Buyer", unread: 0, coverImageUrl: null, lastMessageAt: "2026-09-01T12:00:00Z" }]);
-    if (path === "/api/conversations/conversation/messages") return Promise.resolve([]);
+    if (path === "/api/conversations") return Promise.resolve([{ id: "conversation", listingId: "listing", listingTitle: "Textbook", lifecycleState: "ACTIVE", buyerId: "buyer", sellerId: "seller", otherUserId: "buyer", otherName: "Buyer", otherAvatarId: "avatar-04", unread: 0, coverImageUrl: null, lastMessageAt: "2026-09-01T12:00:00Z" }]);
+    if (path === "/api/conversations/conversation/messages") return Promise.resolve([{ id: "message", clientId: "message-client", conversationId: "conversation", senderId: "buyer", body: "Is this still available?", createdAt: "2026-09-01T12:00:00Z" }]);
     if (path.endsWith("/buyer-reputation")) return Promise.resolve({ reviewCount: 0, averageRating: 0, recentReviews: [] });
     if (path === "/api/transactions") return holdRefresh ? delayedRefresh : Promise.resolve(rows);
     if (path === "/api/transactions/old-request/cancel") {
@@ -44,6 +44,12 @@ it("removes declined request actions before a delayed refresh and accepts only t
   });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/chats/conversation"]}><Routes><Route path="/chats/:conversationId" element={<ChatsPage />} /></Routes></MemoryRouter></QueryClientProvider>);
+  expect(await screen.findByRole("link", { name: "View Buyer's profile" })).toHaveAttribute("href", "/seller/buyer");
+  expect(await screen.findAllByRole("img", { name: "Buyer's avatar" })).toHaveLength(1);
+  const participantNameLinks = screen.getAllByRole("link", { name: "Buyer", exact: true });
+  expect(participantNameLinks).toHaveLength(2);
+  participantNameLinks.forEach((link) => expect(link).toHaveAttribute("href", "/seller/buyer"));
+  expect(document.querySelectorAll('[data-avatar-id="avatar-04"]')).toHaveLength(2);
   fireEvent.click(await screen.findByRole("button", { name: "Decline", exact: true }));
   await waitFor(() => expect(screen.queryByRole("button", { name: "Accept and reserve" })).not.toBeInTheDocument());
   expect(client.getQueryData(["transactions"])).toEqual([cancelledRequest]);

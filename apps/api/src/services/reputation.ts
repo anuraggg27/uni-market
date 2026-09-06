@@ -25,7 +25,15 @@ export async function getReviewSummary(db: Database, userId: string, role: Revie
 export async function getReputation(db: Database, userId: string, role: ReviewRole) {
   const [summary, recentReviews] = await Promise.all([
     getReviewSummary(db, userId, role),
-    db.select({ id: reviews.id, rating: reviews.rating, text: reviews.text, tags: reviews.tags, createdAt: reviews.createdAt, reviewerName: users.displayName })
+    db.select({
+      id: reviews.id,
+      rating: reviews.rating,
+      text: reviews.text,
+      tags: reviews.tags,
+      createdAt: reviews.createdAt,
+      reviewerName: users.displayName,
+      reviewerAvatarId: users.avatarId,
+    })
       .from(reviews).innerJoin(transactions, eq(transactions.id, reviews.transactionId))
       .innerJoin(users, eq(users.id, reviews.reviewerId))
       .where(reviewScope(userId, role)).orderBy(desc(reviews.createdAt)).limit(10),

@@ -264,6 +264,8 @@ export function communicationRouter(
           lifecycleState: listings.lifecycleState,
           buyerName: sql<string>`buyer.display_name`,
           sellerName: sql<string>`seller.display_name`,
+          buyerAvatarId: sql<string>`buyer.avatar_id`,
+          sellerAvatarId: sql<string>`seller.avatar_id`,
           imageKey: listingImages.objectKey,
           unread: sql<number>`(select count(*) from messages m where m.conversation_id = ${conversations.id} and m.sender_id <> ${req.auth!.userId} and m.read_at is null)`,
         })
@@ -306,6 +308,10 @@ export function communicationRouter(
               row.conversation.buyerId === req.auth!.userId
                 ? row.sellerName
                 : row.buyerName,
+            otherAvatarId:
+              row.conversation.buyerId === req.auth!.userId
+                ? row.sellerAvatarId
+                : row.buyerAvatarId,
             unread: Number(row.unread),
             coverImageUrl: row.imageKey
               ? await storage.signedReadUrl(row.imageKey)

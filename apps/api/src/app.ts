@@ -222,7 +222,7 @@ export function createApp(deps: {
   app.use("/api", userOperationsRouter(db, config));
   app.use("/api/admin", grievanceAdminRouter(db, config));
   app.use("/api/admin", complianceAdminRouter(db));
-  app.use("/api/admin", adminRouter(db, config));
+  app.use("/api/admin", adminRouter(db, config, storage));
   if (config.NODE_ENV === "production" || deps.webIndexHtml !== undefined) {
     const webRoot = fileURLToPath(new URL("../../web/dist", import.meta.url));
     app.get("/", (_req, res) => res.redirect(302, MARKETPLACE_BASE_PATH));

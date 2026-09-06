@@ -395,7 +395,7 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
   await expect(sellerPage.getByLabel("2 unread messages")).toBeVisible();
   await sellerPage.getByRole("link", { name: /transaction-buyer/ }).click();
   await expect(sellerPage).toHaveURL(new RegExp(`${conversationPath}$`));
-  await expect(sellerPage.getByText("No buyer reviews yet", { exact: true })).toBeVisible();
+  await expect(sellerPage.getByText("No seller reviews yet.", { exact: true })).toBeVisible();
   await expect(
     sellerPage.getByText("I can bring the exact amount if it is available."),
   ).toBeVisible();
@@ -486,10 +486,12 @@ test("E2E-03 buyer transaction, chat, reservation, completion and reviews", asyn
   await buyerPage.reload();
   profileMode = buyerPage.getByRole("navigation", { name: "Profile mode" });
   await expect(profileMode.getByRole("link", { name: "User profile" })).toHaveAttribute("aria-current", "page");
+  await expect(buyerPage.getByRole("heading", { name: "Reviews from sellers" })).toBeVisible();
+  await expect(buyerPage.getByText("Prompt buyer and easy pickup.", { exact: true })).toBeVisible();
   expect(await buyerPage.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
   await profileMode.getByRole("link", { name: "Seller profile" }).click();
   await expect(buyerPage).toHaveURL(new RegExp(`${marketplacePath(`/seller/${buyerIdentity.id}`)}$`));
-  await expect(buyerPage.locator('.seller-profile-rating')).toHaveText('No seller reviews yet');
+  await expect(buyerPage.locator('.seller-profile-rating')).toHaveText('No buyer reviews yet.');
   await expect(buyerPage.getByText('Prompt buyer and easy pickup.', { exact: true })).toHaveCount(0);
   const sellerIdentity = (await (await seller.request.get(`${API}/api/auth/session`)).json()).data;
   await buyerPage.goto(marketplacePath(`/seller/${sellerIdentity.id}`));
@@ -519,7 +521,11 @@ test("E2E-04 report, removal, seller notification and audit trail", async ({
   await page.getByRole("button", { name: "Submit report" }).click();
   const moderator = await mod.newPage();
   await moderator.goto(marketplacePath("/admin/reports"));
-  await expect(moderator.getByText("MISLEADING INFORMATION")).toBeVisible();
+  await expect(
+    moderator.locator(".admin-report-reason strong", {
+      hasText: "Misleading Information",
+    }),
+  ).toBeVisible();
   const sellerPage = await seller.newPage();
   await sellerPage.setViewportSize({ width: 390, height: 844 });
   await sellerPage.goto(marketplacePath("/profile"));

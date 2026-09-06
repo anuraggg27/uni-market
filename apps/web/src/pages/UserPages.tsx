@@ -56,7 +56,7 @@ import { ProductCard } from "../components/ProductCard";
 import { ProfileModeSwitcher } from "../components/ProfileModeSwitcher";
 import { AvatarPicker, AvatarPickerDialog } from "../components/AvatarPicker";
 import { UserAvatar } from "../components/UserAvatar";
-import { BuyerReputation } from "../components/BuyerReputation";
+import { BuyerReputation, BuyerReputationSection } from "../components/BuyerReputation";
 import {
   formatNotificationTime,
   getNotificationIcon,
@@ -1055,6 +1055,7 @@ type ChatConversation = {
   sellerId: string;
   otherUserId: string;
   otherName: string;
+  otherAvatarId: string | null;
   unread: number;
   coverImageUrl: string | null;
   lastMessageAt: string;
@@ -1553,21 +1554,36 @@ function ChatPanel({
         <Link className="chat-back" to="/chats" aria-label="Back to chats">
           <ArrowLeft aria-hidden="true" />
         </Link>
-        {conversation?.coverImageUrl ? (
-          <img
-            className="chat-listing-image"
-            src={conversation.coverImageUrl}
-            alt=""
-            width="44"
-            height="44"
-          />
+        {conversation ? (
+          <Link
+            className="chat-participant-avatar-link"
+            to={`/seller/${conversation.otherUserId}`}
+            aria-label={`View ${conversation.otherName}'s profile`}
+          >
+            <UserAvatar
+              avatarId={conversation.otherAvatarId}
+              displayName={conversation.otherName}
+              size={44}
+              className="chat-participant-avatar"
+              decorative
+            />
+          </Link>
         ) : (
-          <span className="chat-listing-image" aria-hidden="true">
-            {(conversation?.listingTitle ?? "L").trim().charAt(0).toUpperCase()}
-          </span>
+          <span className="chat-participant-avatar-placeholder" aria-hidden="true" />
         )}
         <div className="chat-context">
-          <strong>{conversation?.otherName ?? "Conversation"}</strong>
+          <strong>
+            {conversation ? (
+              <Link
+                className="chat-participant-name"
+                to={`/seller/${conversation.otherUserId}`}
+              >
+                {conversation.otherName}
+              </Link>
+            ) : (
+              "Conversation"
+            )}
+          </strong>
           {conversation ? (
             <Link to={`/listing/${conversation.listingId}`}>
               {conversation.listingTitle}
@@ -1712,19 +1728,28 @@ function ChatPanel({
                         {!mine ? (
                           <MessageAvatar>
                             {lastInGroup ? (
-                              <span className="message-avatar-fallback">
-                                {(conversation?.otherName ?? "U")
-                                  .trim()
-                                  .charAt(0)
-                                  .toUpperCase()}
-                              </span>
+                              <UserAvatar
+                                avatarId={conversation?.otherAvatarId ?? null}
+                                displayName={conversation?.otherName ?? "User"}
+                                size={30}
+                                className="message-user-avatar"
+                              />
                             ) : null}
                           </MessageAvatar>
                         ) : null}
                         <MessageContent>
                           {!mine && index === 0 ? (
                             <MessageHeader>
-                              {conversation?.otherName ?? "Seller"}
+                              {conversation ? (
+                                <Link
+                                  className="message-sender-link"
+                                  to={`/seller/${conversation.otherUserId}`}
+                                >
+                                  {conversation.otherName}
+                                </Link>
+                              ) : (
+                                "Seller"
+                              )}
                             </MessageHeader>
                           ) : null}
                           <Bubble
@@ -2369,6 +2394,8 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
           <p className="field-error">{mutation.error.message}</p>
         ) : null}
       </form>
+
+      {!onboarding ? <BuyerReputationSection /> : null}
 
       {!onboarding ? (
         <AvatarPickerDialog

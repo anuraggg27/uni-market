@@ -16,6 +16,7 @@ import {
 } from "drizzle-orm";
 import { idSchema, reportReasons } from "@campus-market/shared";
 import { z } from "zod";
+import { alias } from "drizzle-orm/pg-core";
 import type { Database } from "../db/client.js";
 import type { AppConfig } from "../config.js";
 import {
@@ -51,6 +52,7 @@ import { grievanceClock, grievanceTracking } from "../lib/grievance.js";
 import { AppError, asyncRoute } from "../lib/errors.js";
 import { queueUserEmail } from "../services/email-preferences.js";
 import { notifyNotifications } from "../services/notification-events.js";
+import type { StorageService } from "../services/storage.js";
 
 const reportSchema = z.object({
   targetType: z.enum([
@@ -514,7 +516,11 @@ async function audit(
   });
 }
 
-export function adminRouter(db: Database, config: AppConfig): Router {
+export function adminRouter(
+  db: Database,
+  config: AppConfig,
+  storage: StorageService,
+): Router {
   const router = Router();
   router.use(requireStaffStepUp);
   const moderation = requireRole("MODERATOR", "SUPER_ADMIN");
@@ -661,17 +667,49 @@ export function adminRouter(db: Database, config: AppConfig): Router {
         .select({ term: prohibitedTerms.term })
         .from(prohibitedTerms)
         .where(eq(prohibitedTerms.active, true));
-      res.json({
-        data: rows.map((row) => ({
-          ...row,
-          flaggedTerms: activeTerms
-            .filter(({ term }) =>
-              `${row.listing.title} ${row.listing.description} ${row.listing.defects ?? ""}`
-                .toLocaleLowerCase()
-                .includes(term.toLocaleLowerCase()),
+      const listingIds = rows.map(({ listing }) => listing.id);
+      const coverImages = listingIds.length
+        ? await db
+            .select({
+              listingId: listingImages.listingId,
+              objectKey: listingImages.objectKey,
+            })
+            .from(listingImages)
+            .where(
+              and(
+                inArray(listingImages.listingId, listingIds),
+                isNull(listingImages.deletedAt),
+                isNotNull(listingImages.finalizedAt),
+                isNotNull(listingImages.objectKey),
+              ),
             )
-            .map(({ term }) => term),
-        })),
+            .orderBy(asc(listingImages.position))
+        : [];
+      const coverImageKeys = new Map<string, string>();
+      for (const image of coverImages) {
+        if (image.objectKey && !coverImageKeys.has(image.listingId)) {
+          coverImageKeys.set(image.listingId, image.objectKey);
+        }
+      }
+      res.json({
+        data: await Promise.all(
+          rows.map(async (row) => {
+            const coverImageKey = coverImageKeys.get(row.listing.id);
+            return {
+              ...row,
+              coverImageUrl: coverImageKey
+                ? await storage.signedReadUrl(coverImageKey)
+                : null,
+              flaggedTerms: activeTerms
+                .filter(({ term }) =>
+                  `${row.listing.title} ${row.listing.description} ${row.listing.defects ?? ""}`
+                    .toLocaleLowerCase()
+                    .includes(term.toLocaleLowerCase()),
+                )
+                .map(({ term }) => term),
+            };
+          }),
+        ),
       });
     }),
   );
@@ -1065,28 +1103,45 @@ export function adminRouter(db: Database, config: AppConfig): Router {
     moderation,
     asyncRoute(async (req, res) => {
       const q = z.string().max(100).optional().parse(req.query.q);
+      const rows = await db
+        .select({
+          id: users.id,
+          displayName: users.displayName,
+          avatarId: users.avatarId,
+          email: users.email,
+          phoneVerifiedAt: users.phoneVerifiedAt,
+          suspendedAt: users.suspendedAt,
+          completedSales: users.completedSales,
+          createdAt: users.createdAt,
+        })
+        .from(users)
+        .where(
+          q
+            ? or(
+                ilike(users.displayName, `%${q}%`),
+                ilike(users.email, `%${q}%`),
+              )
+            : undefined,
+        )
+        .orderBy(desc(users.createdAt))
+        .limit(100);
+      const roleRows = rows.length
+        ? await db
+            .select({ userId: userRoles.userId, role: userRoles.role })
+            .from(userRoles)
+            .where(inArray(userRoles.userId, rows.map((user) => user.id)))
+        : [];
+      const rolesByUser = new Map<string, string[]>();
+      for (const role of roleRows) {
+        const current = rolesByUser.get(role.userId) ?? [];
+        current.push(role.role);
+        rolesByUser.set(role.userId, current);
+      }
       res.json({
-        data: await db
-          .select({
-            id: users.id,
-            displayName: users.displayName,
-            email: users.email,
-            phoneVerifiedAt: users.phoneVerifiedAt,
-            suspendedAt: users.suspendedAt,
-            completedSales: users.completedSales,
-            createdAt: users.createdAt,
-          })
-          .from(users)
-          .where(
-            q
-              ? or(
-                  ilike(users.displayName, `%${q}%`),
-                  ilike(users.email, `%${q}%`),
-                )
-              : undefined,
-          )
-          .orderBy(desc(users.createdAt))
-          .limit(100),
+        data: rows.map((user) => ({
+          ...user,
+          roles: rolesByUser.get(user.id) ?? [],
+        })),
       });
     }),
   );
@@ -1171,15 +1226,76 @@ export function adminRouter(db: Database, config: AppConfig): Router {
   router.get(
     "/reviews",
     moderation,
-    asyncRoute(async (_req, res) =>
+    asyncRoute(async (_req, res) => {
+      const rows = await db
+        .select({
+          review: reviews,
+          listingId: transactions.listingId,
+          listingTitle: listings.title,
+          buyerId: transactions.buyerId,
+          sellerId: transactions.sellerId,
+          reviewer: {
+            id: users.id,
+            displayName: users.displayName,
+            avatarId: users.avatarId,
+          },
+        })
+        .from(reviews)
+        .innerJoin(transactions, eq(transactions.id, reviews.transactionId))
+        .innerJoin(listings, eq(listings.id, transactions.listingId))
+        .innerJoin(users, eq(users.id, reviews.reviewerId))
+        .orderBy(desc(reviews.createdAt))
+        .limit(100);
+      const listingIds = [...new Set(rows.map((row) => row.listingId))];
+      const imageRows = listingIds.length
+        ? await db
+            .select({
+              listingId: listingImages.listingId,
+              objectKey: listingImages.objectKey,
+              position: listingImages.position,
+            })
+            .from(listingImages)
+            .where(
+              and(
+                inArray(listingImages.listingId, listingIds),
+                isNull(listingImages.deletedAt),
+                isNotNull(listingImages.finalizedAt),
+                isNotNull(listingImages.objectKey),
+              ),
+            )
+            .orderBy(asc(listingImages.position))
+        : [];
+      const coverKeys = new Map<string, string>();
+      for (const image of imageRows) {
+        if (image.objectKey && !coverKeys.has(image.listingId)) {
+          coverKeys.set(image.listingId, image.objectKey);
+        }
+      }
+      const coverUrls = new Map(
+        await Promise.all(
+          [...coverKeys].map(async ([listingId, key]) =>
+            [listingId, await storage.signedReadUrl(key)] as const,
+          ),
+        ),
+      );
       res.json({
-        data: await db
-          .select()
-          .from(reviews)
-          .orderBy(desc(reviews.createdAt))
-          .limit(100),
-      }),
-    ),
+        data: rows.map(({ review, listingId, listingTitle, buyerId, sellerId, reviewer }) => ({
+          ...review,
+          direction:
+            review.reviewerId === buyerId && review.revieweeId === sellerId
+              ? 'BUYER_TO_SELLER'
+              : review.reviewerId === sellerId && review.revieweeId === buyerId
+                ? 'SELLER_TO_BUYER'
+                : null,
+          listing: {
+            id: listingId,
+            title: listingTitle,
+            coverImageUrl: coverUrls.get(listingId) ?? null,
+          },
+          reviewer,
+        })),
+      });
+    }),
   );
   router.post(
     "/reviews/:id/hide",
@@ -1217,6 +1333,8 @@ export function adminRouter(db: Database, config: AppConfig): Router {
     "/support",
     support,
     asyncRoute(async (req, res) => {
+      const requester = alias(users, "support_requester");
+      const assignee = alias(users, "support_assignee");
       const condition = req.auth!.roles.includes("SUPER_ADMIN")
         ? undefined
         : or(
@@ -1224,11 +1342,30 @@ export function adminRouter(db: Database, config: AppConfig): Router {
             isNull(supportTickets.assignedTo),
           );
       res.json({
-        data: await db
-          .select()
+        data: (await db
+          .select({
+            ticket: supportTickets,
+            requester: {
+              id: requester.id,
+              displayName: requester.displayName,
+              avatarId: requester.avatarId,
+            },
+            assignee: {
+              id: assignee.id,
+              displayName: assignee.displayName,
+              avatarId: assignee.avatarId,
+            },
+          })
           .from(supportTickets)
+          .innerJoin(requester, eq(requester.id, supportTickets.userId))
+          .leftJoin(assignee, eq(assignee.id, supportTickets.assignedTo))
           .where(condition)
-          .orderBy(asc(supportTickets.createdAt)),
+          .orderBy(asc(supportTickets.createdAt)))
+          .map(({ ticket, requester: requesterProfile, assignee: assigneeProfile }) => ({
+            ...ticket,
+            requester: requesterProfile,
+            assignee: assigneeProfile,
+          })),
       });
     }),
   );

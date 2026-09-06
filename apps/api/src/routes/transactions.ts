@@ -7,7 +7,7 @@ import type { AppConfig } from '../config.js';
 import type { Database } from '../db/client.js';
 import { blocks, conversations, listingImages, listings, messages, notifications, reviews, transactions, users } from '../db/schema.js';
 import type { StorageService } from '../services/storage.js';
-import { requireVerified } from '../middleware/auth.js';
+import { requireAuth, requireVerified } from '../middleware/auth.js';
 import { keyedHash, safeEqual } from '../lib/crypto.js';
 import { AppError, asyncRoute } from '../lib/errors.js';
 import { queueUserEmail } from '../services/email-preferences.js';
@@ -258,6 +258,11 @@ export function transactionsRouter(db: Database, config: AppConfig, storage: Sto
 
 export function reputationRouter(db: Database): Router {
   const router = Router();
+  router.get('/users/me/buyer-reputation', requireAuth, asyncRoute(async (req, res) => {
+    res.setHeader('cache-control', 'no-store');
+    res.json({ data: await getReputation(db, req.auth!.userId, 'BUYER') });
+  }));
+
   router.get('/sellers/:id', asyncRoute(async (req, res) => {
     const id = idSchema.parse(req.params.id);
     const seller = (await db.select({ id: users.id, displayName: users.displayName, avatarId: users.avatarId, institution: users.institution, campus: users.campus, phoneVerifiedAt: users.phoneVerifiedAt, completedSales: users.completedSales, createdAt: users.createdAt }).from(users).where(and(eq(users.id, id), isNull(users.deletedAt), isNull(users.suspendedAt))).limit(1))[0];

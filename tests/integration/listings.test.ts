@@ -13,6 +13,22 @@ async function moderator(){const mod=await login(ctx.app,'listing-moderator');aw
 async function approve(id:string){const mod=await moderator();return mod.agent.post(`/api/admin/listings/${id}/decision`).set(mod.headers).send({decision:'APPROVE'});}
 
 describe('listing and moderation acceptance',()=>{
+  it('returns a signed cover image URL in the pending moderation queue', async () => {
+    const listing = await draftWithImage();
+    await seller.agent
+      .post(`/api/listings/${listing.id}/submit`)
+      .set(seller.headers)
+      .expect(200);
+    const mod = await moderator();
+    const queue = await mod.agent
+      .get('/api/admin/listings/pending')
+      .expect(200);
+    expect(queue.body.data[0].listing.id).toBe(listing.id);
+    expect(queue.body.data[0].coverImageUrl).toContain(
+      '/api/uploads/local-read?key=',
+    );
+  });
+
   it.each([
     ['exactPrice', 'FIXED', -1], ['exactPrice', 'FIXED', 0],
     ['minimumPrice', 'RANGE', -1], ['minimumPrice', 'RANGE', 0],

@@ -131,7 +131,7 @@ describe('chat acceptance',()=>{
   it('CHAT-09 preserves script input as inert text for React escaping',async()=>{const c=await conversation();const body='<script>globalThis.pwned=true</script>';await buyer.agent.post(`/api/conversations/${c.id}/messages`).set(buyer.headers).send({body,clientId:crypto.randomUUID()}).expect(201);const rows=await buyer.agent.get(`/api/conversations/${c.id}/messages`);expect(rows.body.data[0].body).toBe(body);});
   it('CHAT-10 blocked users cannot send and create no notification',async()=>{const c=await conversation();await seller.agent.post(`/api/blocks/${buyer.user.id}`).set(seller.headers).expect(201);const before=(await ctx.db.select().from(schema.notifications)).length;await buyer.agent.post(`/api/conversations/${c.id}/messages`).set(buyer.headers).send({body:'Blocked message',clientId:crypto.randomUUID()}).expect(403);expect(await ctx.db.select().from(schema.notifications)).toHaveLength(before);});
   it('rejects self-blocking and allows messages again after the blocker removes a block',async()=>{const c=await conversation();const self=await seller.agent.post(`/api/blocks/${seller.user.id}`).set(seller.headers).expect(400);expect(self.body.error.code).toBe('SELF_BLOCK');await seller.agent.post(`/api/blocks/${buyer.user.id}`).set(seller.headers).expect(201);await seller.agent.delete(`/api/blocks/${buyer.user.id}`).set(seller.headers).expect(204);await buyer.agent.post(`/api/conversations/${c.id}/messages`).set(buyer.headers).send({body:'Message after unblock',clientId:crypto.randomUUID()}).expect(201);});
-  it('shows unread conversation counts and marks received messages as read when opened',async()=>{const c=await conversation();await buyer.agent.post(`/api/conversations/${c.id}/messages`).set(buyer.headers).send({body:'Unread seller message',clientId:crypto.randomUUID()}).expect(201);const inbox=await seller.agent.get('/api/conversations').expect(200);expect(inbox.body.data).toHaveLength(1);expect(inbox.body.data[0]).toMatchObject({id:c.id,otherUserId:buyer.user.id,unread:1});await seller.agent.get(`/api/conversations/${c.id}/messages`).expect(200);const reopened=await seller.agent.get('/api/conversations').expect(200);expect(reopened.body.data[0].unread).toBe(0);});
+  it('shows participant avatars and unread conversation counts, then marks received messages as read when opened',async()=>{const c=await conversation();await buyer.agent.post(`/api/conversations/${c.id}/messages`).set(buyer.headers).send({body:'Unread seller message',clientId:crypto.randomUUID()}).expect(201);const inbox=await seller.agent.get('/api/conversations').expect(200);expect(inbox.body.data).toHaveLength(1);expect(inbox.body.data[0]).toMatchObject({id:c.id,otherUserId:buyer.user.id,otherAvatarId:buyer.user.avatarId,unread:1});await seller.agent.get(`/api/conversations/${c.id}/messages`).expect(200);const reopened=await seller.agent.get('/api/conversations').expect(200);expect(reopened.body.data[0].unread).toBe(0);});
 });
 
 describe('transaction and review acceptance',()=>{
@@ -158,7 +158,7 @@ describe('transaction and review acceptance',()=>{
   }
   it('separates seller ratings from buyer feedback and exposes buyer feedback only to the conversation seller', async () => {
     const tx = await completeWithCode();
-    await buyer.agent.post(`/api/transactions/${tx.id}/reviews`).set(buyer.headers).send({ rating: 4, text: 'Accurate listing', tags: [] }).expect(201);
+    const sellerReview = await buyer.agent.post(`/api/transactions/${tx.id}/reviews`).set(buyer.headers).send({ rating: 4, text: 'Accurate listing', tags: [] }).expect(201);
     const buyerReview = await seller.agent.post(`/api/transactions/${tx.id}/reviews`).set(seller.headers).send({ rating: 5, text: 'Prompt buyer', tags: [] }).expect(201);
     const sellerProfile = (await request(ctx.app).get(`/api/sellers/${seller.user.id}`).expect(200)).body.data;
     expect(sellerProfile).toMatchObject({ averageRating: 4, reviewCount: 1 });
@@ -171,7 +171,17 @@ describe('transaction and review acceptance',()=>{
     const path = `/api/conversations/${c.id}/buyer-reputation`;
     const feedback = (await seller.agent.get(path).expect(200)).body.data;
     expect(feedback).toMatchObject({ averageRating: 5, reviewCount: 1 });
-    expect(feedback.recentReviews).toEqual([expect.objectContaining({ text: 'Prompt buyer' })]);
+    expect(feedback.recentReviews).toEqual([expect.objectContaining({ text: 'Prompt buyer', reviewerName: seller.user.displayName, reviewerAvatarId: seller.user.avatarId })]);
+    const ownBuyerReputation = (await buyer.agent.get('/api/users/me/buyer-reputation').expect(200)).body.data;
+    expect(ownBuyerReputation).toMatchObject({ averageRating: 5, reviewCount: 1 });
+    expect(ownBuyerReputation.recentReviews).toEqual([expect.objectContaining({ text: 'Prompt buyer' })]);
+    expect((await seller.agent.get('/api/users/me/buyer-reputation').expect(200)).body.data).toMatchObject({ averageRating: 0, reviewCount: 0, recentReviews: [] });
+    await request(ctx.app).get('/api/users/me/buyer-reputation').expect(401);
+    const reviewAdmin = await login(ctx.app, 'review-direction-admin');
+    await makeRole(ctx.db, reviewAdmin.user.id, 'MODERATOR');
+    const adminReviews = (await reviewAdmin.agent.get('/api/admin/reviews').expect(200)).body.data;
+    expect(adminReviews.find((review: any) => review.id === sellerReview.body.data.id)?.direction).toBe('BUYER_TO_SELLER');
+    expect(adminReviews.find((review: any) => review.id === buyerReview.body.data.id)?.direction).toBe('SELLER_TO_BUYER');
     await buyer.agent.get(path).expect(403);
     await request(ctx.app).get(path).expect(401);
     const outsider = await login(ctx.app, 'reputation-outsider');

@@ -43,6 +43,7 @@ type SellerReview = {
   text: string;
   createdAt: string;
   reviewerName: string;
+  reviewerAvatarId: string | null;
 };
 
 type SellerProfile = {
@@ -138,8 +139,8 @@ export function SellerProfilePage() {
               {seller.reviewCount ? <>
                 <strong>{rating.toFixed(1)}</strong>
                 <Star aria-hidden="true" />
-                <span>from {seller.reviewCount} seller {seller.reviewCount === 1 ? "review" : "reviews"}</span>
-              </> : <span>No seller reviews yet</span>}
+                <span>{seller.reviewCount} {seller.reviewCount === 1 ? "review" : "reviews"} from buyers</span>
+              </> : <span>No buyer reviews yet.</span>}
             </p>
           </div>
         </div>
@@ -226,9 +227,17 @@ export function SellerProfilePage() {
                 {seller.recentReviews.map((review) => (
                   <article className="seller-review" key={review.id}>
                     <div className="seller-review-heading">
-                      <div>
-                        <strong>{review.reviewerName}</strong>
-                        <span>Verified transaction</span>
+                      <div className="seller-review-author">
+                        <UserAvatar
+                          avatarId={review.reviewerAvatarId}
+                          displayName={review.reviewerName}
+                          size={34}
+                          className="seller-review-avatar"
+                        />
+                        <div>
+                          <strong>{review.reviewerName}</strong>
+                          <span>Verified exchange</span>
+                        </div>
                       </div>
                       <span
                         className="seller-review-rating"
@@ -259,7 +268,7 @@ export function SellerProfilePage() {
             ) : (
               <SellerEmpty
                 icon={<PackageCheck />}
-                title="No seller reviews yet"
+                title="No buyer reviews yet."
                 body="Reviews from buyers appear after completed sales."
                 reviews
               />

@@ -1,15 +1,24 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   AlertTriangle,
+  ArrowRight,
+  CalendarDays,
+  CheckCircle2,
   ChevronDown,
   Clock3,
   Database,
   ExternalLink,
+  FileText,
   Globe2,
   LockKeyhole,
+  Plus,
+  RotateCcw,
+  Search,
   ShieldCheck,
+  UserRound,
   UsersRound,
 } from "lucide-react";
 import { api, jsonBody } from "../api";
@@ -34,17 +43,125 @@ function DataState({ query, emptyTitle, children }: { query: any; emptyTitle: st
 }
 
 export function AdminGrievances() {
-  const query = useQuery({ queryKey: ["admin-grievances"], queryFn: () => api<any[]>("/api/admin/grievances"), refetchInterval: 30_000 });
+  const { user } = useAuth();
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [categoryFilter, setCategoryFilter] = useState("ALL");
+  const [assignmentFilter, setAssignmentFilter] = useState("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
+  const query = useQuery({
+    queryKey: ["admin-grievances"],
+    queryFn: () => api<AdminGrievanceQueueItem[]>("/api/admin/grievances"),
+    refetchInterval: 30_000,
+  });
+  const cases = query.data ?? EMPTY_GRIEVANCE_CASES;
+  const statusOptions = useMemo(
+    () => [...new Set(cases.map((item) => item.status))].sort(),
+    [cases],
+  );
+  const categoryOptions = useMemo(
+    () => [...new Set(cases.map((item) => item.category))].sort(),
+    [cases],
+  );
+  const filteredCases = useMemo(() => {
+    const needle = searchQuery.trim().toLocaleLowerCase();
+    return cases
+      .filter((item) => {
+        const assignmentMatches =
+          assignmentFilter === "ALL" ||
+          (assignmentFilter === "UNASSIGNED" && !item.assignedTo) ||
+          (assignmentFilter === "ASSIGNED" && Boolean(item.assignedTo)) ||
+          (assignmentFilter === "MINE" && item.assignedTo === user?.id);
+        return (
+          (statusFilter === "ALL" || item.status === statusFilter) &&
+          (categoryFilter === "ALL" || item.category === categoryFilter) &&
+          assignmentMatches &&
+          (!needle ||
+            [
+              item.publicReference,
+              item.id,
+              item.category,
+              humanise(item.category),
+              item.priority,
+              item.reason,
+              humanise(item.reason),
+              item.status,
+              item.assignedTo,
+            ]
+              .filter(Boolean)
+              .some((value) =>
+                String(value).toLocaleLowerCase().includes(needle),
+              ))
+        );
+      })
+      .sort((left, right) => {
+        const difference =
+          new Date(left.createdAt).getTime() -
+          new Date(right.createdAt).getTime();
+        return sortOrder === "newest" ? -difference : difference;
+      });
+  }, [assignmentFilter, cases, categoryFilter, searchQuery, sortOrder, statusFilter, user?.id]);
+  const filtersActive =
+    statusFilter !== "ALL" ||
+    categoryFilter !== "ALL" ||
+    assignmentFilter !== "ALL" ||
+    Boolean(searchQuery.trim());
+  const clearFilters = () => {
+    setStatusFilter("ALL");
+    setCategoryFilter("ALL");
+    setAssignmentFilter("ALL");
+    setSearchQuery("");
+  };
+  const metrics = [
+    { label: "Open cases", value: cases.filter((item) => item.status === "OPEN").length, note: "Needs your attention", icon: FileText, tone: "plum" },
+    { label: "In review", value: cases.filter((item) => item.status === "INVESTIGATING").length, note: "Currently being handled", icon: CheckCircle2, tone: "success" },
+    { label: "Assigned cases", value: cases.filter((item) => Boolean(item.assignedTo)).length, note: "Current active queue", icon: UsersRound, tone: "plum" },
+    { label: "Urgent cases", value: cases.filter((item) => item.priority === "URGENT").length, note: "Requires immediate action", icon: AlertTriangle, tone: "urgent" },
+  ];
 
-  return <div className="compliance-admin-page">
-    <header className="admin-compliance-heading"><div><h2>Grievance Queue</h2><p>Cases are ordered by their action deadline and refreshed every 30 seconds.</p></div><span className="admin-live-indicator"><span aria-hidden="true" /> Live queue</span></header>
-    <DataState query={query} emptyTitle="No open grievances">{(rows) => <div className="grievance-queue">
-      {rows.map((row: any) => <GrievanceCaseCard row={row} key={row.id} />)}
-    </div>}</DataState>
+  return <div className="compliance-admin-page admin-safety-page">
+    <header className="admin-safety-heading">
+      <div><h2>Grievances &amp; safety</h2><p>Manage user grievances, safety reports, and policy violations. Ensure a safe and respectful community for all students.</p></div>
+      <Link className="admin-safety-new-case" to="/grievance"><Plus aria-hidden="true" />New case</Link>
+    </header>
+    {query.isLoading ? <Loading variant="metrics" label="Loading grievances" /> : query.isError ? <ErrorState error={query.error} retry={() => void query.refetch()} /> : <>
+      <section className="admin-safety-metrics" aria-label="Case summary">
+        {metrics.map(({ icon: Icon, label, note, tone, value }) => <article className={`admin-safety-metric is-${tone}`} key={label}><span className="admin-safety-metric-icon" aria-hidden="true"><Icon /></span><p><strong>{value}</strong><b>{label}</b><span>{note}</span></p></article>)}
+      </section>
+      <section className="admin-safety-filters" aria-labelledby="safety-filters-title">
+        <div className="admin-safety-filter-heading"><div><h3 id="safety-filters-title">Filters</h3><p>Find specific grievances by status, category, or keyword.</p></div><button type="button" className="admin-safety-clear" onClick={clearFilters} disabled={!filtersActive}><RotateCcw aria-hidden="true" />Clear filters</button></div>
+        <div className="admin-safety-filter-grid">
+          <label><span>Status</span><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="ALL">All statuses</option>{statusOptions.map((status) => <option value={status} key={status}>{humanise(status)}</option>)}</select></label>
+          <label><span>Category</span><select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}><option value="ALL">All categories</option>{categoryOptions.map((category) => <option value={category} key={category}>{humanise(category)}</option>)}</select></label>
+          <label><span>Assigned to</span><select value={assignmentFilter} onChange={(event) => setAssignmentFilter(event.target.value)}><option value="ALL">All assignments</option><option value="ASSIGNED">Assigned cases</option><option value="UNASSIGNED">Unassigned</option><option value="MINE">Assigned to me</option></select></label>
+          <label className="admin-safety-search"><span>Search</span><span className="admin-safety-search-control"><Search aria-hidden="true" /><input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search by case ID, category, reason..." /></span></label>
+        </div>
+      </section>
+      <div className="admin-safety-list-heading"><h3>Cases ({filteredCases.length})</h3><label><span>Sort by</span><select value={sortOrder} onChange={(event) => setSortOrder(event.target.value as "newest" | "oldest")}><option value="newest">Newest first</option><option value="oldest">Oldest first</option></select></label></div>
+      {filteredCases.length ? <><div className="admin-safety-table" role="table" aria-label="Grievance cases"><div className="admin-safety-table-head" role="row"><span role="columnheader">Case</span><span role="columnheader">Category</span><span role="columnheader">Reported by</span><span role="columnheader">Assigned to</span><span role="columnheader">Date</span><span role="columnheader">Status</span><span role="columnheader" aria-label="Action" /></div>{filteredCases.map((item) => <GrievanceCaseCard row={item} key={item.id} />)}</div><p className="admin-safety-results">Showing 1–{filteredCases.length} of {filteredCases.length} {filteredCases.length === 1 ? "case" : "cases"}</p></> : <section className="admin-safety-empty"><ShieldCheck aria-hidden="true" /><h3>{filtersActive ? "Nothing matches your filters." : "No open grievances"}</h3><p>{filtersActive ? "Try adjusting or clearing the current filters." : "All current cases have been handled."}</p></section>}
+    </>}
   </div>;
 }
 
-function GrievanceCaseCard({ row }: { row: any }) {
+type AdminGrievanceQueueItem = {
+  id: string;
+  publicReference: string;
+  category: string;
+  priority: string;
+  reason: string;
+  status: string;
+  assignedTo: string | null;
+  acknowledgeDueAt: string;
+  actionDueAt: string;
+  acknowledgedAt: string | null;
+  appealedAt: string | null;
+  createdAt: string;
+  overdue: boolean;
+};
+
+const EMPTY_GRIEVANCE_CASES: AdminGrievanceQueueItem[] = [];
+
+function GrievanceCaseCard({ row }: { row: AdminGrievanceQueueItem }) {
   const [expanded, setExpanded] = useState(false);
   const client = useQueryClient();
   const detail = useQuery({ queryKey: ["admin-grievance", row.id], queryFn: () => api<any>(`/api/admin/grievances/${row.id}`), enabled: expanded, staleTime: 30_000 });
@@ -56,17 +173,28 @@ function GrievanceCaseCard({ row }: { row: any }) {
   const sendUpdate = useMutation({ mutationFn: (body: unknown) => api(`/api/admin/grievances/${row.id}/messages`, { method: "POST", ...jsonBody(body) }), onSuccess: () => { toast.success("Update sent"); refresh(); } });
   const resolve = useMutation({ mutationFn: (body: unknown) => api(`/api/admin/grievances/${row.id}/resolve`, { method: "POST", ...jsonBody(body) }), onSuccess: () => { toast.success("Decision saved"); refresh(); } });
   const mutationError = acknowledge.error ?? sendUpdate.error ?? resolve.error;
+  const panelId = `grievance-case-${row.id}`;
+  const actionable = row.status === "OPEN";
+  const urgent = row.priority === "URGENT";
 
-  return <article className={`grievance-case-card ${row.overdue ? "is-overdue" : ""}`}>
-    <header className="grievance-case-header">
-      <div><div className="grievance-case-badges"><StatusBadge value={row.overdue ? "OVERDUE" : row.priority} /><StatusBadge value={row.category} />{row.appealedAt ? <StatusBadge value="APPEALED" /> : null}</div><h3><code>{row.publicReference}</code></h3><p>{humanise(row.reason)}</p></div>
-      <div className="grievance-case-deadline"><Clock3 aria-hidden="true" /><span>Action target<strong>{formatDateTime(row.actionDueAt)}</strong></span></div>
-    </header>
-    <div className="grievance-assignment">
-      {row.acknowledgedAt ? <span><ShieldCheck aria-hidden="true" /> Acknowledged {formatDateTime(row.acknowledgedAt)}</span> : <><span><AlertTriangle aria-hidden="true" /> Awaiting staff acknowledgement</span><button type="button" className="button secondary" onClick={() => acknowledge.mutate()} disabled={acknowledge.isPending}>{acknowledge.isPending ? "Assigning…" : "Acknowledge & Assign to Me"}</button></>}
+  return <article className={`admin-safety-case ${row.overdue ? "is-overdue" : ""} ${urgent ? "is-urgent" : ""}`}>
+    <div className="admin-safety-row" role="row">
+      <div className="admin-safety-primary" role="cell" data-label="Case">
+        <span className="admin-safety-case-icon" aria-hidden="true">{urgent || row.overdue ? <AlertTriangle /> : <FileText />}</span>
+        <p><strong>{row.publicReference}</strong><span>{humanise(row.reason)}</span></p>
+        {row.appealedAt ? <span className="admin-safety-inline-flag">Appealed</span> : null}
+      </div>
+      <div className="admin-safety-category" role="cell" data-label="Category"><strong>{humanise(row.category)}</strong><span>{humanise(row.priority)} priority</span></div>
+      <div className="admin-safety-reporter" role="cell" data-label="Reported by"><span className="admin-safety-person-icon" aria-hidden="true"><UserRound /></span><p><strong>Private reporter</strong><span>Protected case data</span></p></div>
+      <div className="admin-safety-assignee" role="cell" data-label="Assigned to"><span className="admin-safety-person-icon" aria-hidden="true">{row.assignedTo ? <ShieldCheck /> : <UserRound />}</span><p><strong>{row.assignedTo ? "Assigned" : "Unassigned"}</strong><span>{row.assignedTo ? `#${shortCaseIdentifier(row.assignedTo)}` : "Awaiting acknowledgement"}</span></p></div>
+      <time className="admin-safety-date" role="cell" data-label="Date" dateTime={row.createdAt}><span className="admin-safety-created"><CalendarDays aria-hidden="true" />{formatDateTime(row.createdAt)}</span><span className={`admin-safety-due ${row.overdue ? "is-overdue" : ""}`}><Clock3 aria-hidden="true" />{row.overdue ? "Overdue" : "Due"} {formatDateTime(row.actionDueAt)}</span></time>
+      <div className="admin-safety-status" role="cell" data-label="Status"><StatusBadge value={row.status} /></div>
+      <div className="admin-safety-action" role="cell"><button type="button" aria-expanded={expanded} aria-controls={panelId} onClick={() => setExpanded((value) => !value)}>{expanded ? "Hide" : actionable ? "Investigate" : "View"}{expanded ? <ChevronDown aria-hidden="true" /> : <ArrowRight aria-hidden="true" />}</button></div>
     </div>
-    <button className="grievance-case-toggle" type="button" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>{expanded ? "Hide Case" : "Open Case"}<ChevronDown aria-hidden="true" /></button>
-    {expanded ? <div className="grievance-case-detail">
+    {expanded ? <div className="grievance-case-detail" id={panelId}>
+      <div className="grievance-assignment">
+        {row.acknowledgedAt ? <span><ShieldCheck aria-hidden="true" /> Acknowledged {formatDateTime(row.acknowledgedAt)}</span> : <><span><AlertTriangle aria-hidden="true" /> Awaiting staff acknowledgement</span><button type="button" className="button secondary" onClick={() => acknowledge.mutate()} disabled={acknowledge.isPending}>{acknowledge.isPending ? "Assigning…" : "Acknowledge & Assign to Me"}</button></>}
+      </div>
       {detail.isLoading ? <Loading variant="list" /> : detail.isError ? <ErrorState error={detail.error} retry={() => void detail.refetch()} /> : detail.data ? <>
         <div className="grievance-case-body">
           <div><span className="admin-data-label">Complaint</span><strong>{humanise(detail.data.reason)}</strong><p>{detail.data.details}</p></div>
@@ -79,6 +207,10 @@ function GrievanceCaseCard({ row }: { row: any }) {
       {mutationError ? <p className="field-error" role="alert">{mutationError.message}</p> : null}
     </div> : null}
   </article>;
+}
+
+function shortCaseIdentifier(value: string) {
+  return value.replaceAll("-", "").slice(0, 8).toUpperCase();
 }
 
 export function AdminCompliance() {
