@@ -28,9 +28,12 @@ test('filtered browse pages do not publish search terms as canonical URLs', asyn
 
 test('categories are linked, browse the selected category, and preserve metadata on navigation', async ({ page }) => {
   await page.goto('/marketplace/');
+  await expect(page.locator('.category-links')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Browse by category', exact: true })).toBeVisible();
   await page.getByRole('navigation', { name: 'Marketplace categories', exact: true }).getByRole('link', { name: 'Books', exact: true }).click();
   await expect(page).toHaveURL(/\/marketplace\/category\/books$/);
   await expect(page.getByRole('heading', { name: 'Books', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Breadcrumb', exact: true }).getByText('Books', { exact: true })).toBeVisible();
   await expect(page).toHaveTitle('Books | Uni Rocks Marketplace');
   await expect(page.locator('head link[rel="canonical"]')).toHaveAttribute('href', /\/marketplace\/category\/books$/);
   await expect(page.locator('head meta[name="robots"]')).toHaveAttribute('content', /^index/);

@@ -2,17 +2,26 @@ import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  Armchair,
+  Bike,
+  BookOpen,
   Building2,
   CalendarDays,
   ChevronRight,
+  Dumbbell,
   Heart,
   ImageOff,
   Hash,
+  LampDesk,
   MapPin,
   MessageCircle,
+  Monitor,
+  Package as PackageIcon,
   Palette,
   Search,
+  Shapes,
   ShieldCheck,
+  Shirt,
   SlidersHorizontal,
   Sparkles,
   Star,
@@ -68,6 +77,63 @@ function useListings(search: string, enabled = true) {
 }
 
 type MarketplaceCategory = { id: string; name: string; slug: string };
+
+const CATEGORY_CARD_DESCRIPTIONS: Record<string, string> = {
+  books: "Textbooks, notes and study material",
+  "books-notes": "Textbooks, notes and study material",
+  electronics: "Laptops, phones, calculators and accessories",
+  furniture: "Desks, chairs, shelves and campus furniture",
+  cycles: "Cycles, parts and transport essentials",
+  "cycles-transport": "Cycles, parts and transport essentials",
+  clothing: "Everyday clothing and campus wear",
+  sports: "Sports equipment and fitness gear",
+  "room-essentials": "Storage, lighting and room essentials",
+  other: "Useful campus finds from fellow students",
+};
+
+function categoryCardIcon(category: MarketplaceCategory) {
+  const value = `${category.slug} ${category.name}`.toLowerCase();
+  if (/book|note|academic|study/.test(value)) return BookOpen;
+  if (/electronic|computer|phone|tech/.test(value)) return Monitor;
+  if (/furniture|desk|chair/.test(value)) return Armchair;
+  if (/cycle|bike|transport/.test(value)) return Bike;
+  if (/cloth|fashion|wear/.test(value)) return Shirt;
+  if (/sport|fitness|gym/.test(value)) return Dumbbell;
+  if (/room|home|essential/.test(value)) return LampDesk;
+  if (/other|misc/.test(value)) return Shapes;
+  return PackageIcon;
+}
+
+function BrowseByCategory({ categories }: { categories: MarketplaceCategory[] }) {
+  if (!categories.length) return null;
+
+  return (
+    <section className="section home-category-section" aria-labelledby="home-category-heading">
+      <div className="home-category-heading">
+        <h2 id="home-category-heading">Browse by category</h2>
+        <Link to="/categories" className="home-category-view-all">
+          <span>View all</span>
+          <ChevronRight aria-hidden="true" />
+        </Link>
+      </div>
+      <nav className="home-category-grid" aria-label="Marketplace categories">
+        {categories.slice(0, 8).map((category) => {
+          const Icon = categoryCardIcon(category);
+          return (
+            <Link aria-label={category.name} className="home-category-card" key={category.id} to={categoryPath(category.slug)}>
+              <span className="home-category-icon" aria-hidden="true"><Icon /></span>
+              <span className="home-category-copy">
+                <strong>{category.name}</strong>
+                <span>{CATEGORY_CARD_DESCRIPTIONS[category.slug] ?? `Explore ${category.name.toLowerCase()} listed by students`}</span>
+              </span>
+              <ChevronRight className="home-category-arrow" aria-hidden="true" />
+            </Link>
+          );
+        })}
+      </nav>
+    </section>
+  );
+}
 
 function CategoryLinks({ categories, selected }: { categories: MarketplaceCategory[]; selected?: string | undefined }) {
   return (
@@ -240,8 +306,8 @@ export function HomePage() {
 
       {/* ─── Marketplace Content ─── */}
       <div className="page pt-2 pb-24">
-        <CategoryLinks categories={categories.data ?? []} />
         <ProductSection title="Recently added" query={recent} />
+        <BrowseByCategory categories={categories.data ?? []} />
         <ProductSection title="Popular right now" query={popular} />
         {user ? (
           <ProductSection
@@ -429,6 +495,13 @@ export function BrowsePage() {
 
   return (
     <div className="page !pt-10 sm:!pt-12">
+      {selectedCategory ? (
+        <nav aria-label="Breadcrumb" className="mb-5 flex items-center gap-1.5 text-[13px] text-muted sm:text-sm">
+          <Link className="transition-colors hover:text-ink" to="/">Marketplace</Link>
+          <ChevronRight className="size-3.5" aria-hidden="true" />
+          <span className="font-medium text-ink" aria-current="page">{selectedCategory.name}</span>
+        </nav>
+      ) : null}
       <div className="mb-7 flex flex-col gap-4 sm:mb-9 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="font-bold text-ink">{selectedCategory?.name ?? 'Browse products'}</h1>
@@ -882,14 +955,15 @@ export function ListingPage() {
   const sellerRating = Number(item.seller?.rating);
   const hasSellerRating = Number.isFinite(sellerRating);
   const sellerName = item.seller?.displayName || "Marketplace seller";
+  const listingCategory = categories.data?.find(
+    (category) => category.id === item.categoryId,
+  );
   const categoryName =
     item.categoryName ||
-    categories.data?.find((category) => category.id === item.categoryId)
-      ?.name ||
+    listingCategory?.name ||
     "Marketplace";
-  const categoryHref = item.categoryId
-    ? `/browse?category=${encodeURIComponent(item.categoryId)}`
-    : "/browse";
+  const categorySlug = item.categorySlug || listingCategory?.slug;
+  const categoryHref = categorySlug ? categoryPath(categorySlug) : "/browse";
   const specificationCategoryName =
     item.categoryName ||
     item.category?.name ||
@@ -935,9 +1009,9 @@ export function ListingPage() {
       >
         <Link
           className="shrink-0 transition-colors hover:text-ink"
-          to="/browse"
+          to="/"
         >
-          Browse
+          Marketplace
         </Link>
         <ChevronRight
           className="size-3.5 shrink-0 text-muted"
@@ -953,7 +1027,7 @@ export function ListingPage() {
           className="size-3.5 shrink-0 text-muted"
           aria-hidden="true"
         />
-        <span className="max-w-[15rem] truncate font-medium text-ink sm:max-w-md">
+        <span className="max-w-[15rem] truncate font-medium text-ink sm:max-w-md" aria-current="page">
           {item.title}
         </span>
       </nav>

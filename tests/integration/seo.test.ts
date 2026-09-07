@@ -84,6 +84,7 @@ describe('production-style SEO routes', () => {
     expect(home.headers['x-robots-tag']).toMatch(/^index/);
     const listing = await request(ctx.app).get(`/marketplace/listing/${activeId}`).expect(200);
     expect(listing.text).toContain('<h1>Textbook ACTIVE</h1>');
+    expect(listing.text).toContain('href="/marketplace/category/books"');
     expect(listing.text).toContain('₹450');
     expect(listing.text).toContain(`/media/listings/${activeId}/${imageId}`);
     expect(listing.text).not.toContain(owner.user.email);

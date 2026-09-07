@@ -74,13 +74,13 @@ export async function getSeoPage(db: Database, origin: string, pathname: string,
   const listingMatch = /^\/listing\/([^/]+)$/.exec(path);
   if (listingMatch && idSchema.safeParse(listingMatch[1]).success) {
     const id = listingMatch[1]!;
-    const [item] = await db.select(seoListingFields).from(listings).where(and(visibleListing, eq(listings.id, id))).limit(1);
+    const [item] = await db.select({ ...seoListingFields, categoryName: categories.name, categorySlug: categories.slug }).from(listings).innerJoin(categories, eq(categories.id, listings.categoryId)).where(and(visibleListing, eq(listings.id, id))).limit(1);
     if (item) {
       const [image] = await db.select({ id: listingImages.id }).from(listingImages).where(and(eq(listingImages.listingId, id), isNull(listingImages.deletedAt), sql`${listingImages.objectKey} is not null`, sql`${listingImages.finalizedAt} is not null`)).orderBy(asc(listingImages.position)).limit(1);
       const price = listingPrice(item);
       return {
-        metadata: { ...metadata, title: `${item.title} | Uni Rocks Marketplace`, description: `${price} · ${item.location}. ${item.description}`.replace(/\s+/g, ' ').slice(0, 160), breadcrumbs: [...metadata.breadcrumbs!, { name: item.title, url: metadata.canonical }], robots: item.lifecycleState === 'SOLD' ? 'noindex, follow' : 'index, follow, max-image-preview:large', ...(image && item.lifecycleState !== 'SOLD' ? { image: new URL(`/media/listings/${id}/${image.id}`, origin).href, imageAlt: item.title } : {}) },
-        content: `<h1>${escapeHtml(item.title)}</h1><p>${item.lifecycleState === 'SOLD' ? 'Sold · ' : item.lifecycleState === 'RESERVED' ? 'Reserved · ' : ''}${escapeHtml(price)} · ${escapeHtml(item.location)} · ${escapeHtml(item.condition.replaceAll('_', ' ').toLowerCase())}</p><p>${escapeHtml(item.description)}</p><p><a href="/marketplace/login">Sign in to contact the seller</a></p>`,
+        metadata: { ...metadata, title: `${item.title} | Uni Rocks Marketplace`, description: `${price} · ${item.location}. ${item.description}`.replace(/\s+/g, ' ').slice(0, 160), breadcrumbs: [...metadata.breadcrumbs!, { name: item.categoryName, url: new URL(`/marketplace${categoryPath(item.categorySlug)}`, origin).href }, { name: item.title, url: metadata.canonical }], robots: item.lifecycleState === 'SOLD' ? 'noindex, follow' : 'index, follow, max-image-preview:large', ...(image && item.lifecycleState !== 'SOLD' ? { image: new URL(`/media/listings/${id}/${image.id}`, origin).href, imageAlt: item.title } : {}) },
+        content: `<nav aria-label="Breadcrumb"><a href="/marketplace">Marketplace</a> · <a href="/marketplace${categoryPath(item.categorySlug)}">${escapeHtml(item.categoryName)}</a></nav><h1>${escapeHtml(item.title)}</h1><p>${item.lifecycleState === 'SOLD' ? 'Sold · ' : item.lifecycleState === 'RESERVED' ? 'Reserved · ' : ''}${escapeHtml(price)} · ${escapeHtml(item.location)} · ${escapeHtml(item.condition.replaceAll('_', ' ').toLowerCase())}</p><p>${escapeHtml(item.description)}</p><p><a href="/marketplace/login">Sign in to contact the seller</a></p>`,
         status: 200,
       };
     }

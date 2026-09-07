@@ -63,7 +63,7 @@ export function listingsRouter(db: Database, config: AppConfig, storage: Storage
 
   router.get('/listings/:id', asyncRoute(async (req, res) => {
     const id = idSchema.parse(req.params.id);
-    const listing = (await db.select({ listing: listings, seller: { id: users.id, displayName: users.displayName, avatarId: users.avatarId, institution: users.institution, campus: users.campus, phoneVerifiedAt: users.phoneVerifiedAt, completedSales: users.completedSales, createdAt: users.createdAt } }).from(listings).innerJoin(users, eq(users.id, listings.sellerId)).where(and(eq(listings.id, id), isNull(listings.deletedAt))).limit(1))[0];
+    const listing = (await db.select({ listing: listings, categoryName: categories.name, categorySlug: categories.slug, seller: { id: users.id, displayName: users.displayName, avatarId: users.avatarId, institution: users.institution, campus: users.campus, phoneVerifiedAt: users.phoneVerifiedAt, completedSales: users.completedSales, createdAt: users.createdAt } }).from(listings).innerJoin(users, eq(users.id, listings.sellerId)).innerJoin(categories, eq(categories.id, listings.categoryId)).where(and(eq(listings.id, id), isNull(listings.deletedAt))).limit(1))[0];
     if (!listing) throw new AppError(404, 'LISTING_UNAVAILABLE', 'This listing is unavailable');
     const privileged = req.auth?.userId === listing.listing.sellerId || req.auth?.roles.some((role: string) => ['MODERATOR', 'SUPER_ADMIN'].includes(role));
     if (!privileged && !(listing.listing.moderationState === 'APPROVED' && ['ACTIVE', 'RESERVED', 'SOLD'].includes(listing.listing.lifecycleState))) throw new AppError(404, 'LISTING_UNAVAILABLE', 'This listing is unavailable');
@@ -73,7 +73,7 @@ export function listingsRouter(db: Database, config: AppConfig, storage: Storage
     ]);
     if (!privileged && images.some((image) => image.syntheticStatus !== 'NOT_SYNTHETIC')) throw new AppError(404, 'LISTING_UNAVAILABLE', 'This listing is unavailable');
     if (!privileged) await db.update(listings).set({ viewCount: sql`${listings.viewCount} + 1` }).where(eq(listings.id, id));
-    res.json({ data: { ...listing.listing, priceLabel: priceLabel(listing.listing), seller: { ...listing.seller, email: undefined, phone: undefined, rating: rating.averageRating, reviewCount: rating.reviewCount }, images: await Promise.all(images.filter((image) => image.objectKey).map(async (image) => ({ id: image.id, position: image.position, width: image.width, height: image.height, url: await storage.signedReadUrl(image.objectKey!) }))), ownerPreview: privileged && listing.listing.moderationState !== 'APPROVED' } });
+    res.json({ data: { ...listing.listing, categoryName: listing.categoryName, categorySlug: listing.categorySlug, priceLabel: priceLabel(listing.listing), seller: { ...listing.seller, email: undefined, phone: undefined, rating: rating.averageRating, reviewCount: rating.reviewCount }, images: await Promise.all(images.filter((image) => image.objectKey).map(async (image) => ({ id: image.id, position: image.position, width: image.width, height: image.height, url: await storage.signedReadUrl(image.objectKey!) }))), ownerPreview: privileged && listing.listing.moderationState !== 'APPROVED' } });
   }));
 
   router.patch('/listings/:id', requireVerified, asyncRoute(async (req, res) => {
