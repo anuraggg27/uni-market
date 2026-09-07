@@ -4,7 +4,8 @@ import { evaluateMetrics, reconcileIncident, probeProduction, checkBackupFreshne
 
 function healthy() {
   return { version: 1, checkedAt: new Date().toISOString(), windowMinutes: 60,
-    database: { ok: true, email: { failed: 0, pending: 0, oldestPendingSeconds: 0 } },
+    startedAt: new Date(Date.now() - 60 * 60_000).toISOString(),
+    database: { ok: true, email: { failed: 0, pending: 0, oldestPendingSeconds: 0 }, retention: { mode: 'dry-run', latest: { status: 'COMPLETED' }, lastCompletedAt: new Date().toISOString() as string | null } },
     disk: { usedPercent: 20, freeBytes: 10 * 1024 ** 3, inodeUsedPercent: 10 },
     signals: new OperationalMetrics().snapshot(),
   };
@@ -43,6 +44,18 @@ describe('operational monitoring', () => {
     expect(evaluateMetrics(metrics)).toEqual([]);
     metrics.checkedAt = new Date(0).toISOString();
     expect(evaluateMetrics(metrics)).toEqual(['Operational metrics are missing, incompatible or stale.']);
+  });
+
+  it('alerts on missing, stale and failed retention, with a bounded startup grace period', () => {
+    const metrics = healthy();
+    metrics.database.retention.lastCompletedAt = null;
+    expect(evaluateMetrics(metrics)).toContain('No successful retention run in the last 30 hours.');
+    metrics.startedAt = new Date().toISOString();
+    expect(evaluateMetrics(metrics)).toEqual([]);
+    metrics.database.retention.lastCompletedAt = new Date(Date.now() - 31 * 60 * 60_000).toISOString();
+    expect(evaluateMetrics(metrics)).toContain('No successful retention run in the last 30 hours.');
+    metrics.database.retention.latest.status = 'FAILED';
+    expect(evaluateMetrics(metrics)).toContain('The latest retention run failed; inspect the private retention audit.');
   });
 
   it('retries public outages and never leaks response bodies into alerts', async () => {

@@ -5,6 +5,16 @@ export default defineConfig({
     projects: [
       {
         test: {
+          name: "postgres",
+          include: ["tests/postgres/**/*.test.ts"],
+          environment: "node",
+          fileParallelism: false,
+          testTimeout: 20_000,
+          hookTimeout: 30_000,
+        },
+      },
+      {
+        test: {
           name: "unit",
           include: ["tests/unit/**/*.test.{ts,tsx}"],
           environment: "node",

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation } from 'react-router-dom';
-import { staticPageSeo, type SeoMetadata } from '@campus-market/shared';
+import { seoStructuredData, staticPageSeo, type SeoMetadata } from '@campus-market/shared';
 import { publicApi } from '../api';
 
 const origin = document.querySelector<HTMLMetaElement>('meta[name="seo-origin"]')?.content ?? window.location.origin;
@@ -12,6 +12,7 @@ function readInitialSeo(): { path: string; metadata: SeoMetadata } | undefined {
   } catch { return undefined; }
 }
 const initialSeo = readInitialSeo();
+const initialSearch = window.location.search;
 
 export function applyPageSeo(metadata: SeoMetadata) {
   document.querySelectorAll('head [data-seo], head title, head meta[name="description"], head meta[name="robots"], head link[rel="canonical"]').forEach((element) => element.remove());
@@ -28,7 +29,7 @@ export function applyPageSeo(metadata: SeoMetadata) {
   const canonical = document.createElement('link');
   canonical.rel = 'canonical'; canonical.href = metadata.canonical; canonical.dataset.seo = '';
   document.head.append(canonical);
-  addMeta('og:site_name', 'Uni Market', true);
+  addMeta('og:site_name', 'Uni Rocks', true);
   addMeta('og:type', 'website', true);
   addMeta('og:locale', 'en_IN', true);
   addMeta('og:title', metadata.title, true);
@@ -45,19 +46,19 @@ export function applyPageSeo(metadata: SeoMetadata) {
   if (metadata.robots.startsWith('index')) {
     const structured = document.createElement('script');
     structured.type = 'application/ld+json'; structured.dataset.seo = '';
-    structured.textContent = JSON.stringify({ '@context': 'https://schema.org', '@type': 'WebPage', name: metadata.title, description: metadata.description, url: metadata.canonical, isPartOf: { '@type': 'WebSite', name: 'Uni Market', alternateName: 'Uni Marketplace', url: new URL('/marketplace', origin).href } });
+    structured.textContent = JSON.stringify(seoStructuredData(metadata));
     document.head.append(structured);
   }
 }
 
 export function PageSeo() {
   const { pathname, search } = useLocation();
-  const dynamic = /^\/listing\/[0-9a-f-]{36}\/?$/i.test(pathname);
+  const dynamic = /^\/(?:listing\/[0-9a-f-]{36}|category\/[a-z0-9-]+)\/?$/i.test(pathname);
   const query = useQuery({
-    queryKey: ['seo', pathname],
-    queryFn: () => publicApi<SeoMetadata>(`/api/seo?path=${encodeURIComponent(pathname.replace(/\/$/, ''))}`),
+    queryKey: ['seo', pathname, search],
+    queryFn: () => publicApi<SeoMetadata>(`/api/seo?path=${encodeURIComponent(pathname.replace(/\/$/, ''))}&search=${encodeURIComponent(search)}`),
     enabled: dynamic,
-    initialData: dynamic && initialSeo?.path === pathname ? initialSeo.metadata : undefined,
+    initialData: dynamic && search === initialSearch && initialSeo?.path === pathname ? initialSeo.metadata : undefined,
     staleTime: 30_000,
   });
   useEffect(() => {

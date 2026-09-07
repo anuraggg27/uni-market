@@ -54,6 +54,7 @@ export function Layout() {
               <div>
                 <h2>Marketplace</h2>
                 <Link to="/browse">Browse</Link>
+                <Link to="/categories">Categories</Link>
                 <Link to="/sell">Sell</Link>
                 <Link to="/saved">Saved</Link>
                 <Link to="/my-listings">My listings</Link>

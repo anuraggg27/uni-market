@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import request from 'supertest';
 import { randomUUID } from 'node:crypto';
-import { listings, listingImages, users } from '../../apps/api/src/db/schema';
+import { categories, listings, listingImages, users } from '../../apps/api/src/db/schema';
 import { login, setup } from './helper';
 
 const template = '<!doctype html><html><head><title>Uni Market</title><meta name="description" content="old"><meta name="robots" content="noindex"></head><body><div id="root"></div><script src="/marketplace/app.js"></script></body></html>';
@@ -28,6 +28,52 @@ beforeAll(async () => {
 afterAll(async () => { await ctx?.client.close(); });
 
 describe('production-style SEO routes', () => {
+  it('permanently migrates root and legacy URLs without losing queries', async () => {
+    const home = await request(ctx.app).get('/?utm_source=club').expect(301);
+    expect(home.headers.location).toBe('/marketplace?utm_source=club');
+    const support = await request(ctx.app).get('/support').expect(301);
+    expect(support.headers.location).toBe('/marketplace/support');
+    const destination = await request(ctx.app).get(support.headers.location).expect(200);
+    expect(destination.headers['x-robots-tag']).toMatch(/^noindex/);
+    expect(destination.text).not.toContain('Sign in to Uni Market');
+    expect((await request(ctx.app).get('/marketplace/').expect(301)).headers.location).toBe('/marketplace');
+    expect((await request(ctx.app).get('/marketplace/category/books/?page=2').expect(301)).headers.location).toBe('/marketplace/category/books?page=2');
+    await request(ctx.app).get('/future-product').expect(404);
+  });
+  it('exposes stable root favicon aliases without redirecting to HTML', async () => {
+    for (const [path, filename] of [['/favicon.ico', 'favicon.ico'], ['/favicon.png', 'favicon-96x96.png'], ['/apple-touch-icon.png', 'apple-touch-icon.png'], ['/favicon-96x96.png', 'favicon-96x96.png']]) {
+      const response = await request(ctx.app).get(path).expect(301);
+      expect(response.headers.location).toBe(`/marketplace/${filename}`);
+    }
+  });
+  it('publishes active categories, their products, breadcrumbs and sitemap entries', async () => {
+    const [inactive] = await ctx.db.insert(categories).values({ name: 'Hidden category', slug: 'hidden-category', active: false }).returning();
+    const [electronics] = await ctx.db.insert(categories).values({ name: 'Electronics', slug: 'electronics' }).returning();
+    await ctx.db.insert(listings).values({ sellerId: owner.user.id, categoryId: electronics!.id, title: 'Electronics-only monitor', description: 'A working used monitor for a student desk.', condition: 'GOOD', priceType: 'FIXED', exactPrice: 450, location: 'Campus', lifecycleState: 'ACTIVE', moderationState: 'APPROVED', approvedAt: new Date() });
+    const directory = await request(ctx.app).get('/marketplace/categories').expect(200);
+    expect(directory.text).toContain('href="/marketplace/category/books"');
+    expect(directory.text).not.toContain(inactive!.slug);
+    const page = await request(ctx.app).get('/marketplace/category/books').expect(200);
+    expect(page.text).toContain('<h1>Books</h1>');
+    expect(page.text).toContain(`/marketplace/listing/${activeId}`);
+    expect(page.text).toContain('http://localhost:5173/marketplace/category/books');
+    expect(page.text).toContain('"@type":"BreadcrumbList"');
+    expect(page.text).not.toContain('PRIVATE DRAFT TITLE');
+    expect(page.text).not.toContain('Electronics-only monitor');
+    expect((await request(ctx.app).get('/marketplace/category/electronics')).text).toContain('Electronics-only monitor');
+    expect(page.headers['x-robots-tag']).toMatch(/^index/);
+    const metadata = await request(ctx.app).get('/api/seo?path=/category/books&search=%3Fq%3Dprivate').expect(200);
+    expect(metadata.body.data.robots).toMatch(/^noindex/);
+    expect(metadata.body.data.title).toBe('Books | Uni Rocks Marketplace');
+    expect(JSON.stringify(metadata.body)).not.toContain('private');
+    expect((await request(ctx.app).get('/sitemap-static.xml')).text).toContain('/marketplace/category/books');
+    expect((await request(ctx.app).get('/sitemap-static.xml')).text).not.toContain(inactive!.slug);
+    const redirect = await request(ctx.app).get(`/marketplace/browse?category=${ctx.category.id}&utm_source=club`).expect(301);
+    expect(redirect.headers.location).toBe('/marketplace/category/books?utm_source=club');
+    await request(ctx.app).get('/marketplace/category/hidden-category').expect(404);
+    await request(ctx.app).get('/marketplace/category/missing').expect(404);
+    await request(ctx.app).get('/marketplace/category/books?page=999').expect(404);
+  });
   it('serves readable public HTML and correct canonicals without executing JavaScript', async () => {
     const home = await request(ctx.app).get('/marketplace?utm_source=club').set('Host', 'untrusted.example').expect(200);
     expect(home.text).toContain('Find what you need around campus');

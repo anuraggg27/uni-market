@@ -12,6 +12,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { api, clearCsrf } from "../api";
+import { categoryPath } from "@campus-market/shared";
 import { useAuth } from "../auth";
 import {
   Accordion,
@@ -108,8 +109,8 @@ function getCategoryHref(
       c.slug === item.slug ||
       c.name.toLowerCase().includes(item.slug.replace("-", " ")),
   );
-  if (match) {
-    return `/browse?category=${match.id}`;
+  if (match?.slug) {
+    return categoryPath(match.slug);
   }
   return `/browse?q=${encodeURIComponent(item.title)}`;
 }

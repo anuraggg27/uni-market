@@ -26,7 +26,7 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { api, ApiError, jsonBody } from "../api";
-import { marketplaceHeroDescription, reportReasons } from "@campus-market/shared";
+import { categoryDescription, categoryPath, marketplaceHeroDescription, reportReasons } from "@campus-market/shared";
 import { useAuth } from "../auth";
 import { postLoginDestination } from "../auth-routing";
 import {
@@ -59,11 +59,49 @@ const loginDateFormatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: "medium",
 });
 
-function useListings(search: string) {
+function useListings(search: string, enabled = true) {
   return useQuery({
     queryKey: ["listings", search],
     queryFn: () => api<any[]>(`/api/listings${search}`),
+    enabled,
   });
+}
+
+type MarketplaceCategory = { id: string; name: string; slug: string };
+
+function CategoryLinks({ categories, selected }: { categories: MarketplaceCategory[]; selected?: string | undefined }) {
+  return (
+    <nav className="category-links" aria-label="Marketplace categories">
+      <Link to="/categories">All categories</Link>
+      {categories.map((category) => (
+        <Link key={category.id} to={categoryPath(category.slug)} aria-current={selected === category.slug ? "page" : undefined}>
+          {category.name}
+        </Link>
+      ))}
+    </nav>
+  );
+}
+
+export function CategoriesPage() {
+  const categories = useCategories();
+  return (
+    <div className="page">
+      <h1>Categories</h1>
+      <p className="muted">Find your next campus essential on Uni Rocks Marketplace.</p>
+      {categories.isPending ? <Loading label="Loading categories" /> : categories.isError ? (
+        <ErrorState error={categories.error} retry={() => void categories.refetch()} />
+      ) : (
+        <nav aria-label="Marketplace categories" className="category-directory">
+          {categories.data.map((category: MarketplaceCategory) => (
+            <Link key={category.id} to={categoryPath(category.slug)}>
+              <h2>{category.name}</h2>
+              <p>{categoryDescription(category)}</p>
+            </Link>
+          ))}
+        </nav>
+      )}
+    </div>
+  );
 }
 function useCategories() {
   return useQuery({
@@ -81,6 +119,7 @@ export function HomePage() {
     useState(false);
   const recent = useListings("?limit=8&sort=newest");
   const popular = useListings("?limit=8&sort=popular");
+  const categories = useCategories();
   const { user } = useAuth();
   const saved = useQuery({
     queryKey: ["favourites"],
@@ -201,6 +240,7 @@ export function HomePage() {
 
       {/* ─── Marketplace Content ─── */}
       <div className="page pt-2 pb-24">
+        <CategoryLinks categories={categories.data ?? []} />
         <ProductSection title="Recently added" query={recent} />
         <ProductSection title="Popular right now" query={popular} />
         {user ? (
@@ -318,6 +358,8 @@ function paramsFromFilters(filters: BrowseFilters): URLSearchParams {
 }
 
 export function BrowsePage() {
+  const { categorySlug } = useParams();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const serialized = params.toString();
   const [filters, setFilters] = useState<BrowseFilters>(() =>
@@ -325,13 +367,18 @@ export function BrowsePage() {
   );
   const [filtersOpen, setFiltersOpen] = useState(false);
   const categories = useCategories();
-  const listings = useListings(serialized ? `?${serialized}` : "");
+  const selectedCategory = categories.data?.find((category: MarketplaceCategory) => category.slug === categorySlug);
+  const listingParams = new URLSearchParams(serialized);
+  if (selectedCategory) listingParams.set('category', selectedCategory.id);
+  const listings = useListings(listingParams.size ? `?${listingParams}` : "", !categorySlug || Boolean(selectedCategory));
   const displayedProducts = listings.data ?? [];
   const availableCategories = categories.data ?? [];
 
   useEffect(() => {
-    setFilters(filtersFromParams(new URLSearchParams(serialized)));
-  }, [serialized]);
+    const next = new URLSearchParams(serialized);
+    if (selectedCategory) next.set('category', selectedCategory.id);
+    setFilters(filtersFromParams(next));
+  }, [serialized, selectedCategory]);
 
   useEffect(() => {
     const query = filters.q.trim();
@@ -339,6 +386,7 @@ export function BrowsePage() {
     if (query === currentQuery) return;
     const timeout = window.setTimeout(() => {
       const next = new URLSearchParams(serialized);
+      next.delete('page');
       if (query) next.set("q", query);
       else next.delete("q");
       setParams(next, { replace: true });
@@ -355,12 +403,17 @@ export function BrowsePage() {
 
   function applyFilters(event?: React.FormEvent) {
     event?.preventDefault();
-    setParams(paramsFromFilters(filters));
+    const next = paramsFromFilters(filters);
+    const category = availableCategories.find((entry: MarketplaceCategory) => entry.id === filters.category);
+    next.delete('category');
+    navigate({ pathname: category ? categoryPath(category.slug) : '/browse', search: next.size ? `?${next}` : '' });
     setFiltersOpen(false);
   }
 
   function resetFilters() {
-    setFilters(filtersFromParams(new URLSearchParams()));
+    const next = new URLSearchParams();
+    if (selectedCategory) next.set('category', selectedCategory.id);
+    setFilters(filtersFromParams(next));
     setParams({});
     setFiltersOpen(false);
   }
@@ -370,16 +423,22 @@ export function BrowsePage() {
   const labelClass =
     "mb-2 block text-[12px] font-medium tracking-[0.01em] text-muted";
 
+  if (categorySlug && categories.isPending) return <div className="page"><Loading label="Loading category" /></div>;
+  if (categorySlug && categories.isError) return <div className="page"><ErrorState error={categories.error} retry={() => void categories.refetch()} /></div>;
+  if (categorySlug && !selectedCategory) return <div className="page"><h1>Category not found</h1><Link to="/categories">Browse all categories</Link></div>;
+
   return (
     <div className="page !pt-10 sm:!pt-12">
       <div className="mb-7 flex flex-col gap-4 sm:mb-9 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="font-bold text-ink">Browse products</h1>
+          <h1 className="font-bold text-ink">{selectedCategory?.name ?? 'Browse products'}</h1>
           <p className="mt-2 text-[15px] font-normal text-muted">
-            Find great items listed by students around you.
+            {selectedCategory ? categoryDescription(selectedCategory) : 'Find great items listed by students around you.'}
           </p>
         </div>
       </div>
+
+      <CategoryLinks categories={availableCategories} selected={categorySlug} />
 
       <form
         className="mb-8 hidden rounded-[20px] border border-line bg-surface p-5 shadow-[0_8px_30px_rgba(17,24,39,0.025)] md:block lg:p-6"

@@ -41,6 +41,20 @@ The platform admins have confirmed ownership of listing approvals, support/custo
 - Account closure is immediate. Normal deletion/anonymisation is scheduled after 180 days. Pending uploads expire after one hour; removed-listing images after 180 days; old closed-user message bodies after one year. Closed grievance content is encrypted at rest and scheduled for anonymisation after `GRIEVANCE_RETENTION_DAYS` (730 days by default), unless a documented legal hold applies.
 - A documented active legal hold overrides automated user or listing cleanup. Every hold needs a future review date and must be released with a reason when no longer necessary.
 - The daily worker records dry-run/enforcement counts and failures. Alert operations on failed runs, sustained count spikes, and failed email-outbox jobs.
+- Retention uses a transaction-scoped advisory lock on PostgreSQL, with the lock,
+  database changes and successful audit on the same connection. A failed run
+  rolls back its database changes and records a separate failure audit. The
+  protected operations probe reports latest status/mode and last completion;
+  monitoring alerts on a failed run or no completion for 30 hours (a five-minute
+  grace period applies to a first startup, not to an already stale completion).
+- Verify the production-adapter regression suite with `npm run test:postgres`
+  and `TEST_POSTGRES_URL` pointing to a disposable, localhost-only database named
+  `uni_market_retention_test`. CI provisions PostgreSQL 18 and runs this check.
+  It exercises dry-run, lock contention/release, rollback/retry and a user legal
+  hold. Never point enforcement tests at production.
+- This code fix does **not** flip `RETENTION_MODE` to `enforce`. After deployment,
+  verify a new `COMPLETED` dry-run audit, review its counts and any held records,
+  confirm the latest restore-tested backup, then explicitly approve enforcement.
 - Users can export data, revoke sessions, and request deletion in Settings. Privacy requests sent to the configured privacy address must be logged and completed under the counsel-approved procedure.
 
 ## Incident and provider review

@@ -15,6 +15,18 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: retention_test
+          POSTGRES_PASSWORD: local-ci-retention-only
+          POSTGRES_DB: uni_market_retention_test
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U retention_test -d uni_market_retention_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -28,6 +40,11 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:unit
       - run: LOG_LEVEL=silent npm run test:integration
+      - name: Verify retention with the production PostgreSQL adapter
+        run: npm run test:postgres
+        env:
+          LOG_LEVEL: silent
+          TEST_POSTGRES_URL: postgres://retention_test:local-ci-retention-only@127.0.0.1:5432/uni_market_retention_test
       - run: npm run build
       - run: npm audit --omit=dev --audit-level=high
       - name: Verify encrypted backup and isolated PostgreSQL restore

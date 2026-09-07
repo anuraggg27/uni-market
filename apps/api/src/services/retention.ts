@@ -4,42 +4,79 @@ import type { Database } from '../db/client.js';
 import { emailOutbox, emailPreferences, legalHolds, listingImages, listings, messages, notifications, oauthAccounts, phoneVerifications, policyAcceptances, reportEvents, reports, retentionRuns, sessions, studentEmailVerifications, users } from '../db/schema.js';
 import { logger } from '../lib/logger.js';
 import type { StorageService } from './storage.js';
+import { randomUUID } from 'node:crypto';
+
+type RetentionTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
+export const RETENTION_LOCK_ID = 873240126;
 
 export class RetentionWorker {
-  private timer?: NodeJS.Timeout;
+  private timer: NodeJS.Timeout | undefined;
+  private startupTimer: NodeJS.Timeout | undefined;
+  private running = false;
   constructor(private db: Database, private config: AppConfig, private storage: StorageService) {}
 
   start(): void {
+    if (this.timer) return;
     this.timer = setInterval(() => void this.runOnce(), 24 * 60 * 60_000);
     this.timer.unref();
-    setTimeout(() => void this.runOnce(), 60_000).unref();
+    this.startupTimer = setTimeout(() => void this.runOnce(), 60_000);
+    this.startupTimer.unref();
   }
 
   stop(): void {
     if (this.timer) clearInterval(this.timer);
+    if (this.startupTimer) clearTimeout(this.startupTimer);
+    this.timer = undefined;
+    this.startupTimer = undefined;
   }
 
   async runOnce(): Promise<void> {
-    let locked = true;
-    if (!this.config.DATABASE_URL.startsWith('pglite:')) {
-      const lock = await this.db.execute(sql`select pg_try_advisory_lock(873240126) as locked`);
-      locked = Boolean((lock.rows?.[0] as { locked?: boolean } | undefined)?.locked);
-    }
-    if (!locked) return;
-    const run = (await this.db.insert(retentionRuns).values({ mode: this.config.RETENTION_MODE, status: 'RUNNING', counts: {} }).returning())[0]!;
+    if (this.running) return;
+    this.running = true;
+    const id = randomUUID();
+    const startedAt = new Date();
     try {
+      const counts = await this.db.transaction(async (tx) => {
+        if (!this.config.DATABASE_URL.startsWith('pglite:')) {
+          // Query-builder results have the same shape on postgres-js and PGlite.
+          // Transaction locks stay on one connection, including behind a pooler,
+          // and are released automatically on commit, rollback or disconnect.
+          const [lock] = await tx.select({ locked: sql<boolean>`pg_try_advisory_xact_lock(${RETENTION_LOCK_ID})` }).from(sql`(select 1) as retention_lock`);
+          if (!lock?.locked) return null;
+          await tx.execute(sql`SET LOCAL statement_timeout = '60s'`);
+          await tx.execute(sql`SET LOCAL idle_in_transaction_session_timeout = '120s'`);
+        }
+        await tx.insert(retentionRuns).values({ id, startedAt, mode: this.config.RETENTION_MODE, status: 'RUNNING', counts: {} });
+        const result = await this.process(tx);
+        await tx.update(retentionRuns).set({ status: 'COMPLETED', counts: result, completedAt: new Date() }).where(eq(retentionRuns.id, id));
+        return result;
+      });
+      if (counts) logger.info({ retentionRunId: id, mode: this.config.RETENTION_MODE, counts }, 'retention run completed');
+    } catch (error) {
+      // The failed transaction (including its RUNNING audit) has rolled back.
+      // Record failure separately; startup/lock errors must not reject a timer.
+      await this.db.insert(retentionRuns).values({ id, startedAt, mode: this.config.RETENTION_MODE, status: 'FAILED', counts: {}, error: error instanceof Error ? error.message.slice(0, 1000) : 'Unknown retention error', completedAt: new Date() }).catch((auditError) => {
+        logger.error({ err: auditError, retentionRunId: id }, 'retention failure could not be recorded');
+      });
+      logger.error({ err: error, retentionRunId: id }, 'retention run failed');
+    } finally {
+      this.running = false;
+    }
+  }
+
+  private async process(db: RetentionTransaction) {
       const now = new Date();
       const oneHourAgo = new Date(now.getTime() - 60 * 60_000);
       const oneHundredEightyDaysAgo = new Date(now.getTime() - 180 * 24 * 60 * 60_000);
       const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60_000);
       const oneYearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60_000);
       const [purgeUsers, pendingImages, removedImages, activeHolds, policyReminderUsers, expiredGrievances] = await Promise.all([
-        this.db.select().from(users).where(and(isNotNull(users.purgeAfter), lte(users.purgeAfter, now))),
-        this.db.select().from(listingImages).where(and(isNull(listingImages.finalizedAt), isNull(listingImages.deletedAt), lte(listingImages.createdAt, oneHourAgo))),
-        this.db.select({ image: listingImages, listing: listings }).from(listingImages).innerJoin(listings, eq(listings.id, listingImages.listingId)).where(and(isNotNull(listingImages.objectKey), isNull(listingImages.deletedAt), or(and(isNotNull(listings.deletedAt), lte(listings.deletedAt, oneHundredEightyDaysAgo)), and(eq(listings.moderationState, 'REMOVED'), lte(listings.updatedAt, oneHundredEightyDaysAgo))))),
-        this.db.select().from(legalHolds).where(isNull(legalHolds.releasedAt)),
-        this.db.select({ id: users.id }).from(users).leftJoin(emailPreferences, eq(emailPreferences.userId, users.id)).where(and(eq(users.onboardingComplete, true), isNull(users.closedAt), isNull(users.deletedAt), or(isNull(users.policyReminderSentAt), lte(users.policyReminderSentAt, ninetyDaysAgo)), or(isNull(emailPreferences.userId), and(eq(emailPreferences.enabled, true), eq(emailPreferences.policyReminders, true))))),
-        this.db.select({ id: reports.id }).from(reports).where(and(isNotNull(reports.purgeAfter), lte(reports.purgeAfter, now))),
+        db.select().from(users).where(and(isNotNull(users.purgeAfter), lte(users.purgeAfter, now))),
+        db.select().from(listingImages).where(and(isNull(listingImages.finalizedAt), isNull(listingImages.deletedAt), lte(listingImages.createdAt, oneHourAgo))),
+        db.select({ image: listingImages, listing: listings }).from(listingImages).innerJoin(listings, eq(listings.id, listingImages.listingId)).where(and(isNotNull(listingImages.objectKey), isNull(listingImages.deletedAt), or(and(isNotNull(listings.deletedAt), lte(listings.deletedAt, oneHundredEightyDaysAgo)), and(eq(listings.moderationState, 'REMOVED'), lte(listings.updatedAt, oneHundredEightyDaysAgo))))),
+        db.select().from(legalHolds).where(isNull(legalHolds.releasedAt)),
+        db.select({ id: users.id }).from(users).leftJoin(emailPreferences, eq(emailPreferences.userId, users.id)).where(and(eq(users.onboardingComplete, true), isNull(users.closedAt), isNull(users.deletedAt), or(isNull(users.policyReminderSentAt), lte(users.policyReminderSentAt, ninetyDaysAgo)), or(isNull(emailPreferences.userId), and(eq(emailPreferences.enabled, true), eq(emailPreferences.policyReminders, true))))),
+        db.select({ id: reports.id }).from(reports).where(and(isNotNull(reports.purgeAfter), lte(reports.purgeAfter, now))),
       ]);
       const held = new Set(activeHolds.map((hold) => `${hold.targetType}:${hold.targetId}`));
       const eligibleUsers = purgeUsers.filter((user) => !held.has(`USER:${user.id}`));
@@ -48,7 +85,7 @@ export class RetentionWorker {
       const counts = { users: eligibleUsers.length, pendingImages: pendingImages.length, removedImages: eligibleRemovedImages.length, grievances: eligibleGrievances.length, policyReminders: policyReminderUsers.length };
       if (this.config.RETENTION_MODE === 'enforce') {
         await Promise.all([...pendingImages, ...eligibleRemovedImages.map(({ image }) => image)].flatMap((image) => [image.tempKey, image.objectKey].filter((key): key is string => Boolean(key)).map((key) => this.storage.delete(key))));
-        await this.db.transaction(async (tx) => {
+        await db.transaction(async (tx) => {
           if (pendingImages.length) await tx.update(listingImages).set({ deletedAt: now, tempKey: null }).where(inArray(listingImages.id, pendingImages.map(({ id }) => id)));
           if (eligibleRemovedImages.length) await tx.update(listingImages).set({ deletedAt: now, objectKey: null }).where(inArray(listingImages.id, eligibleRemovedImages.map(({ image }) => image.id)));
           if (eligibleGrievances.length) {
@@ -78,13 +115,6 @@ export class RetentionWorker {
           }
         });
       }
-      await this.db.update(retentionRuns).set({ status: 'COMPLETED', counts, completedAt: new Date() }).where(eq(retentionRuns.id, run.id));
-      logger.info({ retentionRunId: run.id, mode: this.config.RETENTION_MODE, counts }, 'retention run completed');
-    } catch (error) {
-      await this.db.update(retentionRuns).set({ status: 'FAILED', error: error instanceof Error ? error.message.slice(0, 1000) : 'Unknown retention error', completedAt: new Date() }).where(eq(retentionRuns.id, run.id));
-      logger.error({ err: error, retentionRunId: run.id }, 'retention run failed');
-    } finally {
-      if (!this.config.DATABASE_URL.startsWith('pglite:')) await this.db.execute(sql`select pg_advisory_unlock(873240126)`).catch(() => undefined);
-    }
+      return counts;
   }
 }

@@ -20,6 +20,7 @@ const adminPages = () => import("./pages/AdminPages");
 const complianceAdminPages = () => import("./pages/ComplianceAdminPages");
 const legalPages = () => import("./pages/LegalPages");
 const BrowsePage = lazyNamed(publicPages, "BrowsePage");
+const CategoriesPage = lazyNamed(publicPages, "CategoriesPage");
 const HomePage = lazyNamed(publicPages, "HomePage");
 const LeaderboardPage = lazyNamed(publicPages, "LeaderboardPage");
 const ListingPage = lazyNamed(publicPages, "ListingPage");
@@ -83,6 +84,8 @@ export function App() {
           <Route element={<Layout />}>
             <Route index element={<HomePage />} />
             <Route path="browse" element={<BrowsePage />} />
+            <Route path="categories" element={<CategoriesPage />} />
+            <Route path="category/:categorySlug" element={<BrowsePage />} />
             <Route path="listing/:listingId" element={<ListingPage />} />
             <Route path="login" element={<LoginPage />} />
             <Route path="seller/:sellerId" element={<SellerPage />} />

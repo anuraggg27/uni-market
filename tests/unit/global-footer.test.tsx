@@ -37,6 +37,7 @@ describe("global footer", () => {
 
     const supportedDestinations = [
       "/browse",
+      "/categories",
       "/sell",
       "/saved",
       "/my-listings",

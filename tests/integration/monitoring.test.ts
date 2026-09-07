@@ -1,7 +1,7 @@
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { setup, login } from './helper';
-import { emailOutbox } from '../../apps/api/src/db/schema';
+import { emailOutbox, retentionRuns } from '../../apps/api/src/db/schema';
 
 describe('private operational probes', () => {
   let ctx: Awaited<ReturnType<typeof setup>>;
@@ -16,6 +16,7 @@ describe('private operational probes', () => {
   });
 
   it('returns aggregate queue and disk health, without customer data or errors', async () => {
+    await ctx.db.insert(retentionRuns).values({ mode: 'dry-run', status: 'COMPLETED', counts: { users: 1 }, error: 'must-not-leak-retention-error', completedAt: new Date() });
     await ctx.db.insert(emailOutbox).values([
       { template: 'listing_approved', payload: { private: 'must-not-leak' }, dedupeKey: 'monitor-delayed', createdAt: new Date(Date.now() - 20 * 60_000) },
       { template: 'listing_approved', payload: {}, dedupeKey: 'monitor-failed', failedAt: new Date(), lastError: 'smtp-secret-error' },
@@ -25,6 +26,8 @@ describe('private operational probes', () => {
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.body.database).toMatchObject({ ok: true, email: { failed: 1, pending: 1 } });
     expect(response.body.database.email.oldestPendingSeconds).toBeGreaterThanOrEqual(1200);
+    expect(response.body.database.retention).toMatchObject({ mode: 'dry-run', latest: { status: 'COMPLETED' } });
+    expect(response.body.database.retention.lastCompletedAt).toBeTruthy();
     expect(response.body.disk.freeBytes).toBeGreaterThan(0);
     expect(JSON.stringify(response.body)).not.toMatch(/must-not-leak|smtp-secret-error|monitor-normal-user/);
   });
@@ -41,7 +44,7 @@ describe('private operational probes', () => {
     const transaction = vi.spyOn(ctx.db, 'transaction').mockRejectedValueOnce(new Error('private database connection string'));
     try {
       const response = await request(ctx.app).get('/api/internal/operations').set('Authorization', `Bearer ${ctx.config.MONITORING_TOKEN}`).expect(200);
-      expect(response.body.database).toEqual({ ok: false, email: null });
+      expect(response.body.database).toEqual({ ok: false, email: null, retention: null });
       expect(JSON.stringify(response.body)).not.toContain('private database');
     } finally { transaction.mockRestore(); }
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { knownMarketplacePath, staticPageSeo } from '../../packages/shared/src/seo';
+import { categoryPageSeo, knownMarketplacePath, seoStructuredData, staticPageSeo } from '../../packages/shared/src/seo';
 import { renderSeoHtml } from '../../apps/api/src/services/seo';
 
 describe('SEO metadata and safe HTML', () => {
@@ -17,6 +17,21 @@ describe('SEO metadata and safe HTML', () => {
     expect(knownMarketplacePath('/privacy')).toBe(true);
     expect(knownMarketplacePath('/listing/id/edit')).toBe(true);
     expect(knownMarketplacePath('/missing')).toBe(false);
+  });
+  it('gives categories their own canonical, pagination and structured breadcrumbs', () => {
+    const metadata = categoryPageSeo('https://uni.rocks', { name: 'Books & notes', slug: 'books-notes' }, '?page=2&utm_source=club');
+    expect(metadata.title).toBe('Books & notes | Uni Rocks Marketplace');
+    expect(metadata.canonical).toBe('https://uni.rocks/marketplace/category/books-notes?page=2');
+    expect(metadata.robots).toMatch(/^index/);
+    expect(categoryPageSeo('https://uni.rocks', { name: 'Books', slug: 'books' }, '?q=private').robots).toMatch(/^noindex/);
+    const graph = seoStructuredData(metadata)['@graph'];
+    expect(graph).toEqual(expect.arrayContaining([
+      expect.objectContaining({ '@type': 'WebSite', name: 'Uni Rocks', url: 'https://uni.rocks/' }),
+      expect.objectContaining({ '@type': 'BreadcrumbList', itemListElement: expect.arrayContaining([
+        expect.objectContaining({ position: 2, name: 'Marketplace', item: 'https://uni.rocks/marketplace' }),
+        expect.objectContaining({ position: 4, name: 'Books & notes' }),
+      ]) }),
+    ]));
   });
   it('escapes untrusted values and emits a single metadata set', () => {
     const metadata = { ...staticPageSeo('https://uni.rocks', '/'), title: '</title><script>alert(1)</script>', description: '" onload="alert(1) & $& </script>' };

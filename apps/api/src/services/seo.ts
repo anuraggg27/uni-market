@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { idSchema, knownMarketplacePath, marketplaceHeroDescription, marketplaceHeroTitle, publicSeoPages, seoPath, staticPageSeo, type SeoMetadata } from '@campus-market/shared';
+import { categoryDescription, categoryPageSeo, categoryPath, idSchema, knownMarketplacePath, marketplaceHeroDescription, marketplaceHeroTitle, publicSeoPages, seoPath, seoStructuredData, staticPageSeo, type SeoMetadata } from '@campus-market/shared';
 import type { Database } from '../db/client.js';
-import { listingImages, listings, users } from '../db/schema.js';
+import { categories, listingImages, listings, users } from '../db/schema.js';
 
 // SEO must never publish a draft or bypass image moderation/account removal.
 const visibleListing = and(
@@ -37,20 +37,38 @@ function listingLinks(rows: PublicListing[]): string {
 
 export interface SeoPage { metadata: SeoMetadata; content: string; status: number }
 
+export function publicCategories(db: Database) {
+  return db.select({ id: categories.id, name: categories.name, slug: categories.slug }).from(categories).where(eq(categories.active, true)).orderBy(asc(categories.sortOrder), asc(categories.name));
+}
+
+function categoryLinks(rows: Array<{ name: string; slug: string }>, descriptions = false): string {
+  return `<nav aria-label="Marketplace categories"><ul>${rows.map((category) => `<li><a href="/marketplace${categoryPath(category.slug)}">${escapeHtml(category.name)}</a>${descriptions ? `<p>${escapeHtml(categoryDescription(category))}</p>` : ''}</li>`).join('')}</ul></nav>`;
+}
+
 export async function getSeoPage(db: Database, origin: string, pathname: string, search = ''): Promise<SeoPage> {
   const path = seoPath(pathname);
-  const metadata = staticPageSeo(origin, path, search);
-  if (path === '/' || path === '/browse') {
+  let metadata = staticPageSeo(origin, path, search);
+  const categoryMatch = /^\/category\/([a-z0-9-]+)$/.exec(path);
+  const categoryRowsQuery = path === '/' || path === '/browse' || path === '/categories' || categoryMatch ? publicCategories(db) : Promise.resolve([]);
+  const categoryRows = categoryMatch ? await categoryRowsQuery : [];
+  const category = categoryMatch ? categoryRows.find((item) => item.slug === categoryMatch[1]) : undefined;
+  if (categoryMatch && !category) return { metadata, content: '<h1>Category not found</h1>', status: 404 };
+  if (category) metadata = categoryPageSeo(origin, category, search);
+  if (path === '/categories') return { metadata, content: `<h1>Categories</h1><p>${escapeHtml(metadata.description)}</p>${categoryLinks(await categoryRowsQuery, true)}`, status: 200 };
+  if (path === '/' || path === '/browse' || category) {
     const params = new URLSearchParams(search);
     const page = /^\d{1,6}$/.test(params.get('page') ?? '') ? Math.max(1, Number(params.get('page'))) : 1;
     // Filtered/search pages are noindex and remain interactive; do not serve
     // unrelated unfiltered listings in their initial HTML.
-    const filtered = path === '/browse' && metadata.robots.startsWith('noindex');
-    const rows = filtered ? [] : await db.select(seoListingFields).from(listings).where(searchableListing).orderBy(desc(listings.approvedAt), desc(listings.id)).limit(25).offset(path === '/' ? 0 : (page - 1) * 24);
-    const title = path === '/' ? marketplaceHeroTitle : 'Browse products';
+    const filtered = path !== '/' && metadata.robots.startsWith('noindex');
+    const [rows, navigationCategories] = await Promise.all([
+      filtered ? [] : db.select(seoListingFields).from(listings).where(and(searchableListing, category ? eq(listings.categoryId, category.id) : undefined)).orderBy(desc(listings.approvedAt), desc(listings.id)).limit(25).offset(path === '/' ? 0 : (page - 1) * 24),
+      category ? categoryRows : categoryRowsQuery,
+    ]);
+    const title = path === '/' ? marketplaceHeroTitle : category?.name ?? 'Browse products';
     const description = path === '/' ? marketplaceHeroDescription : metadata.description;
-    const content = `<h1>${title}</h1><p>${escapeHtml(description)}</p>${filtered ? '<p>Enable JavaScript to search and filter products.</p>' : listingLinks(rows.slice(0, 24))}${rows.length > 24 && path === '/browse' ? `<a href="/marketplace/browse?page=${page + 1}">Next page</a>` : ''}${page > 1 && path === '/browse' ? `<a href="/marketplace/browse${page > 2 ? `?page=${page - 1}` : ''}">Previous page</a>` : ''}`;
-    if (path === '/browse' && page > 1 && !rows.length && !filtered) return { metadata: { ...metadata, robots: 'noindex, follow' }, content: '<h1>Page not found</h1>', status: 404 };
+    const content = `<h1>${escapeHtml(title)}</h1><p>${escapeHtml(description)}</p>${categoryLinks(navigationCategories)}${filtered ? '<p>Enable JavaScript to search and filter products.</p>' : listingLinks(rows.slice(0, 24))}${rows.length > 24 && path !== '/' ? `<a href="/marketplace${path}?page=${page + 1}">Next page</a>` : ''}${page > 1 && path !== '/' ? `<a href="/marketplace${path}${page > 2 ? `?page=${page - 1}` : ''}">Previous page</a>` : ''}`;
+    if (path !== '/' && page > 1 && !rows.length && !filtered) return { metadata: { ...metadata, robots: 'noindex, follow' }, content: '<h1>Page not found</h1>', status: 404 };
     return { metadata, content, status: 200 };
   }
   const listingMatch = /^\/listing\/([^/]+)$/.exec(path);
@@ -61,7 +79,7 @@ export async function getSeoPage(db: Database, origin: string, pathname: string,
       const [image] = await db.select({ id: listingImages.id }).from(listingImages).where(and(eq(listingImages.listingId, id), isNull(listingImages.deletedAt), sql`${listingImages.objectKey} is not null`, sql`${listingImages.finalizedAt} is not null`)).orderBy(asc(listingImages.position)).limit(1);
       const price = listingPrice(item);
       return {
-        metadata: { ...metadata, title: `${item.title} | Uni Marketplace`, description: `${price} · ${item.location}. ${item.description}`.replace(/\s+/g, ' ').slice(0, 160), robots: item.lifecycleState === 'SOLD' ? 'noindex, follow' : 'index, follow, max-image-preview:large', ...(image && item.lifecycleState !== 'SOLD' ? { image: new URL(`/media/listings/${id}/${image.id}`, origin).href, imageAlt: item.title } : {}) },
+        metadata: { ...metadata, title: `${item.title} | Uni Rocks Marketplace`, description: `${price} · ${item.location}. ${item.description}`.replace(/\s+/g, ' ').slice(0, 160), breadcrumbs: [...metadata.breadcrumbs!, { name: item.title, url: metadata.canonical }], robots: item.lifecycleState === 'SOLD' ? 'noindex, follow' : 'index, follow, max-image-preview:large', ...(image && item.lifecycleState !== 'SOLD' ? { image: new URL(`/media/listings/${id}/${image.id}`, origin).href, imageAlt: item.title } : {}) },
         content: `<h1>${escapeHtml(item.title)}</h1><p>${item.lifecycleState === 'SOLD' ? 'Sold · ' : item.lifecycleState === 'RESERVED' ? 'Reserved · ' : ''}${escapeHtml(price)} · ${escapeHtml(item.location)} · ${escapeHtml(item.condition.replaceAll('_', ' ').toLowerCase())}</p><p>${escapeHtml(item.description)}</p><p><a href="/marketplace/login">Sign in to contact the seller</a></p>`,
         status: 200,
       };
@@ -77,11 +95,11 @@ export function renderSeoHtml(template: string, page: SeoPage, path: string, ori
   const meta = (name: string, content: string, property = false) => `<meta ${property ? 'property' : 'name'}="${name}" content="${escapeHtml(content)}" data-seo>`;
   // Query strings can contain private tracking tokens; metadata never needs them.
   const serialized = JSON.stringify({ path: path.split('?')[0], metadata }).replace(/</g, '\\u003c');
-  const structured = JSON.stringify({ '@context': 'https://schema.org', '@type': 'WebPage', name: metadata.title, description: metadata.description, url: metadata.canonical, isPartOf: { '@type': 'WebSite', name: 'Uni Market', alternateName: 'Uni Marketplace', url: new URL('/marketplace', origin).href } }).replace(/</g, '\\u003c');
+  const structured = JSON.stringify(seoStructuredData(metadata)).replace(/</g, '\\u003c');
   const head = [
     `<title data-seo>${escapeHtml(metadata.title)}</title>`, meta('description', metadata.description), meta('robots', metadata.robots),
     `<link rel="canonical" href="${escapeHtml(metadata.canonical)}" data-seo>`, meta('seo-origin', origin),
-    meta('og:site_name', 'Uni Market', true), meta('og:type', 'website', true), meta('og:locale', 'en_IN', true),
+    meta('og:site_name', 'Uni Rocks', true), meta('og:type', 'website', true), meta('og:locale', 'en_IN', true),
     meta('og:title', metadata.title, true), meta('og:description', metadata.description, true), meta('og:url', metadata.canonical, true),
     meta('twitter:card', metadata.image ? 'summary_large_image' : 'summary'),
     meta('twitter:title', metadata.title), meta('twitter:description', metadata.description),
@@ -89,6 +107,6 @@ export function renderSeoHtml(template: string, page: SeoPage, path: string, ori
     `<script type="application/json" id="seo-data">${serialized}</script>`,
     ...(metadata.robots.startsWith('index') ? [`<script type="application/ld+json" data-seo>${structured}</script>`] : []),
   ].join('\n');
-  const body = `<div id="root"><div class="page"><nav aria-label="Marketplace"><a href="/marketplace">Uni Market</a> · <a href="/marketplace/browse">Browse</a> · <a href="/marketplace/sell">Sell</a></nav><main>${page.content}</main><footer><a href="/marketplace/terms">Terms</a> · <a href="/marketplace/privacy">Privacy</a></footer></div></div>`;
+  const body = `<div id="root"><div class="page"><nav aria-label="Marketplace"><a href="/marketplace">Uni Market</a> · <a href="/marketplace/browse">Browse</a> · <a href="/marketplace/categories">Categories</a> · <a href="/marketplace/sell">Sell</a></nav><main>${page.content}</main><footer><a href="/marketplace/terms">Terms</a> · <a href="/marketplace/privacy">Privacy</a></footer></div></div>`;
   return template.replace(/<title\b[^>]*>[\s\S]*?<\/title>/gi, '').replace(/<meta\b[^>]*name=["'](?:description|robots)["'][^>]*>/gi, '').replace('</head>', () => `${head}\n</head>`).replace('<div id="root"></div>', () => body);
 }

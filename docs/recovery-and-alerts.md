@@ -17,12 +17,13 @@ An independent, owner-only local recovery copy of the backup encryption key is s
 | Check | Schedule / trigger | Incident condition |
 | --- | --- | --- |
 | Public health and marketplace page | External GitHub runner, every 30 minutes | Either endpoint fails two bounded checks |
-| Database | Protected operations probe | Email-queue query cannot complete successfully |
+| Database | Protected operations probe | Email-queue or retention-status queries cannot complete successfully |
 | Droplet space and inodes | Protected operations probe | At least 85% used, or less than 1 GiB available |
 | MSG91 server verification | Aggregate previous hour | At least one provider/network failure; invalid customer codes are not counted |
 | Browser MSG91 widget | Aggregate previous hour | At least three reported failures, and at least half of observed outcomes fail |
 | SMTP delivery and worker | Aggregate previous hour | At least one delivery or worker failure |
 | Email queue | Database-backed, survives app restarts | Pending email older than 15 minutes, or exhausted retries in the last 24 hours |
+| Retention worker | Database-backed, survives app restarts | Latest run failed, or no completed run within 30 hours; five-minute first-start grace |
 | Database backup and restore | Daily, 21:47 UTC / 03:17 IST | Dump, encryption, restore, R2 upload or read-back verification fails |
 | Backup freshness | External check every 30 minutes | No successful restore-tested backup with matching private R2 objects in 30 hours |
 

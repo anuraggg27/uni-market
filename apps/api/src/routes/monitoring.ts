@@ -1,11 +1,11 @@
 import { statfs } from 'node:fs/promises';
 import { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
-import { sql } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Database } from '../db/client.js';
 import type { AppConfig } from '../config.js';
-import { emailOutbox } from '../db/schema.js';
+import { emailOutbox, retentionRuns } from '../db/schema.js';
 import { safeEqual } from '../lib/crypto.js';
 import { asyncRoute } from '../lib/errors.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -28,8 +28,10 @@ export function monitoringRouter(db: Database, config: AppConfig): Router {
         failed: sql<number>`count(*) FILTER (WHERE failed_at > now() - interval '24 hours' AND sent_at IS NULL AND suppressed_at IS NULL)::int`,
         oldestPendingSeconds: sql<number>`COALESCE(EXTRACT(EPOCH FROM (now() - min(created_at) FILTER (WHERE sent_at IS NULL AND suppressed_at IS NULL AND failed_at IS NULL AND template <> 'student-email-otp'))), 0)::int`,
       }).from(emailOutbox);
-      return email!;
-    }).then((email) => ({ ok: true, email })).catch(() => ({ ok: false, email: null }));
+      const [latest] = await tx.select({ status: retentionRuns.status, startedAt: retentionRuns.startedAt, completedAt: retentionRuns.completedAt }).from(retentionRuns).orderBy(desc(retentionRuns.startedAt)).limit(1);
+      const [success] = await tx.select({ completedAt: retentionRuns.completedAt }).from(retentionRuns).where(eq(retentionRuns.status, 'COMPLETED')).orderBy(desc(retentionRuns.completedAt)).limit(1);
+      return { email: email!, retention: { mode: config.RETENTION_MODE, latest: latest ?? null, lastCompletedAt: success?.completedAt ?? null } };
+    }).then((checks) => ({ ok: true, ...checks })).catch(() => ({ ok: false, email: null, retention: null }));
     const disk = await statfs('/').then((value) => ({
       usedPercent: value.blocks > 0 ? Math.ceil(100 * (1 - value.bavail / value.blocks)) : null,
       freeBytes: value.bavail * value.bsize,

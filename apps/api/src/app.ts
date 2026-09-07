@@ -225,7 +225,17 @@ export function createApp(deps: {
   app.use("/api/admin", adminRouter(db, config, storage));
   if (config.NODE_ENV === "production" || deps.webIndexHtml !== undefined) {
     const webRoot = fileURLToPath(new URL("../../web/dist", import.meta.url));
-    app.get("/", (_req, res) => res.redirect(302, MARKETPLACE_BASE_PATH));
+    app.get("/", (req, res) => res.set('Cache-Control', 'public, max-age=3600').redirect(301, `${MARKETPLACE_BASE_PATH}${req.originalUrl.slice(1)}`));
+    // Root favicon URLs remain stable even as more products are added later.
+    // Uni Rocks and Marketplace share one brand; no profile/header logo changes.
+    for (const icon of ['favicon.png', 'favicon.ico', 'apple-touch-icon.png', 'favicon-96x96.png', 'favicon-48x48.png', 'favicon-32x32.png', 'favicon-16x16.png']) {
+      app.get(`/${icon}`, (_req, res) => res.redirect(301, `${MARKETPLACE_BASE_PATH}/${icon === 'favicon.png' ? 'favicon-96x96.png' : icon}`));
+    }
+    // URLs indexed before the /marketplace move must not become SPA login pages.
+    // Only migrate known product routes; leave room for future Uni products.
+    app.get(/^\/(browse|categories|category\/[a-z0-9-]+|listing\/[^/]+(?:\/edit)?|seller\/[^/]+|login|support(?:\/[^/]+)?|terms|privacy|seller-policy|community-rules|prohibited-items|marketplace-disclosure|grievance(?:\/track)?|settings|profile|sell|my-listings|saved|chats(?:\/[^/]+)?|requests|transactions|notifications|leaderboard)\/?$/, (req, res) => {
+      res.set('Cache-Control', 'private, no-store').redirect(301, `${MARKETPLACE_BASE_PATH}${req.originalUrl}`);
+    });
     app.use(
       MARKETPLACE_BASE_PATH,
       express.static(webRoot, {

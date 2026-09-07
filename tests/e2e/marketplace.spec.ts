@@ -276,7 +276,7 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   await expect(
     page.getByRole("heading", { name: "Engineering mechanics book", level: 1 }),
   ).toBeVisible();
-  await expect(page).toHaveTitle('Engineering mechanics book | Uni Marketplace');
+  await expect(page).toHaveTitle('Engineering mechanics book | Uni Rocks Marketplace');
   await expect(page.locator('head meta[name="robots"]')).toHaveAttribute('content', /^index/);
   await expect(page.locator('head meta[property="og:image"]')).toHaveAttribute('content', new RegExp(`/media/listings/${listingId}/`));
   const guest = await browser.newContext();

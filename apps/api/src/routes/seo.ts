@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
-import { idSchema, publicSeoPages } from '@campus-market/shared';
+import { categoryPath, idSchema, publicSeoPages } from '@campus-market/shared';
 import type { AppConfig } from '../config.js';
 import type { Database } from '../db/client.js';
-import { listingImages, listings } from '../db/schema.js';
+import { categories, listingImages, listings } from '../db/schema.js';
 import { AppError, asyncRoute } from '../lib/errors.js';
-import { escapeHtml, getSeoPage, renderSeoHtml, searchableListing } from '../services/seo.js';
+import { escapeHtml, getSeoPage, publicCategories, renderSeoHtml, searchableListing } from '../services/seo.js';
 import type { StorageService } from '../services/storage.js';
 
 const SITEMAP_PAGE_SIZE = 1000;
@@ -24,9 +24,10 @@ export function seoRouter(db: Database, config: AppConfig, storage: StorageServi
     const paths = ['/sitemap-static.xml', ...Array.from({ length: pages }, (_, index) => `/sitemap-listings-${index + 1}.xml`)];
     res.type('application/xml').set('Cache-Control', 'public, max-age=60').send(`<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${paths.map((path) => `<sitemap><loc>${absolute(path)}</loc></sitemap>`).join('')}</sitemapindex>`);
   }));
-  router.get('/sitemap-static.xml', (_req, res) => {
-    res.type('application/xml').set('Cache-Control', 'public, max-age=300').send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${Object.keys(publicSeoPages).map((path) => `<url><loc>${absolute(`/marketplace${path === '/' ? '' : path}`)}</loc></url>`).join('')}</urlset>`);
-  });
+  router.get('/sitemap-static.xml', asyncRoute(async (_req, res) => {
+    const paths = [...Object.keys(publicSeoPages), ...(await publicCategories(db)).map((category) => categoryPath(category.slug))];
+    res.type('application/xml').set('Cache-Control', 'public, max-age=300').send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${paths.map((path) => `<url><loc>${absolute(`/marketplace${path === '/' ? '' : path}`)}</loc></url>`).join('')}</urlset>`);
+  }));
   router.get(/^\/sitemap-listings-([1-9]\d{0,4})\.xml$/, asyncRoute(async (req, res) => {
     const page = Number(req.params[0]);
     const rows = await db.select({ id: listings.id, updatedAt: listings.updatedAt }).from(listings).where(searchableListing).orderBy(asc(listings.id)).limit(SITEMAP_PAGE_SIZE).offset((page - 1) * SITEMAP_PAGE_SIZE);
@@ -35,8 +36,9 @@ export function seoRouter(db: Database, config: AppConfig, storage: StorageServi
   }));
   router.get('/api/seo', asyncRoute(async (req, res) => {
     const path = typeof req.query.path === 'string' ? req.query.path : '';
-    if (!/^\/listing\/[^/]+$/.test(path) || path.length > 100) throw new AppError(400, 'INVALID_SEO_PATH', 'Invalid page');
-    const page = await getSeoPage(db, origin, path);
+    if (!/^\/(?:listing\/[^/]+|category\/[a-z0-9-]+)$/.test(path) || path.length > 150) throw new AppError(400, 'INVALID_SEO_PATH', 'Invalid page');
+    const search = typeof req.query.search === 'string' ? req.query.search.slice(0, 2000) : '';
+    const page = await getSeoPage(db, origin, path, search);
     // Metadata only, never private listing records or rendered HTML.
     res.set('Cache-Control', 'no-store').set('X-Robots-Tag', 'noindex').json({ data: page.metadata });
   }));
@@ -56,6 +58,20 @@ export function marketplaceHtmlRouter(db: Database, config: AppConfig, template:
   const render = asyncRoute(async (req, res) => {
     const path = req.path.slice('/marketplace'.length) || '/';
     const search = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+    if (req.path.endsWith('/')) {
+      res.redirect(301, `/marketplace${path.replace(/\/+$/, '')}${search}`);
+      return;
+    }
+    // Consolidate old category-filter links into the public category route.
+    const params = new URLSearchParams(search);
+    if (path === '/browse' && idSchema.safeParse(params.get('category')).success) {
+      const [category] = await db.select({ slug: categories.slug }).from(categories).where(and(eq(categories.id, params.get('category')!), eq(categories.active, true))).limit(1);
+      if (category) {
+        params.delete('category');
+        res.redirect(301, `/marketplace${categoryPath(category.slug)}${params.size ? `?${params}` : ''}`);
+        return;
+      }
+    }
     const page = await getSeoPage(db, origin, path, search);
     // Keep owner/moderator draft previews working without publishing their data.
     if (page.status === 404 && req.auth && /^\/listing\/[^/]+$/.test(path)) {

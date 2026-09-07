@@ -18,6 +18,16 @@ export function evaluateMetrics(metrics, now = Date.now()) {
   }
   const mail = metrics.database?.email;
   if (metrics.database?.ok) {
+    const retention = metrics.database.retention;
+    const lastCompleted = Date.parse(retention?.lastCompletedAt);
+    const starting = Number.isFinite(Date.parse(metrics.startedAt)) && now - Date.parse(metrics.startedAt) < 5 * 60_000;
+    if (!retention || !['dry-run', 'enforce'].includes(retention.mode)) {
+      issues.push('Retention worker metrics could not be read.');
+    } else if (retention.latest?.status === 'FAILED') {
+      issues.push('The latest retention run failed; inspect the private retention audit.');
+    } else if ((!Number.isFinite(lastCompleted) && !starting) || (Number.isFinite(lastCompleted) && now - lastCompleted > 30 * 60 * 60_000)) {
+      issues.push('No successful retention run in the last 30 hours.');
+    }
     if (!mail || ![mail.failed, mail.pending, mail.oldestPendingSeconds].every(validCount)) {
       issues.push('Email queue metrics could not be read.');
     } else {

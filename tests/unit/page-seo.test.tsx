@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it } from 'vitest';
-import { staticPageSeo } from '../../packages/shared/src/seo';
+import { categoryPageSeo, staticPageSeo } from '../../packages/shared/src/seo';
 import { applyPageSeo } from '../../apps/web/src/components/PageSeo';
 
 afterEach(() => { document.head.replaceChildren(); });
@@ -20,4 +20,8 @@ it('replaces public metadata when navigating to an account page and back', () =>
   expect(document.querySelectorAll('link[rel="canonical"]')).toHaveLength(1);
   expect(document.querySelectorAll('meta[name="description"]')).toHaveLength(1);
   expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toMatch(/^index/);
+  applyPageSeo(categoryPageSeo('https://uni.rocks', { name: 'Books', slug: 'books' }));
+  const structured = JSON.parse(document.querySelector('script[type="application/ld+json"]')!.textContent!);
+  expect(structured['@graph']).toEqual(expect.arrayContaining([expect.objectContaining({ '@type': 'BreadcrumbList' })]));
+  expect(document.querySelector('meta[property="og:site_name"]')?.getAttribute('content')).toBe('Uni Rocks');
 });
