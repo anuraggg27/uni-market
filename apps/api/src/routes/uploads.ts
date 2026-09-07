@@ -1,5 +1,5 @@
 import express, { Router } from 'express';
-import { and, count, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { idSchema } from '@campus-market/shared';
 import type { AppConfig } from '../config.js';
@@ -28,14 +28,24 @@ export function uploadsRouter(db: Database, config: AppConfig, storage: StorageS
   router.post('/uploads/listings/:listingId/presign', requireVerified, asyncRoute(async (req, res) => {
     const listingId = idSchema.parse(req.params.listingId);
     const input = z.object({ mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']), byteSize: z.number().int().positive() }).strict().parse(req.body);
-    const listing = (await db.select().from(listings).where(and(eq(listings.id, listingId), eq(listings.sellerId, req.auth!.userId), isNull(listings.deletedAt))).limit(1))[0];
-    if (!listing) throw new AppError(404, 'LISTING_NOT_FOUND', 'Listing not found');
-    if (['SOLD', 'RESERVED'].includes(listing.lifecycleState)) throw new AppError(409, 'LISTING_LOCKED', 'Images cannot be changed now');
-    const existing = await db.select({ value: count() }).from(listingImages).where(and(eq(listingImages.listingId, listingId), isNull(listingImages.deletedAt)));
-    if ((existing[0]?.value ?? 0) >= config.MAX_LISTING_IMAGES) throw new AppError(400, 'IMAGE_LIMIT_REACHED', `A listing can have up to ${config.MAX_LISTING_IMAGES} images`);
-    const ticket = await storage.createUploadTicket(req.auth!.userId, listingId, input.mimeType, input.byteSize);
-    const image = (await db.insert(listingImages).values({ listingId, ownerId: req.auth!.userId, tempKey: ticket.tempKey, mimeType: input.mimeType, byteSize: input.byteSize, position: Number(existing[0]?.value ?? 0), syntheticStatus: 'NOT_SYNTHETIC', syntheticDeclaredAt: new Date() }).returning({ id: listingImages.id }))[0]!;
-    res.status(201).json({ data: { imageId: image.id, ...ticket } });
+    const data = await db.transaction(async (tx) => {
+      // Lock the parent even when it has no photos. Every allocator for this
+      // listing must finish its count + position + insert before another starts.
+      const [listing] = await tx.select().from(listings).where(and(eq(listings.id, listingId), eq(listings.sellerId, req.auth!.userId), isNull(listings.deletedAt))).limit(1).for('update');
+      if (!listing) throw new AppError(404, 'LISTING_NOT_FOUND', 'Listing not found');
+      if (['SOLD', 'RESERVED'].includes(listing.lifecycleState)) throw new AppError(409, 'LISTING_LOCKED', 'Images cannot be changed now');
+      const [allocation] = await tx.select({
+        activeCount: sql<number>`count(*) filter (where ${listingImages.deletedAt} is null)::int`,
+        // Soft-deleted rows still belong to the unique position index. Do not
+        // reuse their positions, or treat the active count as an image ordinal.
+        nextPosition: sql<number>`coalesce(max(${listingImages.position}), -1) + 1`,
+      }).from(listingImages).where(eq(listingImages.listingId, listingId));
+      if (allocation!.activeCount >= config.MAX_LISTING_IMAGES) throw new AppError(400, 'IMAGE_LIMIT_REACHED', `A listing can have up to ${config.MAX_LISTING_IMAGES} images`);
+      const ticket = await storage.createUploadTicket(req.auth!.userId, listingId, input.mimeType, input.byteSize);
+      const [image] = await tx.insert(listingImages).values({ listingId, ownerId: req.auth!.userId, tempKey: ticket.tempKey, mimeType: input.mimeType, byteSize: input.byteSize, position: allocation!.nextPosition, syntheticStatus: 'NOT_SYNTHETIC', syntheticDeclaredAt: new Date() }).returning({ id: listingImages.id });
+      return { imageId: image!.id, ...ticket };
+    });
+    res.status(201).json({ data });
   }));
 
   router.post('/uploads/listings/:listingId/finalize', requireVerified, asyncRoute(async (req, res) => {

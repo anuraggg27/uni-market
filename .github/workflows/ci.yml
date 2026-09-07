@@ -40,7 +40,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run test:unit
       - run: LOG_LEVEL=silent npm run test:integration
-      - name: Verify retention with the production PostgreSQL adapter
+      - name: Verify retention and upload concurrency with the production PostgreSQL adapter
         run: npm run test:postgres
         env:
           LOG_LEVEL: silent

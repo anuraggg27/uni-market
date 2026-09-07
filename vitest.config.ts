@@ -8,7 +8,10 @@ export default defineConfig({
           name: "postgres",
           include: ["tests/postgres/**/*.test.ts"],
           environment: "node",
-          fileParallelism: false,
+          // Vitest 3 uses the root pool setting for file parallelism. The
+          // test:postgres script supplies --no-file-parallelism because these
+          // suites migrate the same disposable database; requests within each
+          // upload concurrency test still use independent database connections.
           testTimeout: 20_000,
           hookTimeout: 30_000,
         },
