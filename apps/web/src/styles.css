@@ -7938,6 +7938,26 @@ h3,
   letter-spacing: 0;
 }
 
+.home-hero {
+  isolation: isolate;
+}
+
+.home-hero::after {
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 1;
+  height: clamp(120px, 15vw, 210px);
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    color-mix(in srgb, var(--color-canvas) 24%, transparent) 34%,
+    color-mix(in srgb, var(--color-canvas) 72%, transparent) 70%,
+    var(--color-canvas) 100%
+  );
+}
+
 .brand,
 .site-footer-wordmark {
   font-weight: 700;
