@@ -1,6 +1,18 @@
 import { expect, test, type BrowserContext } from "@playwright/test";
 
 const API = "http://127.0.0.1:" + (process.env.E2E_API_PORT ?? "4000");
+const ADMIN_SECTION_ROUTES = [
+  "/marketplace/admin",
+  "/marketplace/admin/listings/pending",
+  "/marketplace/admin/reports",
+  "/marketplace/admin/grievances",
+  "/marketplace/admin/users",
+  "/marketplace/admin/reviews",
+  "/marketplace/admin/support",
+  "/marketplace/admin/audit-logs",
+  "/marketplace/admin/categories",
+  "/marketplace/admin/compliance",
+] as const;
 
 async function signInAsAdmin(context: BrowserContext) {
   const request = context.request;
@@ -75,11 +87,32 @@ test("admin dashboard preserves real data and stays responsive at supported widt
 
   await page.setViewportSize({ width: 375, height: 800 });
   await page.getByRole("button", { name: "Open admin navigation" }).click();
-  await expect(
-    page.getByRole("dialog").getByRole("link", { name: "Compliance registers" }),
-  ).toBeVisible();
+  const adminDialog = page.getByRole("dialog");
+  const adminLinks = adminDialog.getByRole("navigation", { name: "Admin sections" }).getByRole("link");
+  await expect(adminLinks).toHaveCount(10);
+  await expect(adminDialog.getByRole("link", { name: "Compliance registers" })).toBeInViewport();
+  const firstLink = await adminLinks.nth(0).boundingBox();
+  const secondLink = await adminLinks.nth(1).boundingBox();
+  expect(firstLink).not.toBeNull();
+  expect(secondLink).not.toBeNull();
+  expect(Math.abs(secondLink!.x - firstLink!.x)).toBeLessThanOrEqual(1);
+  expect(secondLink!.y).toBeGreaterThan(firstLink!.y);
+  expect(await adminDialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toBeHidden();
+
+  for (const width of [430, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const route of ADMIN_SECTION_ROUTES) {
+      await page.goto(route);
+      await expect(page.getByRole("button", { name: "Open admin navigation" })).toBeVisible();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth),
+        route + " must not overflow at " + width + "px",
+      ).toBe(false);
+    }
+  }
+
   await context.close();
 });
 test('admin user detail uses real signals and responsive card ordering', async ({ browser }) => {

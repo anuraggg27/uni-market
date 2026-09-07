@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -91,6 +91,27 @@ const CATEGORY_CARD_DESCRIPTIONS: Record<string, string> = {
   other: "Useful campus finds from fellow students",
 };
 
+const HOME_MOBILE_CATEGORY_PRIORITY = [
+  "books-notes",
+  "books",
+  "electronics",
+  "furniture",
+  "cycles-transport",
+  "cycles",
+  "clothing",
+] as const;
+
+function mobileCategoryShortcuts(categories: MarketplaceCategory[]) {
+  return [...categories]
+    .sort((left, right) => {
+      const leftPriority = HOME_MOBILE_CATEGORY_PRIORITY.indexOf(left.slug as (typeof HOME_MOBILE_CATEGORY_PRIORITY)[number]);
+      const rightPriority = HOME_MOBILE_CATEGORY_PRIORITY.indexOf(right.slug as (typeof HOME_MOBILE_CATEGORY_PRIORITY)[number]);
+      return (leftPriority < 0 ? Number.MAX_SAFE_INTEGER : leftPriority)
+        - (rightPriority < 0 ? Number.MAX_SAFE_INTEGER : rightPriority);
+    })
+    .slice(0, 5);
+}
+
 function categoryCardIcon(category: MarketplaceCategory) {
   const value = `${category.slug} ${category.name}`.toLowerCase();
   if (/book|note|academic|study/.test(value)) return BookOpen;
@@ -106,6 +127,9 @@ function categoryCardIcon(category: MarketplaceCategory) {
 
 function BrowseByCategory({ categories }: { categories: MarketplaceCategory[] }) {
   if (!categories.length) return null;
+  const mobileShortcutOrder = new Map(
+    mobileCategoryShortcuts(categories).map((category, index) => [category.id, index]),
+  );
 
   return (
     <section className="section home-category-section" aria-labelledby="home-category-heading">
@@ -120,7 +144,14 @@ function BrowseByCategory({ categories }: { categories: MarketplaceCategory[] })
         {categories.slice(0, 8).map((category) => {
           const Icon = categoryCardIcon(category);
           return (
-            <Link aria-label={category.name} className="home-category-card" key={category.id} to={categoryPath(category.slug)}>
+            <Link
+              aria-label={category.name}
+              className="home-category-card"
+              data-mobile-shortcut={mobileShortcutOrder.has(category.id) ? "true" : "false"}
+              key={category.id}
+              style={{ "--mobile-category-order": mobileShortcutOrder.get(category.id) ?? 6 } as CSSProperties}
+              to={categoryPath(category.slug)}
+            >
               <span className="home-category-icon" aria-hidden="true"><Icon /></span>
               <span className="home-category-copy">
                 <strong>{category.name}</strong>
@@ -130,21 +161,18 @@ function BrowseByCategory({ categories }: { categories: MarketplaceCategory[] })
             </Link>
           );
         })}
+        <Link
+          aria-label="All categories"
+          className="home-category-card home-category-card-all"
+          style={{ "--mobile-category-order": 5 } as CSSProperties}
+          to="/categories"
+        >
+          <span className="home-category-icon" aria-hidden="true"><Shapes /></span>
+          <span className="home-category-copy"><strong>All categories</strong></span>
+          <ChevronRight className="home-category-arrow" aria-hidden="true" />
+        </Link>
       </nav>
     </section>
-  );
-}
-
-function CategoryLinks({ categories, selected }: { categories: MarketplaceCategory[]; selected?: string | undefined }) {
-  return (
-    <nav className="category-links" aria-label="Marketplace categories">
-      <Link to="/categories">All categories</Link>
-      {categories.map((category) => (
-        <Link key={category.id} to={categoryPath(category.slug)} aria-current={selected === category.slug ? "page" : undefined}>
-          {category.name}
-        </Link>
-      ))}
-    </nav>
   );
 }
 
@@ -305,9 +333,9 @@ export function HomePage() {
       </section>
 
       {/* ─── Marketplace Content ─── */}
-      <div className="page pt-2 pb-24">
-        <ProductSection title="Recently added" query={recent} />
+      <div className="page home-content pt-2 pb-24">
         <BrowseByCategory categories={categories.data ?? []} />
+        <ProductSection title="Recently added" query={recent} />
         <ProductSection title="Popular right now" query={popular} />
         {user ? (
           <ProductSection
@@ -351,8 +379,8 @@ function ProductSection({
   query: ReturnType<typeof useListings>;
 }) {
   return (
-    <section className="section">
-      <div className="mb-6 flex items-baseline justify-between border-b border-line pb-3">
+    <section className="section home-product-section">
+      <div className="home-product-section-header mb-6 flex items-baseline justify-between border-b border-line pb-3">
         <h2 className="text-2xl font-semibold tracking-[-0.025em] text-ink">
           {title}
         </h2>
@@ -360,7 +388,7 @@ function ProductSection({
           to="/browse"
           className="group flex items-center gap-1 text-[14px] font-medium text-muted hover:text-ink transition-colors"
         >
-          <span>Browse all</span>
+          <span>View all</span>
           <span className="transition-transform duration-150 group-hover:translate-x-0.5">
             →
           </span>
@@ -510,8 +538,6 @@ export function BrowsePage() {
           </p>
         </div>
       </div>
-
-      <CategoryLinks categories={availableCategories} selected={categorySlug} />
 
       <form
         className="mb-8 hidden rounded-[20px] border border-line bg-surface p-5 shadow-[0_8px_30px_rgba(17,24,39,0.025)] md:block lg:p-6"

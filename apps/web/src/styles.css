@@ -195,20 +195,6 @@ button:disabled {
   }
 }
 
-.category-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 20px;
-  margin: 0 0 32px;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--color-line);
-  font-size: 14px;
-}
-
-.category-links a { color: var(--color-muted); }
-.category-links a:hover,
-.category-links a[aria-current="page"] { color: var(--color-ink); text-decoration: underline; text-underline-offset: 5px; }
-
 .category-directory {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
@@ -339,6 +325,10 @@ button:disabled {
 .home-category-card:hover .home-category-arrow {
   color: var(--color-accent);
   transform: translateX(2px);
+}
+
+.home-category-card-all {
+  display: none;
 }
 
 @media (max-width: 1023px) {
@@ -10202,8 +10192,53 @@ html.dark .hero-campus-background {
 
 .admin-mobile-sheet .admin-sidebar-inner {
   min-height: 100%;
+  overflow: visible;
   border: 0;
   border-radius: 0;
+}
+
+.admin-mobile-sheet .admin-nav {
+  display: grid;
+  flex: none;
+  grid-template-columns: 1fr;
+  align-content: start;
+  gap: 3px;
+  padding: 12px 10px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.admin-mobile-sheet .admin-nav a {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 8px 13px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--color-muted);
+  font-size: 0.88rem;
+}
+
+.admin-mobile-sheet .admin-nav a svg {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 auto;
+}
+
+.admin-mobile-sheet .admin-nav a:hover {
+  border-color: color-mix(in srgb, var(--color-line) 72%, transparent);
+  background: var(--color-surface-muted);
+  color: var(--color-ink);
+}
+
+.admin-mobile-sheet .admin-nav a.active {
+  border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-line));
+  background: color-mix(in srgb, var(--color-plum) 42%, var(--color-surface));
+  color: var(--color-ink);
+  font-weight: 650;
 }
 
 @media (max-width: 1320px) {
@@ -11658,6 +11693,116 @@ html.dark .hero-campus-background {
   .admin-report-reason,
   .admin-report-action {
     grid-column: auto;
+  }
+}
+
+/* Mobile homepage discovery stays compact while desktop category cards and
+   product grids retain their existing layout. */
+@media (max-width: 639px) {
+  .home-content .section {
+    margin-top: 38px;
+  }
+
+  .home-content .home-category-section {
+    margin-top: 30px;
+  }
+
+  .home-category-heading,
+  .home-product-section-header {
+    margin-bottom: 14px !important;
+    padding-bottom: 10px !important;
+  }
+
+  .home-category-heading h2,
+  .home-product-section-header h2 {
+    font-size: 1.3rem;
+  }
+
+  .home-category-view-all,
+  .home-product-section-header a {
+    font-size: 0.8rem;
+  }
+
+  .home-category-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .home-category-card {
+    min-height: 86px;
+    gap: 9px;
+    order: var(--mobile-category-order);
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .home-category-card[data-mobile-shortcut="false"] {
+    display: none;
+  }
+
+  .home-category-card-all {
+    display: grid;
+  }
+
+  .home-category-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+  }
+
+  .home-category-icon svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .home-category-copy {
+    gap: 0;
+  }
+
+  .home-category-copy strong {
+    display: -webkit-box;
+    overflow: hidden;
+    font-size: 0.82rem;
+    line-height: 1.28;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .home-category-copy > span {
+    display: none;
+  }
+
+  .home-category-arrow {
+    width: 15px;
+    height: 15px;
+  }
+
+  .home-product-section .product-grid {
+    display: flex;
+    gap: 12px;
+    padding: 1px 0 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    scroll-padding-inline: 1px;
+    scroll-snap-type: inline proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .home-product-section .product-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .home-product-section .product-grid > .market-card {
+    flex: 0 0 clamp(176px, 54vw, 224px);
+    scroll-snap-align: start;
+  }
+}
+
+@media (max-width: 340px) {
+  .home-category-grid {
+    grid-template-columns: 1fr;
   }
 }
 /* Admin category and content-filter workspace */
@@ -16184,5 +16329,54 @@ html.dark .hero-campus-background {
   .admin-user-email {
     white-space: normal;
     overflow-wrap: anywhere;
+  }
+}
+
+/* Section workspaces own their page titles, but the shared shell still owns
+   mobile navigation. Keep a compact menu toolbar available on every route. */
+@media (max-width: 1100px) {
+  .admin-main:has(> .admin-reports-page) .admin-console-header,
+  .admin-main:has(> .admin-categories-page) .admin-console-header,
+  .admin-main:has(> .admin-audit-page) .admin-console-header,
+  .admin-main:has(> .admin-support-page) .admin-console-header,
+  .admin-main:has(> .admin-reviews-page) .admin-console-header,
+  .admin-main:has(> .admin-safety-page) .admin-console-header {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .admin-main:has(> .admin-reports-page) .admin-console-heading,
+  .admin-main:has(> .admin-categories-page) .admin-console-heading,
+  .admin-main:has(> .admin-audit-page) .admin-console-heading,
+  .admin-main:has(> .admin-support-page) .admin-console-heading,
+  .admin-main:has(> .admin-reviews-page) .admin-console-heading,
+  .admin-main:has(> .admin-safety-page) .admin-console-heading {
+    align-items: center;
+  }
+
+  .admin-main:has(> .admin-reports-page) .admin-console-heading > div,
+  .admin-main:has(> .admin-categories-page) .admin-console-heading > div,
+  .admin-main:has(> .admin-audit-page) .admin-console-heading > div,
+  .admin-main:has(> .admin-support-page) .admin-console-heading > div,
+  .admin-main:has(> .admin-reviews-page) .admin-console-heading > div,
+  .admin-main:has(> .admin-safety-page) .admin-console-heading > div {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-console-page,
+  .admin-console-page .admin-layout,
+  .admin-console-page .admin-main,
+  .admin-console-page .admin-main > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .admin-nav-trigger {
+    width: 42px;
+    height: 42px;
   }
 }
