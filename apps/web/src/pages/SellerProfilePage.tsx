@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -26,6 +26,7 @@ import { UserAvatar } from "../components/UserAvatar";
 type SellerListing = {
   id: string;
   title: string;
+  coverImageUrl?: string | null;
   condition: string;
   location: string;
   priceType: "FIXED" | "RANGE" | "FREE";
@@ -341,6 +342,8 @@ function SellerEmpty({
 }
 
 function SellerListingCard({ listing }: { listing: SellerListing }) {
+  const [failedImageUrl, setFailedImageUrl] = useState<string>();
+  const showImage = Boolean(listing.coverImageUrl) && listing.coverImageUrl !== failedImageUrl;
   const postedAt = listing.approvedAt ?? listing.createdAt;
   const postedDate = new Date(postedAt);
   const postedLabel = formatRelativeDate(postedDate);
@@ -358,8 +361,23 @@ function SellerListingCard({ listing }: { listing: SellerListing }) {
         aria-label={`View ${listing.title}`}
       >
         <div className="seller-listing-visual">
-          <ImageOff aria-hidden="true" />
-          <span>No image</span>
+          {showImage ? (
+            <img
+              className="seller-listing-image"
+              src={listing.coverImageUrl ?? undefined}
+              alt={listing.title}
+              loading="lazy"
+              decoding="async"
+              width={640}
+              height={480}
+              onError={() => setFailedImageUrl(listing.coverImageUrl ?? undefined)}
+            />
+          ) : (
+            <>
+              <ImageOff aria-hidden="true" />
+              <span>No image</span>
+            </>
+          )}
         </div>
         <div className="seller-listing-content">
           <span className="seller-listing-condition">

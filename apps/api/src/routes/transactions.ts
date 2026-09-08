@@ -256,7 +256,7 @@ export function transactionsRouter(db: Database, config: AppConfig, storage: Sto
   return router;
 }
 
-export function reputationRouter(db: Database): Router {
+export function reputationRouter(db: Database, storage: StorageService): Router {
   const router = Router();
   router.get('/users/me/buyer-reputation', requireAuth, asyncRoute(async (req, res) => {
     res.setHeader('cache-control', 'no-store');
@@ -264,6 +264,8 @@ export function reputationRouter(db: Database): Router {
   }));
 
   router.get('/sellers/:id', asyncRoute(async (req, res) => {
+    // Cover URLs are short-lived; do not cache a profile with expired signatures.
+    res.setHeader('cache-control', 'no-store');
     const id = idSchema.parse(req.params.id);
     const seller = (await db.select({ id: users.id, displayName: users.displayName, avatarId: users.avatarId, institution: users.institution, campus: users.campus, phoneVerifiedAt: users.phoneVerifiedAt, completedSales: users.completedSales, createdAt: users.createdAt }).from(users).where(and(eq(users.id, id), isNull(users.deletedAt), isNull(users.suspendedAt))).limit(1))[0];
     if (!seller) throw new AppError(404, 'SELLER_NOT_FOUND', 'Seller profile not found');
@@ -271,7 +273,21 @@ export function reputationRouter(db: Database): Router {
       getReputation(db, id, 'SELLER'),
       db.select().from(listings).where(and(eq(listings.sellerId, id), eq(listings.moderationState, 'APPROVED'), eq(listings.lifecycleState, 'ACTIVE'), isNull(listings.deletedAt))).orderBy(desc(listings.approvedAt)).limit(20),
     ]);
-    res.json({ data: { ...seller, ...reputation, activeListings, soldListingCount: seller.completedSales } });
+    const listingIds = activeListings.map(listing => listing.id);
+    const images = listingIds.length ? await db.select({ listingId: listingImages.listingId, objectKey: listingImages.objectKey })
+      .from(listingImages).where(and(
+        inArray(listingImages.listingId, listingIds),
+        isNull(listingImages.deletedAt), isNotNull(listingImages.finalizedAt), isNotNull(listingImages.objectKey),
+        eq(listingImages.syntheticStatus, 'NOT_SYNTHETIC'),
+      )).orderBy(asc(listingImages.position), asc(listingImages.id)) : [];
+    // Upload positions can have gaps after a photo is removed. Select the first
+    // usable photo for each listing in one batch instead of assuming position 0.
+    const coverKeys = new Map<string, string>();
+    for (const image of images) {
+      if (image.objectKey && !coverKeys.has(image.listingId)) coverKeys.set(image.listingId, image.objectKey);
+    }
+    const coverUrls = new Map(await Promise.all([...coverKeys].map(async ([listingId, key]) => [listingId, await storage.signedReadUrl(key)] as const)));
+    res.json({ data: { ...seller, ...reputation, activeListings: activeListings.map(listing => ({ ...listing, coverImageUrl: coverUrls.get(listing.id) ?? null })), soldListingCount: seller.completedSales } });
   }));
 
   router.get('/leaderboard', asyncRoute(async (req, res) => {

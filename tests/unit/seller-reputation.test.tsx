@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -14,8 +14,55 @@ vi.mock("../../apps/web/src/api", () => ({ api: apiMock }));
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 function wrapper(component: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/seller/account"]}><Routes><Route path="/seller/:sellerId" element={component} /></Routes></MemoryRouter></QueryClientProvider>);
+  return { ...render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/seller/account"]}><Routes><Route path="/seller/:sellerId" element={component} /></Routes></MemoryRouter></QueryClientProvider>), client };
 }
+
+function profileWithPhoto(coverImageUrl: string | null | undefined) {
+  return {
+    id: "account", displayName: "Seller", avatarId: "avatar-01", institution: "UPES", campus: null,
+    phoneVerifiedAt: null, completedSales: 0, createdAt: "2026-09-01T00:00:00Z", averageRating: 0, reviewCount: 0, recentReviews: [],
+    activeListings: [{ id: "ikigai", title: "Ikigai", condition: "GOOD", location: "Sai Mandir", priceType: "FIXED", exactPrice: 200, minimumPrice: null, maximumPrice: null, viewCount: 1, approvedAt: "2026-09-08T10:00:00Z", createdAt: "2026-09-08T09:00:00Z", coverImageUrl }],
+  };
+}
+
+describe("seller listing photos", () => {
+  it("renders the cover photo and keeps the product link accessible", async () => {
+    apiMock.mockResolvedValue(profileWithPhoto("https://images.example.test/ikigai.webp"));
+    wrapper(<SellerProfilePage />);
+    const image = await screen.findByRole("img", { name: "Ikigai" });
+    expect(image).toHaveAttribute("src", "https://images.example.test/ikigai.webp");
+    expect(image).toHaveAttribute("loading", "lazy");
+    expect(screen.queryByText("No image")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View Ikigai" })).toHaveAttribute("href", "/listing/ikigai");
+  });
+
+  it.each([null, undefined])("shows the fallback when the photo URL is %s", async coverImageUrl => {
+    apiMock.mockResolvedValue(profileWithPhoto(coverImageUrl));
+    wrapper(<SellerProfilePage />);
+    expect(await screen.findByText("No image")).toBeVisible();
+    expect(screen.queryByRole("img", { name: "Ikigai" })).not.toBeInTheDocument();
+  });
+
+  it("shows the fallback if the image fails to load", async () => {
+    apiMock.mockResolvedValue(profileWithPhoto("https://images.example.test/missing.webp"));
+    wrapper(<SellerProfilePage />);
+    fireEvent.error(await screen.findByRole("img", { name: "Ikigai" }));
+    expect(screen.getByText("No image")).toBeVisible();
+    expect(screen.queryByRole("img", { name: "Ikigai" })).not.toBeInTheDocument();
+  });
+
+  it("tries the new photo when a failed signed URL is refreshed", async () => {
+    apiMock.mockResolvedValue(profileWithPhoto("https://images.example.test/ikigai.webp?signature=old"));
+    const { client } = wrapper(<SellerProfilePage />);
+    fireEvent.error(await screen.findByRole("img", { name: "Ikigai" }));
+    expect(screen.getByText("No image")).toBeVisible();
+    await act(async () => {
+      client.setQueryData(["seller", "account"], profileWithPhoto("https://images.example.test/ikigai.webp?signature=new"));
+    });
+    expect(await screen.findByRole("img", { name: "Ikigai" })).toHaveAttribute("src", "https://images.example.test/ikigai.webp?signature=new");
+    expect(screen.queryByText("No image")).not.toBeInTheDocument();
+  });
+});
 
 describe("role-specific reputation", () => {
   it("shows an unrated seller clearly instead of displaying a star score without seller reviews", async () => {

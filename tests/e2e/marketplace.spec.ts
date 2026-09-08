@@ -166,6 +166,35 @@ test("the uni.rocks root redirects into the marketplace product", async ({
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 });
 
+test("seller profiles render uploaded listing photos on desktop and mobile", async ({ browser, page }) => {
+  const seller = await browser.newContext();
+  const moderator = await browser.newContext();
+  try {
+    const auth = await signIn(seller, "seller-photo");
+    const listing = await createListing(auth, "Ikigai seller photo");
+    await approve(moderator, listing.id);
+    const account = (await (await auth.request.get(`${API}/api/auth/me`)).json()).data;
+    await page.goto(marketplacePath(`/seller/${account.id}`));
+    const card = page.getByRole("link", { name: "View Ikigai seller photo" });
+    const image = card.getByRole("img", { name: "Ikigai seller photo" });
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await image.scrollIntoViewIfNeeded();
+      await expect(image).toBeVisible();
+      await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0)).toBe(true);
+      await expect(image).toHaveCSS("object-fit", "contain");
+      await expect(card.getByText("No image")).toHaveCount(0);
+      const bounds = await image.boundingBox();
+      expect(bounds!.x).toBeGreaterThanOrEqual(0);
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+      await card.screenshot({ path: test.info().outputPath(`seller-listing-${width}.png`) });
+    }
+  } finally {
+    await seller.close();
+    await moderator.close();
+  }
+});
+
 test("E2E-01 seller journey from onboarding through moderator approval", async ({
   browser,
 }) => {

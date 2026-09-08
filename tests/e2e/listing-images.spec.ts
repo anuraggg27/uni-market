@@ -4,6 +4,7 @@ import { expect, test } from "@playwright/test";
 const listingImageSurfaces = [
   { name: "browse card", wrapperClass: "market-card-visual", imageClass: "market-card-image" },
   { name: "seller listing", wrapperClass: "my-listing-image" },
+  { name: "public seller listing", wrapperClass: "seller-listing-visual", imageClass: "seller-listing-image" },
   { name: "upload preview", wrapperClass: "photo-preview" },
   { name: "search result", wrapperClass: "marketplace-search-result-image" },
   { name: "main gallery", wrapperClass: "product-gallery-main", imageClass: "product-gallery-main-image" },
