@@ -153,7 +153,11 @@ function ProfileMenu({ compact = false }: { compact?: boolean }) {
     <div className="relative" ref={rootRef}>
       <button
         type="button"
-        className={`grid place-items-center rounded-full border border-line bg-surface text-ink transition-colors hover:border-sandalwood hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30 ${
+        className={`grid place-items-center rounded-full border text-ink transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus/30 ${
+          user
+            ? "border-transparent bg-transparent hover:bg-transparent"
+            : "border-line bg-surface hover:border-sandalwood hover:bg-surface-muted"
+        } ${
           compact ? "size-8" : "size-9"
         }`}
         onClick={() => setMenuOpen((current) => !current)}
