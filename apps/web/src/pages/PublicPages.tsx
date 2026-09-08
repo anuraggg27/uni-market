@@ -135,7 +135,7 @@ function BrowseByCategory({ categories }: { categories: MarketplaceCategory[] })
     <section className="section home-category-section" aria-labelledby="home-category-heading">
       <div className="home-category-heading">
         <h2 id="home-category-heading">Browse by category</h2>
-        <Link to="/categories" className="home-category-view-all">
+        <Link to="/browse" className="home-category-view-all">
           <span>View all</span>
           <ChevronRight aria-hidden="true" />
         </Link>
@@ -179,19 +179,30 @@ function BrowseByCategory({ categories }: { categories: MarketplaceCategory[] })
 export function CategoriesPage() {
   const categories = useCategories();
   return (
-    <div className="page">
+    <div className="page categories-page">
       <h1>Categories</h1>
       <p className="muted">Find your next campus essential on Uni Rocks Marketplace.</p>
+      <Link className="categories-browse-all" to="/browse">
+        <span>Browse all listings</span>
+        <ChevronRight aria-hidden="true" />
+      </Link>
       {categories.isPending ? <Loading label="Loading categories" /> : categories.isError ? (
         <ErrorState error={categories.error} retry={() => void categories.refetch()} />
       ) : (
         <nav aria-label="Marketplace categories" className="category-directory">
-          {categories.data.map((category: MarketplaceCategory) => (
-            <Link key={category.id} to={categoryPath(category.slug)}>
-              <h2>{category.name}</h2>
-              <p>{categoryDescription(category)}</p>
-            </Link>
-          ))}
+          {categories.data.map((category: MarketplaceCategory) => {
+            const Icon = categoryCardIcon(category);
+            return (
+              <Link className="category-directory-card" key={category.id} to={categoryPath(category.slug)}>
+                <span className="category-directory-icon" aria-hidden="true"><Icon /></span>
+                <span className="category-directory-copy">
+                  <h2>{category.name}</h2>
+                  <p>{categoryDescription(category)}</p>
+                </span>
+                <ChevronRight className="category-directory-arrow" aria-hidden="true" />
+              </Link>
+            );
+          })}
         </nav>
       )}
     </div>

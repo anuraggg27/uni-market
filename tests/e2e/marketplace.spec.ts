@@ -612,8 +612,13 @@ test("guest Contact seller resumes into chat and exposes request history and ema
   await expect(page.locator(".mobile-nav").getByRole("link", { name: "Browse" })).toHaveCount(0);
   await expect(page.locator(".mobile-nav").getByRole("link", { name: "Profile" })).toHaveCount(0);
   await page.getByRole("button", { name: "Open menu" }).click();
-  await expect(page.getByRole("dialog").getByRole("link", { name: "Profile" })).toHaveCount(0);
-  await expect(page.getByRole("dialog").getByRole("link", { name: "Notifications" })).toHaveCount(0);
+  const mobileDrawer = page.getByRole("dialog");
+  await expect(mobileDrawer.getByRole("link", { name: "Profile" })).toHaveCount(0);
+  await expect(mobileDrawer.getByRole("link", { name: "Notifications" })).toHaveCount(0);
+  await expect(mobileDrawer.getByRole("link", { name: "Browse", exact: true })).toHaveAttribute("href", marketplacePath("/browse"));
+  await expect(mobileDrawer.getByRole("link", { name: "Books & notes" })).toHaveCount(0);
+  await mobileDrawer.getByRole("link", { name: "Browse", exact: true }).click();
+  await expect(page).toHaveURL(/\/marketplace\/browse$/);
 
   await page.goto(marketplacePath("/settings?section=email"));
   await expect(page.getByRole("switch")).toHaveCount(3);

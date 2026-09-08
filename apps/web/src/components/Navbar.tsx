@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   CircleHelp,
+  ChevronRight,
   LogIn,
   LogOut,
   MenuIcon,
@@ -14,12 +15,6 @@ import {
 import { api, clearCsrf } from "../api";
 import { categoryPath } from "@campus-market/shared";
 import { useAuth } from "../auth";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "./ui/accordion";
 import { Button } from "./ui/button";
 import { NotificationTray } from "./NotificationTray";
 import { MarketplaceSearch } from "./MarketplaceSearch";
@@ -494,37 +489,14 @@ export const Navbar = () => {
                   </SheetTitle>
                 </SheetHeader>
                 <div className="flex flex-col p-4">
-                  <Accordion type="single" collapsible className="mt-2 mb-2">
-                    <AccordionItem value="browse" className="border-none">
-                      <AccordionTrigger className="text-[15px] font-medium text-ink hover:no-underline py-2.5">
-                        Browse
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <div className="grid md:grid-cols-2 gap-1 pt-1">
-                          {DROPDOWN_ITEMS.map((item, index) => {
-                            const href = getCategoryHref(item, categories);
-                            return (
-                              <Link
-                                to={href}
-                                key={index}
-                                onClick={() => setOpen(false)}
-                                className="rounded-xl p-2.5 transition-colors hover:bg-brand-hover/[0.03] block"
-                              >
-                                <div>
-                                  <p className="mb-0.5 text-[14px] font-medium text-ink">
-                                    {item.title}
-                                  </p>
-                                  <p className="text-[12px] text-muted line-clamp-1">
-                                    {item.description}
-                                  </p>
-                                </div>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  </Accordion>
+                  <Link
+                    to="/browse"
+                    onClick={() => setOpen(false)}
+                    className="mt-2 mb-2 flex min-h-11 items-center justify-between rounded-xl px-2.5 text-[15px] font-medium text-ink transition-colors hover:bg-surface-muted"
+                  >
+                    <span>Browse</span>
+                    <ChevronRight className="size-4 text-muted" aria-hidden="true" />
+                  </Link>
                   <div className="flex flex-col gap-3 py-2 border-t border-line">
                     <Link
                       to="/sell"

@@ -31,6 +31,7 @@ test('categories are linked, browse the selected category, and preserve metadata
   await page.goto('/marketplace/');
   await expect(page.locator('.category-links')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Browse by category', exact: true })).toBeVisible();
+  await expect(page.locator('.home-category-heading').getByRole('link', { name: 'View all' })).toHaveAttribute('href', '/marketplace/browse');
   expect((await page.getByRole('heading', { name: 'Browse by category', exact: true }).boundingBox())!.y)
     .toBeLessThan((await page.getByRole('heading', { name: 'Recently added', exact: true }).boundingBox())!.y);
   await page.getByRole('navigation', { name: 'Marketplace categories', exact: true }).getByRole('link', { name: 'Books', exact: true }).click();
@@ -53,9 +54,26 @@ test('categories are linked, browse the selected category, and preserve metadata
   await page.goto('/marketplace/categories');
   await expect(page.getByRole('heading', { name: 'Categories', exact: true })).toBeVisible();
   await expect(page).toHaveTitle('Marketplace Categories | Uni Rocks Marketplace');
-  await page.setViewportSize({ width: 390, height: 844 });
-  const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
-  expect(overflows).toBe(false);
+  await expect(page.locator('head link[rel="canonical"]')).toHaveAttribute('href', /\/marketplace\/categories$/);
+  const categoryDirectory = page.locator('.category-directory');
+  const categoryCards = categoryDirectory.locator('.category-directory-card');
+  await expect(categoryCards).toHaveCount(4);
+  await expect(categoryCards.first()).toHaveAttribute('href', '/marketplace/category/books');
+  await expect(categoryCards.first().locator('p')).toBeVisible();
+  await expect(categoryCards.first().locator('.category-directory-icon')).toBeHidden();
+  await expect(page.getByRole('link', { name: 'Browse all listings' })).toBeHidden();
+  for (const width of [375, 390, 412, 430]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect(page.getByRole('link', { name: 'Browse all listings' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Browse all listings' })).toHaveAttribute('href', '/marketplace/browse');
+    expect(await categoryDirectory.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(2);
+    await expect(categoryCards.first().locator('.category-directory-icon')).toBeVisible();
+    await expect(categoryCards.first().locator('p')).toBeHidden();
+    const cardHeights = await categoryCards.evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().height));
+    expect(Math.max(...cardHeights) - Math.min(...cardHeights)).toBeLessThanOrEqual(1);
+    const overflows = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+    expect(overflows).toBe(false);
+  }
 });
 
 test('mobile homepage uses compact category shortcuts and horizontally scrollable product rails', async ({ page }) => {
