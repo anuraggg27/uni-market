@@ -29,6 +29,23 @@ describe('support acceptance',()=>{
 });
 
 describe('security acceptance',()=>{
+  it('CSP permits Cloudflare analytics without broadening script execution', async () => {
+    const response = await request(ctx.app).get('/health').expect(200);
+    const directives = new Map<string, string[]>(
+      response.headers['content-security-policy'].split(';').map((directive: string) => {
+        const [name, ...sources] = directive.trim().split(/\s+/);
+        return [name, sources];
+      }),
+    );
+    // An origin source permits both beacon.min.js and Cloudflare's versioned URLs.
+    expect(directives.get('script-src')).toContain('https://static.cloudflareinsights.com');
+    for (const unsafe of ["'unsafe-inline'", "'unsafe-eval'", '*', 'https:', 'https://*.cloudflareinsights.com']) {
+      expect(directives.get('script-src')).not.toContain(unsafe);
+    }
+    expect(directives.get('script-src-attr')).toEqual(["'none'"]);
+    // Automatically injected beacons report to the site's own /cdn-cgi/rum.
+    expect(directives.get('connect-src')).toContain("'self'");
+  });
   it('SEC-01 enforces IDOR protection across listings, conversations, transactions, notifications and tickets',async()=>{const listing=await createDraft(user,ctx.category.id);const other=await login(ctx.app,'idor-other');await verifyPhone(other,'9987654321');await other.agent.patch(`/api/listings/${listing.id}`).set(other.headers).send({}).expect(400);const ticket=(await user.agent.post('/api/support').set(user.headers).send({category:'OTHER',subject:'Private ticket',description:'This ticket belongs only to its authenticated creator.'})).body.data;await other.agent.get(`/api/support/${ticket.id}`).expect(403);const notification=(await ctx.db.insert(schema.notifications).values({userId:user.user.id,type:'MODERATION_WARNING',title:'Private',body:'Private update',href:'/'}).returning())[0]!;await other.agent.patch(`/api/notifications/${notification.id}/read`).set(other.headers).expect(404);});
   it('SEC-02 parameterized search treats SQL injection as text',async()=>{const response=await request(ctx.app).get('/api/listings').query({q:"' OR 1=1 --"}).expect(200);expect(response.body.data).toEqual([]);expect(await ctx.db.select().from(schema.users)).toHaveLength(1);});
   it('SEC-03 stored XSS remains plain JSON text',async()=>{const listing=await createDraft(user,ctx.category.id,{title:'<script>alert(1)</script>'});const stored=(await ctx.db.select().from(schema.listings).where(eq(schema.listings.id,listing.id)))[0];expect(stored?.title).toBe('<script>alert(1)</script>');});

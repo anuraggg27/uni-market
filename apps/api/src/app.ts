@@ -85,6 +85,8 @@ export function createApp(deps: {
             "'self'",
             "https://accounts.google.com",
             "https://challenges.cloudflare.com",
+            // Cloudflare injects a versioned analytics beacon at the edge.
+            "https://static.cloudflareinsights.com",
             "https://verify.msg91.com",
             "https://www.google.com",
             "https://www.gstatic.com",
