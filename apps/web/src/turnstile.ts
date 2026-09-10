@@ -1,5 +1,6 @@
 declare global {
   interface Window {
+    __uniMarketTurnstileLoaded?: () => void;
     turnstile?: {
       ready(callback: () => void): void;
       render(container: HTMLElement, options: Record<string, unknown>): string;
@@ -12,27 +13,34 @@ declare global {
 let scriptPromise: Promise<void> | null = null;
 
 function loadScript(): Promise<void> {
-  if (window.turnstile) return new Promise((resolve) => window.turnstile!.ready(resolve));
   if (scriptPromise) return scriptPromise;
+  if (window.turnstile) return Promise.resolve();
   scriptPromise = new Promise<void>((resolve, reject) => {
     const script = document.createElement("script");
-    const fail = () => {
+    let settled = false;
+    const finish = () => {
+      settled = true;
       window.clearTimeout(timeout);
+      delete window.__uniMarketTurnstileLoaded;
+    };
+    const fail = () => {
+      if (settled) return;
+      finish();
       script.remove();
       reject(new Error("The security check could not load. Check your connection and try again."));
     };
     const timeout = window.setTimeout(fail, 15_000);
-    script.src =
-      "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
+    // Async loading must use the SDK's onload callback. Calling ready() with
+    // an async/deferred api.js script throws inside the real Cloudflare SDK.
+    window.__uniMarketTurnstileLoaded = () => {
+      if (settled) return;
       if (!window.turnstile) { fail(); return; }
-      window.turnstile.ready(() => {
-        window.clearTimeout(timeout);
-        resolve();
-      });
+      finish();
+      resolve();
     };
+    script.src =
+      "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=__uniMarketTurnstileLoaded";
+    script.async = true;
     script.onerror = fail;
     document.head.append(script);
   }).catch((error: unknown) => {

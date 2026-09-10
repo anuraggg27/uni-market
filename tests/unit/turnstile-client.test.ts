@@ -22,12 +22,16 @@ describe('Turnstile challenge recovery', () => {
     renderWidget = vi.fn((_container, config) => { options = config; return 'widget-1'; });
     resetWidget = vi.fn();
     removeWidget = vi.fn();
-    window.turnstile = { ready: (callback) => callback(), render: renderWidget, reset: resetWidget, remove: removeWidget };
+    window.turnstile = {
+      ready: vi.fn(() => { throw new Error('[Cloudflare Turnstile] Remove async/defer from the Turnstile api.js script tag before using turnstile.ready().'); }),
+      render: renderWidget, reset: resetWidget, remove: removeWidget,
+    };
   });
   afterEach(() => {
     document.body.replaceChildren();
     document.head.querySelectorAll('script[src*="challenges.cloudflare.com"]').forEach((script) => script.remove());
     delete window.turnstile;
+    delete window.__uniMarketTurnstileLoaded;
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
     vi.useRealTimers();
@@ -94,20 +98,45 @@ describe('Turnstile challenge recovery', () => {
     const nextScript = document.head.querySelector('script')!;
     expect(nextScript).not.toBe(firstScript);
     window.turnstile = turnstile;
-    fireEvent.load(nextScript);
+    window.__uniMarketTurnstileLoaded!();
     await screen.findByRole('dialog');
     options.callback('fresh-token');
     await expect(retried).resolves.toBe('fresh-token');
   });
 
-  it('waits for provider readiness and leaves no orphaned popup after a render failure', async () => {
-    let ready: (() => void) | undefined;
-    window.turnstile!.ready = (callback) => { ready = callback; };
+  it('waits for the SDK onload callback with async loading, without calling ready()', async () => {
+    const turnstile = window.turnstile!;
+    delete window.turnstile;
+    const { solveTurnstile } = await import('../../apps/web/src/turnstile');
+    const result = solveTurnstile();
+    const script = document.head.querySelector<HTMLScriptElement>('script')!;
+    expect(script.async).toBe(true);
+    const callbackName = new URL(script.src).searchParams.get('onload');
+    expect(callbackName).toBe('__uniMarketTurnstileLoaded');
+    window.turnstile = turnstile;
+    fireEvent.load(script);
+    await Promise.resolve();
+    expect(renderWidget).not.toHaveBeenCalled();
+    window.__uniMarketTurnstileLoaded!();
+    await screen.findByRole('dialog');
+    expect(turnstile.ready).not.toHaveBeenCalled();
+    options.callback('fresh-token');
+    await expect(result).resolves.toBe('fresh-token');
+    expect(window.__uniMarketTurnstileLoaded).toBeUndefined();
+
+    const subsequent = solveTurnstile();
+    await screen.findByRole('dialog');
+    options.callback('second-token');
+    await expect(subsequent).resolves.toBe('second-token');
+    expect(turnstile.ready).not.toHaveBeenCalled();
+    expect(document.head.querySelectorAll('script')).toHaveLength(1);
+  });
+
+  it('leaves no orphaned popup after a render failure', async () => {
     renderWidget.mockImplementationOnce(() => { throw new Error('initialization failed'); });
     const { solveTurnstile } = await import('../../apps/web/src/turnstile');
     const result = solveTurnstile();
     expect(renderWidget).not.toHaveBeenCalled();
-    ready!();
     await screen.findByRole('dialog');
     expect(screen.getByRole('status')).toHaveTextContent('could not start');
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));

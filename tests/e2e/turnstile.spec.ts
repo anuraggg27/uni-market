@@ -16,11 +16,16 @@ for (const width of [320, 390]) {
         await route.fulfill({ json: { data: { ok: true } } });
       }
     });
-    await page.route('https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit', (route) => route.fulfill({
+    await page.route('https://challenges.cloudflare.com/turnstile/v0/api.js?*', (route) => route.fulfill({
       contentType: 'application/javascript',
       body: `let options;
+        const apiScript = document.currentScript;
+        const sdkOnload = new URL(apiScript.src).searchParams.get('onload');
         window.turnstile = {
-          ready(callback) { callback(); },
+          ready(callback) {
+            if (apiScript.async || apiScript.defer) throw new Error('[Cloudflare Turnstile] Remove async/defer from the Turnstile api.js script tag before using turnstile.ready().');
+            callback();
+          },
           render(container, config) {
             options = config;
             const frame = document.createElement('div');
@@ -33,7 +38,8 @@ for (const width of [320, 390]) {
           },
           reset() { setTimeout(() => options.callback('fresh-test-token'), 20); },
           remove() {}
-        };`,
+        };
+        if (sdkOnload) setTimeout(() => window[sdkOnload](), 10);`,
     }));
     await page.goto('/marketplace/');
     await page.evaluate(() => {
