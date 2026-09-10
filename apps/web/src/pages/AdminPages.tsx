@@ -2847,6 +2847,7 @@ export function AdminCategories() {
     onSuccess: () => {
       toast.success("Category added");
       void client.invalidateQueries({ queryKey: ["admin-categories"] });
+      void client.invalidateQueries({ queryKey: ["categories"] });
     },
   });
   const toggle = useMutation({
@@ -2858,6 +2859,7 @@ export function AdminCategories() {
     onSuccess: (_data, variables) => {
       toast.success(variables.active ? "Category enabled" : "Category disabled");
       void client.invalidateQueries({ queryKey: ["admin-categories"] });
+      void client.invalidateQueries({ queryKey: ["categories"] });
     },
   });
   const createTerm = useMutation({
@@ -2915,7 +2917,7 @@ export function AdminCategories() {
           <section className="admin-category-table-card" aria-labelledby="admin-category-list-title">
             <header>
               <h3 id="admin-category-list-title">Categories ({categories.length})</h3>
-              <p>These categories are shown to users when creating a new listing.</p>
+              <p>Active categories appear in All categories and the listing form. The homepage shows the first 8, or the first 5 on mobile, in sort order.</p>
             </header>
             {categories.length ? (
               <div className="admin-category-table" role="table" aria-label="Categories">
@@ -2965,12 +2967,12 @@ export function AdminCategories() {
         <label>
           <span>Slug</span>
           <input name="slug" placeholder="e.g. books-notes" pattern="[a-z0-9-]+" required />
-          <small>Lowercase, hyphen-separated</small>
+          <small>Lowercase, hyphen-separated. Category names and slugs must be unique.</small>
         </label>
         <label>
           <span>Sort order</span>
           <input name="sortOrder" type="number" defaultValue="0" required />
-          <small>Lower numbers appear first</small>
+          <small>Lower numbers appear first. Shared numbers are allowed; ties are sorted alphabetically.</small>
         </label>
         </div>
         <SubmitButton pending={create.isPending}>Add category</SubmitButton>

@@ -489,7 +489,7 @@ function primaryAdminRole(
 }
 
 async function audit(
-  db: Database,
+  db: Pick<Database, "insert">,
   req: Request,
   input: {
     action: string;
@@ -1574,7 +1574,7 @@ export function adminRouter(
         data: await db
           .select()
           .from(categories)
-          .orderBy(asc(categories.sortOrder)),
+          .orderBy(asc(categories.sortOrder), asc(categories.name)),
       }),
     ),
   );
@@ -1589,15 +1589,19 @@ export function adminRouter(
           sortOrder: z.number().int().default(0),
         })
         .parse(req.body);
-      const category = (
-        await db.insert(categories).values(input).returning()
-      )[0]!;
-      await audit(db, req, {
-        action: "CATEGORY_CREATE",
-        targetType: "CATEGORY",
-        targetId: category.id,
-        newState: category,
-        internalReason: "Category administration",
+      const category = await db.transaction(async (tx) => {
+        const [created] = await tx.insert(categories).values(input).onConflictDoNothing().returning();
+        if (!created) {
+          throw new AppError(409, "CATEGORY_EXISTS", "A category with this name or slug already exists. Use the existing category instead.");
+        }
+        await audit(tx, req, {
+          action: "CATEGORY_CREATE",
+          targetType: "CATEGORY",
+          targetId: created.id,
+          newState: created,
+          internalReason: "Category administration",
+        });
+        return created;
       });
       res.status(201).json({ data: category });
     }),

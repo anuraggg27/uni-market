@@ -76,6 +76,28 @@ test('categories are linked, browse the selected category, and preserve metadata
   }
 });
 
+test('homepage category shortcuts follow admin order for new categories on mobile and desktop', async ({ page }) => {
+  const names = ['Accessories', 'Books', 'Electronics', 'Furniture', 'Cycles', 'Clothing', 'Sports', 'Room essentials', 'Other'];
+  await page.route('**/api/categories', async (route) => route.fulfill({
+    contentType: 'application/json',
+    body: JSON.stringify({ data: names.map((name, index) => ({
+      id: `category-${index}`, name, slug: name.toLowerCase().replaceAll(' ', '-'), active: true, sortOrder: Math.max(0, index - 1),
+    })) }),
+  }));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/marketplace/');
+  const cards = page.locator('.home-category-section .home-category-card:visible');
+  await expect(cards).toHaveCount(6);
+  expect(await cards.locator('strong').allTextContents()).toEqual([...names.slice(0, 5), 'All categories']);
+  await expect(cards.first()).toHaveAttribute('href', '/marketplace/category/accessories');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(cards).toHaveCount(8);
+  expect(await cards.locator('strong').allTextContents()).toEqual(names.slice(0, 8));
+  await page.setViewportSize({ width: 390, height: 844 });
+  await cards.last().click();
+  await expect(page.locator('.category-directory').getByRole('link', { name: /Other/ })).toBeVisible();
+});
+
 test('mobile homepage uses compact category shortcuts and horizontally scrollable product rails', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.route('**/api/listings?**', async (route) => {

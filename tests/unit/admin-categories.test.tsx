@@ -25,8 +25,7 @@ const terms = [
   { id: 'term-2', term: 'gift card', severity: 'BLOCK', active: false },
 ];
 
-function renderPage() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderPage(client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   return render(
     <MemoryRouter initialEntries={['/admin/categories']}>
       <QueryClientProvider client={client}><AdminCategories /></QueryClientProvider>
@@ -70,7 +69,9 @@ describe('AdminCategories', () => {
   });
 
   it('preserves category create and enable-disable API behavior', async () => {
-    renderPage();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(['categories'], []);
+    renderPage(client);
     await screen.findByRole('table', { name: 'Categories' });
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Electronics' } });
     fireEvent.change(screen.getByRole('textbox', { name: /slug/i }), { target: { value: 'electronics' } });
@@ -80,12 +81,34 @@ describe('AdminCategories', () => {
       method: 'POST',
       body: JSON.stringify({ name: 'Electronics', slug: 'electronics', sortOrder: 12 }),
     }));
+    await waitFor(() => expect(client.getQueryState(['categories'])?.isInvalidated).toBe(true));
+    client.setQueryData(['categories'], []);
 
     fireEvent.click(screen.getByRole('button', { name: 'Disable Books & notes' }));
     await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/api/admin/categories/category-1', {
       method: 'PATCH',
       body: JSON.stringify({ active: false }),
     }));
+    await waitFor(() => expect(client.getQueryState(['categories'])?.isInvalidated).toBe(true));
+  });
+
+  it('explains shared sort numbers and preserves the form when a duplicate category is rejected', async () => {
+    const message = 'A category with this name or slug already exists. Use the existing category instead.';
+    apiMock.mockImplementation((path: string, options?: { method?: string }) => {
+      if (options?.method === 'POST') return Promise.reject(new Error(message));
+      if (path === '/api/admin/categories') return Promise.resolve(categories);
+      return Promise.resolve(terms);
+    });
+    renderPage();
+    await screen.findByRole('table', { name: 'Categories' });
+    expect(screen.getByText(/Shared numbers are allowed; ties are sorted alphabetically/)).toBeVisible();
+    expect(screen.getByText(/first 8, or the first 5 on mobile/)).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Accessories' } });
+    fireEvent.change(screen.getByRole('textbox', { name: /slug/i }), { target: { value: 'accessories' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Add category' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(message);
+    expect(screen.getByLabelText('Name')).toHaveValue('Accessories');
+    expect(screen.getByRole('textbox', { name: /slug/i })).toHaveValue('accessories');
   });
 
   it('preserves prohibited-term create and enable-disable API behavior', async () => {

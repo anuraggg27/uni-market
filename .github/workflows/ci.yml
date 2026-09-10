@@ -68,6 +68,8 @@ jobs:
         run: npm run build -w @campus-market/shared
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
+        env:
+          VITE_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
       - if: failure()
         uses: actions/upload-artifact@v4
         with:

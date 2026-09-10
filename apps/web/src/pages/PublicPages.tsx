@@ -91,27 +91,6 @@ const CATEGORY_CARD_DESCRIPTIONS: Record<string, string> = {
   other: "Useful campus finds from fellow students",
 };
 
-const HOME_MOBILE_CATEGORY_PRIORITY = [
-  "books-notes",
-  "books",
-  "electronics",
-  "furniture",
-  "cycles-transport",
-  "cycles",
-  "clothing",
-] as const;
-
-function mobileCategoryShortcuts(categories: MarketplaceCategory[]) {
-  return [...categories]
-    .sort((left, right) => {
-      const leftPriority = HOME_MOBILE_CATEGORY_PRIORITY.indexOf(left.slug as (typeof HOME_MOBILE_CATEGORY_PRIORITY)[number]);
-      const rightPriority = HOME_MOBILE_CATEGORY_PRIORITY.indexOf(right.slug as (typeof HOME_MOBILE_CATEGORY_PRIORITY)[number]);
-      return (leftPriority < 0 ? Number.MAX_SAFE_INTEGER : leftPriority)
-        - (rightPriority < 0 ? Number.MAX_SAFE_INTEGER : rightPriority);
-    })
-    .slice(0, 5);
-}
-
 function categoryCardIcon(category: MarketplaceCategory) {
   const value = `${category.slug} ${category.name}`.toLowerCase();
   if (/book|note|academic|study/.test(value)) return BookOpen;
@@ -128,7 +107,7 @@ function categoryCardIcon(category: MarketplaceCategory) {
 function BrowseByCategory({ categories }: { categories: MarketplaceCategory[] }) {
   if (!categories.length) return null;
   const mobileShortcutOrder = new Map(
-    mobileCategoryShortcuts(categories).map((category, index) => [category.id, index]),
+    categories.slice(0, 5).map((category, index) => [category.id, index]),
   );
 
   return (

@@ -6865,6 +6865,9 @@ html.dark .site-footer-wordmark:hover > span:first-child {
 }
 .security-dialog {
   width: min(420px, 100%);
+  min-width: 0;
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
   display: grid;
   gap: 16px;
   padding: 24px;
@@ -6876,6 +6879,12 @@ html.dark .site-footer-wordmark:hover > span:first-child {
 .security-dialog h2,
 .security-dialog p {
   margin: 0;
+}
+.security-widget {
+  min-width: 0;
+}
+.security-dialog [hidden] {
+  display: none;
 }
 .spin {
   animation: spin 1s linear infinite;

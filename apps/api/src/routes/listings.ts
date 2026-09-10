@@ -24,7 +24,7 @@ export function listingsRouter(db: Database, config: AppConfig, storage: Storage
   const router = Router();
 
   router.get('/categories', asyncRoute(async (_req, res) => {
-    res.setHeader('cache-control', 'public, max-age=300');
+    res.setHeader('cache-control', 'public, no-cache');
     res.json({ data: await db.select().from(categories).where(eq(categories.active, true)).orderBy(asc(categories.sortOrder), asc(categories.name)) });
   }));
 

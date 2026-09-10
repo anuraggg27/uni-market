@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../../apps/api/src/config";
 import { TurnstileVerifier } from "../../apps/api/src/services/turnstile";
+import { logger } from "../../apps/api/src/lib/logger";
 
 const baseConfig = loadConfig({ NODE_ENV: "test", DEV_MODE: "false" });
 
 describe("TurnstileVerifier", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
   it("bypasses verification outside production when no secret is configured", async () => {
     const fetchMock = vi.fn();
@@ -68,10 +69,11 @@ describe("TurnstileVerifier", () => {
   });
 
   it("rejects a challenge that Cloudflare does not accept", async () => {
+    const log = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ success: false }), { status: 200 }),
+        new Response(JSON.stringify({ success: false, 'error-codes': ['timeout-or-duplicate'] }), { status: 200 }),
       ),
     );
     const verifier = new TurnstileVerifier({
@@ -86,5 +88,11 @@ describe("TurnstileVerifier", () => {
       status: 403,
       code: "BOT_CHECK_FAILED",
     });
+    expect(log).toHaveBeenCalledWith(
+      { turnstileErrorCodes: ['timeout-or-duplicate'], providerStatus: 200 },
+      'Turnstile token verification failed',
+    );
+    expect(JSON.stringify(log.mock.calls)).not.toContain('bad-token');
+    expect(JSON.stringify(log.mock.calls)).not.toContain('turnstile-secret');
   });
 });
