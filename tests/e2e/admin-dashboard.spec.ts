@@ -4,6 +4,7 @@ const API = "http://127.0.0.1:" + (process.env.E2E_API_PORT ?? "4000");
 const ADMIN_SECTION_ROUTES = [
   "/marketplace/admin",
   "/marketplace/admin/listings/pending",
+  "/marketplace/admin/listings",
   "/marketplace/admin/reports",
   "/marketplace/admin/grievances",
   "/marketplace/admin/users",
@@ -89,7 +90,7 @@ test("admin dashboard preserves real data and stays responsive at supported widt
   await page.getByRole("button", { name: "Open admin navigation" }).click();
   const adminDialog = page.getByRole("dialog");
   const adminLinks = adminDialog.getByRole("navigation", { name: "Admin sections" }).getByRole("link");
-  await expect(adminLinks).toHaveCount(10);
+  await expect(adminLinks).toHaveCount(11);
   await expect(adminDialog.getByRole("link", { name: "Compliance registers" })).toBeInViewport();
   const firstLink = await adminLinks.nth(0).boundingBox();
   const secondLink = await adminLinks.nth(1).boundingBox();
@@ -942,5 +943,41 @@ test("admin categories keep real actions and stack cleanly on mobile", async ({
   await expect(page.locator(".admin-category-table-head")).toBeHidden();
   await expect(page.locator(".admin-terms-table-head")).toBeHidden();
   await expect(page.locator(".admin-category-slug").first()).toBeVisible();
+  await context.close();
+});
+
+test('admin listing history filters removed and changes-requested listings and returns to the same view', async ({ browser }) => {
+  const context = await browser.newContext();
+  await signInAsAdmin(context);
+  const page = await context.newPage();
+  const listing = {
+    id: '33333333-3333-4333-8333-333333333333', title: 'Calculator awaiting better photos',
+    description: 'A scientific calculator with its original cover.', submittedAt: '2026-09-06T10:30:00.000Z',
+    moderationState: 'REJECTED', lifecycleState: 'DRAFT', requestedChanges: 'Please upload a clear photo of the actual item.',
+    condition: 'GOOD', priceLabel: '₹450', location: 'Campus', images: [],
+  };
+  await page.route('**/api/admin/listings?*', async route => {
+    const removed = new URL(route.request().url()).searchParams.get('status') === 'REMOVED';
+    await route.fulfill({ json: { data: { rows: [{ listing: removed ? { ...listing, moderationState: 'REMOVED', requestedChanges: null, rejectionReason: 'Removed after review' } : listing, sellerName: 'Priya Sharma', sellerCompletedSales: 2, categoryName: 'Electronics', coverImageUrl: null, flaggedTerms: [] }], total: 1, page: 1, pageSize: 50 } } });
+  });
+  await page.route('**/api/admin/listings/' + listing.id, route => route.fulfill({ json: { data: { listing, seller: { displayName: 'Priya Sharma', completedSales: 2 }, rejectionHistory: [] } } }));
+  await page.route('**/api/listings/' + listing.id, route => route.fulfill({ json: { data: listing } }));
+  await page.goto('/marketplace/admin/listings');
+  await expect(page.getByRole('heading', { name: 'All listings', exact: true })).toBeVisible();
+  await page.getByLabel('Moderation status').selectOption('REMOVED');
+  await expect(page.locator('.status-removed')).toBeVisible();
+  await expect(page.getByText('Removed after review')).toBeVisible();
+  await page.getByLabel('Moderation status').selectOption('CHANGES_REQUESTED');
+  await expect(page.locator('.status-changes-requested')).toBeVisible();
+  for (const width of [1440, 1024, 768, 375]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), 'history must fit at ' + width).toBe(true);
+    await expect(page.getByRole('link', { name: 'View listing' })).toBeVisible();
+  }
+  await page.getByRole('link', { name: 'View listing' }).click();
+  await expect(page.getByRole('heading', { name: 'Requested changes', exact: true })).toBeVisible();
+  await expect(page.getByText(listing.requestedChanges, { exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Back to listings' }).click();
+  await expect(page.getByLabel('Moderation status')).toHaveValue('CHANGES_REQUESTED');
   await context.close();
 });

@@ -5,6 +5,7 @@ import {
   Link,
   NavLink,
   Outlet,
+  useLocation,
   useNavigate,
   useParams,
   useSearchParams,
@@ -79,6 +80,7 @@ import { UserAvatar } from "../components/UserAvatar";
 const links = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { to: "/admin/listings/pending", label: "Pending listings", icon: ClipboardCheck },
+  { to: "/admin/listings", label: "All listings", icon: Package },
   { to: "/admin/reports", label: "Reports", icon: Flag },
   { to: "/admin/grievances", label: "Grievances & safety", icon: ShieldAlert },
   { to: "/admin/users", label: "Users", icon: Users },
@@ -106,7 +108,7 @@ function AdminNavigation({ onNavigate }: { onNavigate?: () => void }) {
           <NavLink
             key={to}
             to={to}
-            end={to === "/admin"}
+            end={to === "/admin" || to === "/admin/listings"}
             onClick={onNavigate}
           >
             <Icon aria-hidden="true" />
@@ -416,7 +418,17 @@ function formatAdminTime(value: unknown) {
   return formatter.format(Math.round(elapsedHours / 24), "day");
 }
 
-export function PendingListings() {
+export function AdminListings() {
+  return <PendingListings browseAll />;
+}
+
+function listingModerationStatus(listing: any) {
+  if (listing.moderationState === "REJECTED" && listing.requestedChanges) return "CHANGES_REQUESTED";
+  if (listing.moderationState === "PENDING" && !listing.submittedAt) return "NOT_SUBMITTED";
+  return listing.moderationState;
+}
+
+export function PendingListings({ browseAll = false }: { browseAll?: boolean }) {
   const [params, setParams] = useSearchParams();
   const categories = useQuery({
     queryKey: ["categories"],
@@ -427,12 +439,17 @@ export function PendingListings() {
     queryFn: () => api<any[]>("/api/admin/users"),
   });
   const query = useQuery({
-    queryKey: ["admin-pending", params.toString()],
-    queryFn: () => api<any[]>(`/api/admin/listings/pending?${params}`),
+    queryKey: ["admin-pending", browseAll, params.toString()],
+    queryFn: async () => {
+      if (browseAll) return api<{ rows: any[]; total: number; page: number; pageSize: number }>(`/api/admin/listings?${params}`);
+      const rows = await api<any[]>(`/api/admin/listings/pending?${params}`);
+      return { rows, total: rows.length, page: 1, pageSize: rows.length };
+    },
     refetchInterval: 10_000,
   });
   const update = (name: string, value: string) => {
     const next = new URLSearchParams(params);
+    if (name !== "page") next.delete("page");
     if (value) next.set(name, value);
     else next.delete(name);
     setParams(next);
@@ -441,15 +458,16 @@ export function PendingListings() {
     <div className="admin-queue-page">
       <div className="admin-queue-heading">
         <div>
-          <h2>Pending listing queue</h2>
+          <h2>{browseAll ? "All listings" : "Pending listing queue"}</h2>
           <p className="lede">
-            Review every image and field before making a decision.
+            {browseAll ? "Browse listings across moderation decisions and sale statuses." : "Review every image and field before making a decision."}
           </p>
+          <Link to={browseAll ? "/admin/listings/pending" : "/admin/listings"}>{browseAll ? "Open pending queue" : "Browse all listing statuses"}</Link>
         </div>
         <span className="admin-queue-count">
           {query.isLoading
-            ? "Loading queue…"
-            : formatPendingCount(query.data?.length ?? 0)}
+            ? "Loading listings…"
+            : browseAll ? `${query.data?.total ?? 0} listings` : formatPendingCount(query.data?.total ?? 0)}
         </span>
       </div>
 
@@ -461,7 +479,7 @@ export function PendingListings() {
           <div className="admin-filter-title">
             <SlidersHorizontal aria-hidden="true" />
             <div>
-              <h3 id="queue-filters-title">Queue filters</h3>
+              <h3 id="queue-filters-title">{browseAll ? "Listing filters" : "Queue filters"}</h3>
               <p>Focus the review list by seller, category, or risk signal.</p>
             </div>
           </div>
@@ -477,10 +495,36 @@ export function PendingListings() {
         </div>
 
         <div className="admin-filter-grid">
+          {browseAll ? <>
+            <label className="admin-filter-field">
+              <span>Moderation status</span>
+              <select value={params.get("status") ?? "ALL"} onChange={(e) => update("status", e.target.value)}>
+                <option value="ALL">All statuses</option>
+                <option value="PENDING">Pending review</option>
+                <option value="CHANGES_REQUESTED">Changes requested</option>
+                <option value="REJECTED">Rejected</option>
+                <option value="REMOVED">Removed</option>
+                <option value="APPROVED">Approved</option>
+                <option value="DRAFT">Not submitted</option>
+              </select>
+            </label>
+            <label className="admin-filter-field">
+              <span>Sale status</span>
+              <select value={params.get("lifecycle") ?? ""} onChange={(e) => update("lifecycle", e.target.value)}>
+                <option value="">All sale statuses</option>
+                <option value="DRAFT">Draft</option>
+                <option value="ACTIVE">Active</option>
+                <option value="RESERVED">Reserved</option>
+                <option value="SOLD">Sold</option>
+                <option value="EXPIRED">Expired</option>
+                <option value="WITHDRAWN">Withdrawn</option>
+              </select>
+            </label>
+          </> : null}
           <label className="admin-filter-field">
             <span>Sort by</span>
             <select
-              value={params.get("sort") ?? "oldest"}
+              value={params.get("sort") ?? (browseAll ? "newest" : "oldest")}
               onChange={(e) => update("sort", e.target.value)}
             >
               <option value="oldest">Oldest first</option>
@@ -537,13 +581,13 @@ export function PendingListings() {
       </section>
 
       {query.isLoading ? (
-        <Loading variant="list" label="Loading pending listings" />
+        <Loading variant="list" label={browseAll ? "Loading listings" : "Loading pending listings"} />
       ) : query.isError ? (
         <ErrorState error={query.error} retry={() => void query.refetch()} />
-      ) : query.data?.length ? (
+      ) : query.data?.rows.length ? (
         <>
           <div className="admin-pending-list">
-            {query.data.map((row: any) => (
+            {query.data.rows.map((row: any) => (
               <article className="admin-pending-card" key={row.listing.id}>
                 <div className="admin-pending-preview">
                   {row.coverImageUrl ? (
@@ -567,6 +611,10 @@ export function PendingListings() {
                   <div className="admin-pending-copy">
                     <h3>{row.listing.title}</h3>
                     <p>{row.listing.description}</p>
+                    {browseAll ? <>
+                      <div className="row"><StatusBadge value={listingModerationStatus(row.listing)} /><StatusBadge value={row.listing.lifecycleState} /></div>
+                      {row.listing.requestedChanges || row.listing.rejectionReason ? <p><strong>Feedback:</strong> {row.listing.requestedChanges || row.listing.rejectionReason}</p> : null}
+                    </> : null}
                   </div>
                 </div>
 
@@ -596,7 +644,7 @@ export function PendingListings() {
                   <p className="admin-pending-inline-value">
                     <CalendarDays aria-hidden="true" />
                     <time dateTime={row.listing.submittedAt}>
-                      {formatSubmittedAt(row.listing.submittedAt)}
+                      {row.listing.submittedAt ? formatSubmittedAt(row.listing.submittedAt) : "Not submitted"}
                     </time>
                   </p>
                 </div>
@@ -614,8 +662,9 @@ export function PendingListings() {
                   <Link
                     className="admin-review-button"
                     to={"/admin/listings/" + row.listing.id}
+                    state={{ returnTo: `${browseAll ? "/admin/listings" : "/admin/listings/pending"}?${params}` }}
                   >
-                    Review
+                    {browseAll ? "View listing" : "Review"}
                     <ArrowRight aria-hidden="true" />
                   </Link>
                 </div>
@@ -623,8 +672,8 @@ export function PendingListings() {
             ))}
           </div>
           <p className="admin-pending-results">
-            Showing 1–{query.data.length} of {query.data.length}{" "}
-            {query.data.length === 1 ? "pending listing" : "pending listings"}
+            Showing {(query.data.page - 1) * query.data.pageSize + 1}–{(query.data.page - 1) * query.data.pageSize + query.data.rows.length} of {query.data.total}{" "}
+            {browseAll ? "listings" : query.data.total === 1 ? "pending listing" : "pending listings"}
           </p>
         </>
       ) : (
@@ -632,10 +681,17 @@ export function PendingListings() {
           <span aria-hidden="true">
             <CheckCircle2 />
           </span>
-          <h3>No pending listings</h3>
-          <p>Everything has been reviewed.</p>
+          <h3>{browseAll ? "No matching listings" : "No pending listings"}</h3>
+          <p>{browseAll ? "Try a different status or clear the filters." : "Everything has been reviewed."}</p>
         </section>
       )}
+      {browseAll && query.data && (query.data.total > query.data.pageSize || query.data.page > 1) ? (
+        <nav className="row" aria-label="Listing pages">
+          <button className="button secondary" disabled={query.data.page <= 1} onClick={() => update("page", String(query.data!.page - 1))}>Previous</button>
+          <span>Page {query.data.page} of {Math.max(1, Math.ceil(query.data.total / query.data.pageSize))}</span>
+          <button className="button secondary" disabled={query.data.page * query.data.pageSize >= query.data.total} onClick={() => update("page", String(query.data!.page + 1))}>Next</button>
+        </nav>
+      ) : null}
     </div>
   );
 }
@@ -676,6 +732,9 @@ function formatSubmittedAt(value: unknown) {
 
 export function AdminListingReview() {
   const { listingId } = useParams();
+  const location = useLocation();
+  const previousList = location.state?.returnTo;
+  const returnTo = typeof previousList === "string" && /^\/admin\/listings(?:\/pending)?(?:\?|$)/.test(previousList) ? previousList : "/admin/listings";
   const navigate = useNavigate();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [moderationDecision, setModerationDecision] = useState("APPROVE");
@@ -704,6 +763,7 @@ export function AdminListingReview() {
       toast.success(messages[variables.decision] ?? "Decision recorded");
       void client.invalidateQueries({ queryKey: ["admin-pending"] });
       void client.invalidateQueries({ queryKey: ["admin-listing", listingId] });
+      void client.invalidateQueries({ queryKey: ["listing", listingId] });
     },
   });
   const deleteListing = useMutation({
@@ -711,7 +771,7 @@ export function AdminListingReview() {
     onSuccess: () => {
       toast.success("Listing deleted");
       void client.invalidateQueries({ queryKey: ["admin-pending"] });
-      navigate("/admin/listings/pending");
+      navigate(returnTo);
     },
   });
   if (admin.isLoading || detail.isLoading)
@@ -722,11 +782,11 @@ export function AdminListingReview() {
   const item = detail.data;
   return (
     <div className="stack-lg">
-      <Link to="/admin/listings/pending">← Back to queue</Link>
+      <Link to={returnTo}>← Back to listings</Link>
       <div>
         <h2>{item.title}</h2>
         <div className="row">
-          <StatusBadge value={item.moderationState} />
+          <StatusBadge value={listingModerationStatus(item)} />
           <StatusBadge value={item.lifecycleState} />
         </div>
       </div>
@@ -760,6 +820,12 @@ export function AdminListingReview() {
           <dd>{item.defects || "None disclosed"}</dd>
         </dl>
       </section>
+      {item.requestedChanges || item.rejectionReason ? (
+        <section className="panel">
+          <h3>{listingModerationStatus(item) === "CHANGES_REQUESTED" ? "Requested changes" : "Moderation feedback"}</h3>
+          <p>{item.requestedChanges || item.rejectionReason}</p>
+        </section>
+      ) : null}
       <section className="panel">
         <h3>Seller summary</h3>
         <p>

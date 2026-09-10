@@ -21,7 +21,7 @@ vi.mock("../../apps/web/src/auth", () => ({
   useAuth: () => ({ user: { id: "admin-user", roles: ["SUPER_ADMIN"] } }),
 }));
 
-import { PendingListings } from "../../apps/web/src/pages/AdminPages";
+import { AdminListings, PendingListings } from "../../apps/web/src/pages/AdminPages";
 
 const rows = [
   {
@@ -51,14 +51,14 @@ const rows = [
   },
 ];
 
-function renderPage() {
+function renderPage(browseAll = false) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={["/admin/listings/pending"]}>
-        <PendingListings />
+        {browseAll ? <AdminListings /> : <PendingListings />}
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -155,4 +155,29 @@ describe("PendingListings", () => {
     expect(screen.getByText("Everything has been reviewed.")).toBeVisible();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
+});
+
+
+it("browses moderation outcomes and resets pagination when filters change", async () => {
+  apiMock.mockImplementation((path: string) => {
+    if (path.startsWith("/api/admin/listings?")) {
+      const params = new URLSearchParams(path.split("?")[1]);
+      return Promise.resolve({ rows: [{ ...rows[0], listing: { ...rows[0].listing, moderationState: "REJECTED", lifecycleState: "DRAFT", requestedChanges: "Upload a clearer photo" } }], total: 51, page: Number(params.get("page") ?? 1), pageSize: 50 });
+    }
+    return Promise.resolve([]);
+  });
+  renderPage(true);
+  expect(await screen.findByText("CHANGES REQUESTED")).toBeVisible();
+  expect(screen.getByText("Upload a clearer photo")).toBeVisible();
+  expect(screen.getByRole("link", { name: "View listing" })).toHaveAttribute("href", "/admin/listings/listing-1");
+  fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  await waitFor(() => expect(apiMock).toHaveBeenCalledWith("/api/admin/listings?page=2"));
+  fireEvent.change(screen.getByLabelText("Moderation status"), { target: { value: "REMOVED" } });
+  await waitFor(() => expect(apiMock).toHaveBeenCalledWith("/api/admin/listings?status=REMOVED"));
+  fireEvent.change(screen.getByLabelText("Sale status"), { target: { value: "WITHDRAWN" } });
+  await waitFor(() => expect(apiMock).toHaveBeenCalledWith("/api/admin/listings?status=REMOVED&lifecycle=WITHDRAWN"));
+  fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+  await waitFor(() => expect(screen.getByLabelText("Moderation status")).toHaveValue("ALL"));
+  cleanup();
+  vi.clearAllMocks();
 });

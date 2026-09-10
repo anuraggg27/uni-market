@@ -628,18 +628,29 @@ export function adminRouter(
   );
 
   router.get(
-    "/listings/pending",
+    ["/listings", "/listings/pending"],
     moderation,
     asyncRoute(async (req, res) => {
+      const pendingOnly = req.path === "/listings/pending";
       const query = z
         .object({
-          sort: z.enum(["oldest", "newest"]).default("oldest"),
+          status: z.enum(["ALL", "PENDING", "APPROVED", "CHANGES_REQUESTED", "REJECTED", "REMOVED", "DRAFT"]).default("ALL"),
+          lifecycle: z.enum(["DRAFT", "ACTIVE", "RESERVED", "SOLD", "EXPIRED", "WITHDRAWN"]).optional(),
+          page: z.coerce.number().int().min(1).max(100000).default(1),
+          sort: z.enum(["oldest", "newest"]).default(pendingOnly ? "oldest" : "newest"),
           seller: z.string().uuid().optional(),
           category: z.string().uuid().optional(),
           flagged: z.enum(["true", "false"]).optional(),
         })
         .parse(req.query);
-      const conditions = [eq(listings.moderationState, "PENDING"), isNotNull(listings.submittedAt), isNull(listings.deletedAt)];
+      const conditions = [isNull(listings.deletedAt)];
+      const status = pendingOnly ? "PENDING" : query.status;
+      if (status === "PENDING") conditions.push(eq(listings.moderationState, "PENDING"), isNotNull(listings.submittedAt));
+      else if (status === "DRAFT") conditions.push(eq(listings.moderationState, "PENDING"), isNull(listings.submittedAt));
+      else if (status === "CHANGES_REQUESTED") conditions.push(eq(listings.moderationState, "REJECTED"), isNotNull(listings.requestedChanges));
+      else if (status === "REJECTED") conditions.push(eq(listings.moderationState, "REJECTED"), isNull(listings.requestedChanges));
+      else if (status !== "ALL") conditions.push(eq(listings.moderationState, status));
+      if (query.lifecycle) conditions.push(eq(listings.lifecycleState, query.lifecycle));
       if (query.seller) conditions.push(eq(listings.sellerId, query.seller));
       if (query.category)
         conditions.push(eq(listings.categoryId, query.category));
@@ -647,7 +658,8 @@ export function adminRouter(
         conditions.push(
           sql`exists (select 1 from ${prohibitedTerms} pt where pt.active = true and (${listings.title} ilike ('%' || pt.term || '%') or ${listings.description} ilike ('%' || pt.term || '%') or coalesce(${listings.defects}, '') ilike ('%' || pt.term || '%')))`,
         );
-      const rows = await db
+      const pageSize = 50;
+      const rowsQuery = db
         .select({
           listing: listings,
           sellerName: users.displayName,
@@ -662,7 +674,12 @@ export function adminRouter(
           query.sort === "oldest"
             ? asc(listings.updatedAt)
             : desc(listings.updatedAt),
+          asc(listings.id),
         );
+      const [rows, totals] = await Promise.all([
+        pendingOnly ? rowsQuery : rowsQuery.limit(pageSize).offset((query.page - 1) * pageSize),
+        pendingOnly ? Promise.resolve([]) : db.select({ total: count() }).from(listings).where(and(...conditions)),
+      ]);
       const activeTerms = await db
         .select({ term: prohibitedTerms.term })
         .from(prohibitedTerms)
@@ -691,26 +708,25 @@ export function adminRouter(
           coverImageKeys.set(image.listingId, image.objectKey);
         }
       }
-      res.json({
-        data: await Promise.all(
-          rows.map(async (row) => {
-            const coverImageKey = coverImageKeys.get(row.listing.id);
-            return {
-              ...row,
-              coverImageUrl: coverImageKey
-                ? await storage.signedReadUrl(coverImageKey)
-                : null,
-              flaggedTerms: activeTerms
-                .filter(({ term }) =>
-                  `${row.listing.title} ${row.listing.description} ${row.listing.defects ?? ""}`
-                    .toLocaleLowerCase()
-                    .includes(term.toLocaleLowerCase()),
-                )
-                .map(({ term }) => term),
-            };
-          }),
-        ),
-      });
+      const data = await Promise.all(
+        rows.map(async (row) => {
+          const coverImageKey = coverImageKeys.get(row.listing.id);
+          return {
+            ...row,
+            coverImageUrl: coverImageKey
+              ? await storage.signedReadUrl(coverImageKey)
+              : null,
+            flaggedTerms: activeTerms
+              .filter(({ term }) =>
+                `${row.listing.title} ${row.listing.description} ${row.listing.defects ?? ""}`
+                  .toLocaleLowerCase()
+                  .includes(term.toLocaleLowerCase()),
+              )
+              .map(({ term }) => term),
+          };
+        }),
+      );
+      res.json({ data: pendingOnly ? data : { rows: data, total: totals[0]?.total ?? 0, page: query.page, pageSize } });
     }),
   );
 
@@ -849,6 +865,7 @@ export function adminRouter(
                 moderationState: "REJECTED" as const,
                 lifecycleState: "DRAFT" as const,
                 rejectionReason: input.userVisibleReason!,
+                requestedChanges: null,
                 approvedAt: null,
               }
             : input.decision === "REQUEST_CHANGES"
@@ -861,6 +878,7 @@ export function adminRouter(
                 }
               : {
                   moderationState: "REMOVED" as const,
+                  requestedChanges: null,
                   rejectionReason: input.userVisibleReason!,
                   approvedAt: null,
                 };

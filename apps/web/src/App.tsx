@@ -57,6 +57,7 @@ const AdminUserDetail = lazyNamed(adminPages, "AdminUserDetail");
 const AdminUsers = lazyNamed(adminPages, "AdminUsers");
 const AuditLogs = lazyNamed(adminPages, "AuditLogs");
 const PendingListings = lazyNamed(adminPages, "PendingListings");
+const AdminListings = lazyNamed(adminPages, "AdminListings");
 const CommunityRulesPage = lazyNamed(legalPages, "CommunityRulesPage");
 const GrievancePage = lazyNamed(legalPages, "GrievancePage");
 const GrievanceTrackPage = lazyNamed(legalPages, "GrievanceTrackPage");
@@ -214,6 +215,14 @@ export function App() {
               }
             >
               <Route index element={<AdminDashboard />} />
+              <Route
+                path="listings"
+                element={
+                  <RequireAuth roles={["MODERATOR", "SUPER_ADMIN"]}>
+                    <AdminListings />
+                  </RequireAuth>
+                }
+              />
               <Route
                 path="listings/pending"
                 element={
