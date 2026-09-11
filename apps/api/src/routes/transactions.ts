@@ -1,11 +1,11 @@
 import { Router, type Request } from 'express';
 import type { Server } from 'socket.io';
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, or, sql } from 'drizzle-orm';
 import { idSchema, reviewSchema } from '@campus-market/shared';
 import { z } from 'zod';
 import type { AppConfig } from '../config.js';
 import type { Database } from '../db/client.js';
-import { blocks, conversations, listingImages, listings, messages, notifications, reviews, transactions, users } from '../db/schema.js';
+import { blocks, conversations, listings, messages, notifications, reviews, transactions, users } from '../db/schema.js';
 import type { StorageService } from '../services/storage.js';
 import { requireAuth, requireVerified } from '../middleware/auth.js';
 import { keyedHash, safeEqual } from '../lib/crypto.js';
@@ -13,6 +13,7 @@ import { AppError, asyncRoute } from '../lib/errors.js';
 import { queueUserEmail } from '../services/email-preferences.js';
 import { notifyNotifications } from '../services/notification-events.js';
 import { getReputation } from '../services/reputation.js';
+import { getListingCoverUrls } from '../services/listing-images.js';
 
 type TransactionRow = typeof transactions.$inferSelect;
 
@@ -62,15 +63,7 @@ export function transactionsRouter(db: Database, config: AppConfig, storage: Sto
 
   router.get('/transactions', requireVerified, asyncRoute(async (req, res) => {
     const rows = await db.select({ transaction: transactions, reviewId: reviews.id, listing: { title: listings.title, priceType: listings.priceType, exactPrice: listings.exactPrice, minimumPrice: listings.minimumPrice, maximumPrice: listings.maximumPrice } }).from(transactions).innerJoin(listings, eq(listings.id, transactions.listingId)).leftJoin(reviews, and(eq(reviews.transactionId, transactions.id), eq(reviews.reviewerId, req.auth!.userId))).where(or(eq(transactions.buyerId, req.auth!.userId), eq(transactions.sellerId, req.auth!.userId))).orderBy(desc(transactions.updatedAt));
-    const listingIds = [...new Set(rows.map((row) => row.transaction.listingId))];
-    const images = listingIds.length ? await db.select({ listingId: listingImages.listingId, objectKey: listingImages.objectKey })
-      .from(listingImages).where(and(inArray(listingImages.listingId, listingIds), isNull(listingImages.deletedAt), isNotNull(listingImages.finalizedAt), isNotNull(listingImages.objectKey)))
-      .orderBy(asc(listingImages.position)) : [];
-    const covers = new Map<string, string>();
-    for (const image of images) {
-      if (image.objectKey && !covers.has(image.listingId)) covers.set(image.listingId, image.objectKey);
-    }
-    const coverUrls = new Map(await Promise.all([...covers].map(async ([listingId, key]) => [listingId, await storage.signedReadUrl(key)] as const)));
+    const coverUrls = await getListingCoverUrls(db, storage, rows.map(row => row.transaction.listingId));
     res.json({ data: rows.map((row) => ({ ...publicTransaction(row.transaction, req.auth!.userId, config, { title: row.listing.title, priceLabel: listingPriceLabel(row.listing) }), coverImageUrl: coverUrls.get(row.transaction.listingId) ?? null, reviewSubmitted: row.reviewId !== null })) });
   }));
 
@@ -273,20 +266,7 @@ export function reputationRouter(db: Database, storage: StorageService): Router 
       getReputation(db, id, 'SELLER'),
       db.select().from(listings).where(and(eq(listings.sellerId, id), eq(listings.moderationState, 'APPROVED'), eq(listings.lifecycleState, 'ACTIVE'), isNull(listings.deletedAt))).orderBy(desc(listings.approvedAt)).limit(20),
     ]);
-    const listingIds = activeListings.map(listing => listing.id);
-    const images = listingIds.length ? await db.select({ listingId: listingImages.listingId, objectKey: listingImages.objectKey })
-      .from(listingImages).where(and(
-        inArray(listingImages.listingId, listingIds),
-        isNull(listingImages.deletedAt), isNotNull(listingImages.finalizedAt), isNotNull(listingImages.objectKey),
-        eq(listingImages.syntheticStatus, 'NOT_SYNTHETIC'),
-      )).orderBy(asc(listingImages.position), asc(listingImages.id)) : [];
-    // Upload positions can have gaps after a photo is removed. Select the first
-    // usable photo for each listing in one batch instead of assuming position 0.
-    const coverKeys = new Map<string, string>();
-    for (const image of images) {
-      if (image.objectKey && !coverKeys.has(image.listingId)) coverKeys.set(image.listingId, image.objectKey);
-    }
-    const coverUrls = new Map(await Promise.all([...coverKeys].map(async ([listingId, key]) => [listingId, await storage.signedReadUrl(key)] as const)));
+    const coverUrls = await getListingCoverUrls(db, storage, activeListings.map(listing => listing.id));
     res.json({ data: { ...seller, ...reputation, activeListings: activeListings.map(listing => ({ ...listing, coverImageUrl: coverUrls.get(listing.id) ?? null })), soldListingCount: seller.completedSales } });
   }));
 

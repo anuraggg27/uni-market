@@ -8,7 +8,6 @@ import {
   blocks,
   conversations,
   favourites,
-  listingImages,
   listings,
   messages,
   messageRiskEvents,
@@ -22,6 +21,7 @@ import { createScamConfirmation, scamRiskCodes, verifyScamConfirmation } from ".
 import { queueUserEmail } from "../services/email-preferences.js";
 import { notifyNotifications } from "../services/notification-events.js";
 import { getReputation } from "../services/reputation.js";
+import { getListingCoverUrls } from "../services/listing-images.js";
 
 async function assertConversationMember(
   db: Database,
@@ -95,31 +95,19 @@ export function communicationRouter(
       const rows = await db
         .select({
           listing: listings,
-          imageKey: listingImages.objectKey,
           savedAt: favourites.createdAt,
         })
         .from(favourites)
         .innerJoin(listings, eq(listings.id, favourites.listingId))
-        .leftJoin(
-          listingImages,
-          and(
-            eq(listingImages.listingId, listings.id),
-            eq(listingImages.position, 0),
-            isNull(listingImages.deletedAt),
-          ),
-        )
         .where(eq(favourites.userId, req.auth!.userId))
         .orderBy(desc(favourites.createdAt));
+      const covers = await getListingCoverUrls(db, storage, rows.map(({ listing }) => listing.id));
       res.json({
-        data: await Promise.all(
-          rows.map(async ({ listing, imageKey, savedAt }) => ({
-            ...listing,
-            savedAt,
-            coverImageUrl: imageKey
-              ? await storage.signedReadUrl(imageKey)
-              : null,
-          })),
-        ),
+        data: rows.map(({ listing, savedAt }) => ({
+          ...listing,
+          savedAt,
+          coverImageUrl: covers.get(listing.id) ?? null,
+        })),
       });
     }),
   );
@@ -266,7 +254,6 @@ export function communicationRouter(
           sellerName: sql<string>`seller.display_name`,
           buyerAvatarId: sql<string>`buyer.avatar_id`,
           sellerAvatarId: sql<string>`seller.avatar_id`,
-          imageKey: listingImages.objectKey,
           unread: sql<number>`(select count(*) from messages m where m.conversation_id = ${conversations.id} and m.sender_id <> ${req.auth!.userId} and m.read_at is null)`,
         })
         .from(conversations)
@@ -279,14 +266,6 @@ export function communicationRouter(
           sql`${users} as seller`,
           sql`seller.id = ${conversations.sellerId}`,
         )
-        .leftJoin(
-          listingImages,
-          and(
-            eq(listingImages.listingId, listings.id),
-            eq(listingImages.position, 0),
-            isNull(listingImages.deletedAt),
-          ),
-        )
         .where(
           or(
             eq(conversations.buyerId, req.auth!.userId),
@@ -294,30 +273,27 @@ export function communicationRouter(
           ),
         )
         .orderBy(desc(conversations.lastMessageAt));
+      const covers = await getListingCoverUrls(db, storage, rows.map(row => row.conversation.listingId));
       res.json({
-        data: await Promise.all(
-          rows.map(async (row) => ({
-            ...row.conversation,
-            listingTitle: row.listingTitle,
-            lifecycleState: row.lifecycleState,
-            otherUserId:
-              row.conversation.buyerId === req.auth!.userId
-                ? row.conversation.sellerId
-                : row.conversation.buyerId,
-            otherName:
-              row.conversation.buyerId === req.auth!.userId
-                ? row.sellerName
-                : row.buyerName,
-            otherAvatarId:
-              row.conversation.buyerId === req.auth!.userId
-                ? row.sellerAvatarId
-                : row.buyerAvatarId,
-            unread: Number(row.unread),
-            coverImageUrl: row.imageKey
-              ? await storage.signedReadUrl(row.imageKey)
-              : null,
-          })),
-        ),
+        data: rows.map((row) => ({
+          ...row.conversation,
+          listingTitle: row.listingTitle,
+          lifecycleState: row.lifecycleState,
+          otherUserId:
+            row.conversation.buyerId === req.auth!.userId
+              ? row.conversation.sellerId
+              : row.conversation.buyerId,
+          otherName:
+            row.conversation.buyerId === req.auth!.userId
+              ? row.sellerName
+              : row.buyerName,
+          otherAvatarId:
+            row.conversation.buyerId === req.auth!.userId
+              ? row.sellerAvatarId
+              : row.buyerAvatarId,
+          unread: Number(row.unread),
+          coverImageUrl: covers.get(row.conversation.listingId) ?? null,
+        })),
       });
     }),
   );

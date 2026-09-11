@@ -81,7 +81,7 @@ async function category(request: APIRequestContext) {
 async function createListing(
   auth: Awaited<ReturnType<typeof signIn>>,
   title: string,
-  { submit = true } = {},
+  { submit = true, unfinishedFirstUpload = false } = {},
 ) {
   const categoryId = await category(auth.request);
   const created = await auth.request.post(`${API}/api/listings`, {
@@ -107,6 +107,12 @@ async function createListing(
     },
   });
   const listing = (await created.json()).data;
+  if (unfinishedFirstUpload) {
+    const reserved = await auth.request.post(`${API}/api/uploads/listings/${listing.id}/presign`, {
+      headers: auth.headers, data: { mimeType: "image/jpeg", byteSize: 100 },
+    });
+    expect(reserved.status()).toBe(201);
+  }
   const image = await sharp({
     create: { width: 640, height: 480, channels: 3, background: "#5b7f68" },
   })
@@ -798,5 +804,32 @@ test("E2E-07 important marketplace screens remain usable at mobile, tablet and d
     }
     expect(pageErrors).toEqual([]);
     await context.close();
+  }
+});
+
+
+test("thumbnail loads after an unfinished first upload on desktop and mobile", async ({ browser }) => {
+  const sellerContext = await browser.newContext();
+  const adminContext = await browser.newContext();
+  const guestContext = await browser.newContext();
+  try {
+    const seller = await signIn(sellerContext, "cover-retry-seller");
+    const title = "Cover retry regression textbook";
+    const listing = await createListing(seller, title, { unfinishedFirstUpload: true });
+    await approve(adminContext, listing.id);
+    const page = await guestContext.newPage();
+    await page.goto(marketplacePath("/browse?q=" + encodeURIComponent(title)));
+    const card = page.getByRole("link", { name: `View ${title}`, exact: true });
+    for (const width of [1280, 375]) {
+      await page.setViewportSize({ width, height: 900 });
+      const image = card.getByRole("img", { name: title, exact: true });
+      await expect(image).toBeVisible();
+      await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0)).toBe(true);
+    }
+    await card.click();
+    await expect(page).toHaveURL(new RegExp(`/listing/${listing.id}$`));
+    await expect(page.locator(".product-gallery-main-image")).toBeVisible();
+  } finally {
+    await Promise.all([sellerContext.close(), adminContext.close(), guestContext.close()]);
   }
 });

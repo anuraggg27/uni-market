@@ -11,6 +11,7 @@ import type { StorageService } from '../services/storage.js';
 import { matchProhibitedTerms } from '../services/content-risk.js';
 import { notifyNotifications } from '../services/notification-events.js';
 import { getReviewSummary } from '../services/reputation.js';
+import { getListingCoverUrls } from '../services/listing-images.js';
 
 const publicListing = and(eq(listings.moderationState, 'APPROVED'), inArray(listings.lifecycleState, ['ACTIVE', 'RESERVED', 'SOLD']), isNull(listings.deletedAt));
 
@@ -42,8 +43,9 @@ export function listingsRouter(db: Database, config: AppConfig, storage: Storage
     if (query.minPrice !== undefined) conditions.push(or(gte(listings.exactPrice, query.minPrice), gte(listings.maximumPrice, query.minPrice), eq(listings.priceType, 'FREE'))!);
     if (query.maxPrice !== undefined) conditions.push(or(lte(listings.exactPrice, query.maxPrice), lte(listings.minimumPrice, query.maxPrice), eq(listings.priceType, 'FREE'))!);
     const order = query.sort === 'price_asc' ? asc(sql`coalesce(${listings.exactPrice}, ${listings.minimumPrice}, 0)`) : query.sort === 'price_desc' ? desc(sql`coalesce(${listings.exactPrice}, ${listings.maximumPrice}, 0)`) : query.sort === 'popular' ? desc(sql`${listings.viewCount} + ${listings.favouriteCount} * 3`) : desc(listings.approvedAt);
-    const rows = await db.select({ listing: listings, categoryName: categories.name, imageKey: listingImages.objectKey }).from(listings).innerJoin(categories, eq(categories.id, listings.categoryId)).leftJoin(listingImages, and(eq(listingImages.listingId, listings.id), eq(listingImages.position, 0), isNull(listingImages.deletedAt))).where(and(...conditions)).orderBy(order, desc(listings.id)).limit(query.limit).offset((query.page - 1) * query.limit);
-    const data = await Promise.all(rows.map(async ({ listing, categoryName, imageKey }) => ({ ...listing, categoryName, priceLabel: priceLabel(listing), coverImageUrl: imageKey ? await storage.signedReadUrl(imageKey) : null })));
+    const rows = await db.select({ listing: listings, categoryName: categories.name }).from(listings).innerJoin(categories, eq(categories.id, listings.categoryId)).where(and(...conditions)).orderBy(order, desc(listings.id)).limit(query.limit).offset((query.page - 1) * query.limit);
+    const covers = await getListingCoverUrls(db, storage, rows.map(({ listing }) => listing.id));
+    const data = rows.map(({ listing, categoryName }) => ({ ...listing, categoryName, priceLabel: priceLabel(listing), coverImageUrl: covers.get(listing.id) ?? null }));
     res.setHeader('cache-control', 'public, max-age=30, stale-while-revalidate=60');
     res.json({ data, meta: { page: query.page, limit: query.limit, hasMore: rows.length === query.limit } });
   }));
@@ -57,8 +59,9 @@ export function listingsRouter(db: Database, config: AppConfig, storage: Storage
   }));
 
   router.get('/my-listings', requireAuth, asyncRoute(async (req, res) => {
-    const rows = await db.select({ listing: listings, imageKey: listingImages.objectKey }).from(listings).leftJoin(listingImages, and(eq(listingImages.listingId, listings.id), eq(listingImages.position, 0), isNull(listingImages.deletedAt))).where(and(eq(listings.sellerId, req.auth!.userId), isNull(listings.deletedAt))).orderBy(desc(listings.updatedAt));
-    res.json({ data: await Promise.all(rows.map(async ({ listing, imageKey }) => ({ ...listing, priceLabel: priceLabel(listing), coverImageUrl: imageKey ? await storage.signedReadUrl(imageKey) : null }))) });
+    const rows = await db.select({ listing: listings }).from(listings).where(and(eq(listings.sellerId, req.auth!.userId), isNull(listings.deletedAt))).orderBy(desc(listings.updatedAt));
+    const covers = await getListingCoverUrls(db, storage, rows.map(({ listing }) => listing.id));
+    res.json({ data: rows.map(({ listing }) => ({ ...listing, priceLabel: priceLabel(listing), coverImageUrl: covers.get(listing.id) ?? null })) });
   }));
 
   router.get('/listings/:id', asyncRoute(async (req, res) => {
