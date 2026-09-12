@@ -2229,22 +2229,32 @@ html.dark .confirm-warning {
 }
 .request-product-thumbnail {
   width: 100%;
-  aspect-ratio: 3 / 4;
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: 4 / 3;
   display: grid;
   place-items: center;
   overflow: hidden;
   border: 1px solid var(--color-line);
   border-radius: 13px;
-  background: var(--color-surface-muted);
+  background: color-mix(in srgb, var(--color-surface-muted) 72%, var(--color-surface));
   color: var(--color-muted);
 }
-.request-product-thumbnail img {
+.request-product-image {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  object-position: center;
 }
-.request-product-thumbnail svg {
+.request-product-placeholder {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  color: var(--color-muted);
+  font-size: 0.72rem;
+}
+.request-product-placeholder svg {
   width: 25px;
   height: 25px;
   stroke-width: 1.5;
@@ -2561,7 +2571,6 @@ html.dark .confirm-warning {
     grid-template-columns: minmax(0, 1fr);
   }
   .transactions-page .request-product-thumbnail {
-    aspect-ratio: 4 / 3;
     max-width: none;
   }
   .transactions-page .transaction-card-actions {
@@ -5424,6 +5433,7 @@ html.dark [data-site-header] :where(
 
 /* Product media must preserve the complete uploaded image at every surface. */
 img.market-card-image,
+img.request-product-image,
 .my-listing-image img,
 img.product-image,
 .photo-preview img,

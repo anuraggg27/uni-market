@@ -24,6 +24,7 @@ import {
   Circle,
   Download,
   ExternalLink,
+  ImageOff,
   ImagePlus,
   KeyRound,
   LogOut,
@@ -1973,6 +1974,37 @@ function transactionStatusText(transaction: TransactionRecord): string {
   return labels[transaction.status] ?? transaction.status.replaceAll("_", " ").toLocaleLowerCase();
 }
 
+function RequestListingThumbnail({ transaction }: { transaction: TransactionRecord }) {
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
+  const imageUrl = transaction.coverImageUrl ?? null;
+  const showImage = Boolean(imageUrl) && imageUrl !== failedImageUrl;
+
+  return (
+    <Link
+      className="request-product-thumbnail"
+      to={`/listing/${transaction.listingId}`}
+      aria-label={`View ${transaction.listingTitle}`}
+    >
+      {showImage ? (
+        <img
+          className="request-product-image"
+          src={imageUrl ?? undefined}
+          alt={transaction.listingTitle}
+          loading="lazy"
+          width={640}
+          height={480}
+          onError={() => setFailedImageUrl(imageUrl)}
+        />
+      ) : (
+        <span className="request-product-placeholder">
+          <ImageOff aria-hidden="true" />
+          <span>No image</span>
+        </span>
+      )}
+    </Link>
+  );
+}
+
 export function RequestsPage() {
   const client = useQueryClient();
   const [realtimeState, setRealtimeState] = useState<RealtimeState>("connecting");
@@ -2148,9 +2180,7 @@ export function RequestsPage() {
             <article className="panel transaction-card" id={`transaction-${tx.id}`} key={tx.id}>
               <div className="transaction-card-header">
                 <div className="transaction-card-main">
-                  <Link className="request-product-thumbnail" to={`/listing/${tx.listingId}`} aria-label={`View ${tx.listingTitle}`}>
-                    {tx.coverImageUrl ? <img src={tx.coverImageUrl} alt="" /> : <ImagePlus aria-hidden="true" />}
-                  </Link>
+                  <RequestListingThumbnail transaction={tx} />
                   <div className="transaction-card-copy">
                     <span className={`request-direction request-direction-${tx.role.toLowerCase()}`}>{tx.role === "BUYER" ? "Sent" : "Received"}</span>
                     <h2><Link to={`/listing/${tx.listingId}`}>{tx.listingTitle}</Link></h2>

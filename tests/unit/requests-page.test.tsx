@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -43,6 +43,7 @@ const transactions = [
     createdAt: "2026-09-03T10:00:00.000Z",
     updatedAt: "2026-09-03T10:00:00.000Z",
     reviewSubmitted: false,
+    coverImageUrl: "https://images.example/new-calculator.webp",
   },
   {
     id: "received-pending",
@@ -72,15 +73,16 @@ const transactions = [
   },
 ];
 
-function renderPage() {
+function renderPage(initialEntry = "/requests") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-  return render(
+  const result = render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/requests"]}>
+      <MemoryRouter initialEntries={[initialEntry]}>
         <RequestsPage />
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  return { ...result, client };
 }
 
 describe("RequestsPage", () => {
@@ -131,5 +133,31 @@ describe("RequestsPage", () => {
         body: JSON.stringify({ rating: 5, text: "Smooth campus exchange.", tags: [] }),
       },
     ));
+  });
+
+  it("renders the same request image from a notification route and recovers from a refreshed URL", async () => {
+    const { client } = renderPage("/requests?view=sent#transaction-new-completed");
+
+    const title = await screen.findByText("Newer calculator");
+    const card = title.closest("article");
+    expect(card).not.toBeNull();
+    const cardQueries = within(card!);
+    const image = cardQueries.getByRole("img", { name: "Newer calculator" });
+    expect(image).toHaveAttribute("src", "https://images.example/new-calculator.webp");
+    expect(screen.queryByText("Received desk request")).not.toBeInTheDocument();
+
+    fireEvent.error(image);
+    expect(cardQueries.getByText("No image")).toBeVisible();
+
+    act(() => {
+      client.setQueryData(["transactions"], (current: typeof transactions | undefined) =>
+        current?.map((transaction) => transaction.id === "new-completed"
+          ? { ...transaction, coverImageUrl: "https://images.example/new-calculator-refreshed.webp" }
+          : transaction),
+      );
+    });
+
+    await waitFor(() => expect(cardQueries.getByRole("img", { name: "Newer calculator" }))
+      .toHaveAttribute("src", "https://images.example/new-calculator-refreshed.webp"));
   });
 });
