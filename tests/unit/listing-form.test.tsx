@@ -2,6 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import React from "react";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -24,7 +25,7 @@ vi.mock("../../apps/web/src/api", () => ({
   }),
 }));
 
-import { ListingFormPage } from "../../apps/web/src/pages/UserPages";
+import { ListingFormPage, mapWithConcurrency } from "../../apps/web/src/pages/UserPages";
 
 describe("ListingFormPage photos", () => {
   let previewNumber = 0;
@@ -56,12 +57,12 @@ describe("ListingFormPage photos", () => {
       if (path === "/api/listings" && options?.method === "POST") {
         return Promise.resolve({ id: "listing-1" });
       }
-      if (path === "/api/uploads/listings/listing-1/presign") {
-        return Promise.resolve({
+      if (path === "/api/uploads/listings/listing-1/presign-batch") {
+        return Promise.resolve([{
           uploadUrl: "https://uploads.example.test/image",
           headers: { "content-type": "image/jpeg" },
           imageId: "image-1",
-        });
+        }]);
       }
       if (path === "/api/uploads/listings/listing-1/finalize") {
         return Promise.resolve({});
@@ -79,6 +80,25 @@ describe("ListingFormPage photos", () => {
     vi.unstubAllGlobals();
     Reflect.deleteProperty(URL, "createObjectURL");
     Reflect.deleteProperty(URL, "revokeObjectURL");
+  });
+
+  it("runs independent work at the configured concurrency limit", async () => {
+    let active = 0;
+    let maximumActive = 0;
+    const releases: Array<() => void> = [];
+    const pending = mapWithConcurrency([0, 1, 2, 3, 4], 3, async () => {
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      await new Promise<void>((resolve) => releases.push(resolve));
+      active -= 1;
+    });
+    await waitFor(() => expect(releases).toHaveLength(3));
+    expect(maximumActive).toBe(3);
+    releases.splice(0).forEach((release) => release());
+    await waitFor(() => expect(releases).toHaveLength(2));
+    releases.splice(0).forEach((release) => release());
+    await pending;
+    expect(maximumActive).toBe(3);
   });
 
   it.each(["Price (₹)", "Minimum (₹)", "Maximum (₹)"])("shows a clear negative-price error for %s without saving", async (label) => {
@@ -222,17 +242,21 @@ describe("ListingFormPage photos", () => {
     );
     fireEvent.click(screen.getByLabelText(/I own this used physical item/));
     fireEvent.click(screen.getByLabelText(/This listing is accurate and follows the seller rules/));
+    let finishUpload!: (response: { ok: boolean }) => void;
+    fetchMock.mockImplementationOnce(() => new Promise((resolve) => { finishUpload = resolve; }));
     fireEvent.click(
       screen.getByRole("button", { name: "Submit for review" }),
     );
     await waitFor(() =>
       expect(apiMock).toHaveBeenCalledWith(
-        "/api/uploads/listings/listing-1/presign",
+        "/api/uploads/listings/listing-1/presign-batch",
         expect.objectContaining({ method: "POST" }),
       ),
     );
-    const presignCall = apiMock.mock.calls.find(([path]) => path === "/api/uploads/listings/listing-1/presign");
-    expect(JSON.parse(String(presignCall?.[1]?.body))).toEqual({ mimeType: "image/jpeg", byteSize: book.size });
+    expect(await screen.findByText("Uploading photos… 0/1", { selector: ".listing-submit-status" })).toBeVisible();
+    await act(async () => finishUpload({ ok: true }));
+    const presignCall = apiMock.mock.calls.find(([path]) => path === "/api/uploads/listings/listing-1/presign-batch");
+    expect(JSON.parse(String(presignCall?.[1]?.body))).toEqual({ files: [{ mimeType: "image/jpeg", byteSize: book.size }] });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
       "https://uploads.example.test/image",

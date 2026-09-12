@@ -1,12 +1,14 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { performance } from 'node:perf_hooks';
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { fileTypeFromBuffer } from 'file-type';
 import sharp from 'sharp';
 import type { AppConfig } from '../config.js';
 import { AppError } from '../lib/errors.js';
+import { logger } from '../lib/logger.js';
 
 const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
@@ -50,31 +52,75 @@ export class StorageService {
     const path = this.localPath(params.key); await mkdir(dirname(path), { recursive: true }); await writeFile(path, buffer, { flag: 'wx' });
   }
 
-  async finalize(tempKey: string, ownerId: string, listingId: string): Promise<{ objectKey: string; mimeType: string; byteSize: number; width: number; height: number; sourceSha256: string; sourceProvenanceDetected: boolean }> {
+  async finalize(tempKey: string, ownerId: string, listingId: string, expectedByteSize: number, diagnosticId?: string): Promise<{ objectKey: string; mimeType: string; byteSize: number; width: number; height: number; sourceSha256: string; sourceProvenanceDetected: boolean }> {
     if (!tempKey.startsWith(`temporary/${ownerId}/${listingId}/`) || tempKey.includes('..')) throw new AppError(403, 'UPLOAD_FORBIDDEN', 'This upload does not belong to you');
+    const startedAt = performance.now();
+    const timings: Record<string, number> = {};
+    const measure = (name: string, stageStartedAt: number) => { timings[name] = Math.round(performance.now() - stageStartedAt); };
+    let outcome = 'succeeded';
+    let cleanupPromise: Promise<void> | undefined;
+    const startCleanup = () => {
+      if (!cleanupPromise) {
+        const cleanupStartedAt = performance.now();
+        cleanupPromise = this.delete(tempKey).catch(() => undefined).finally(() => {
+          measure(this.s3 ? 'r2DeleteMs' : 'localDeleteMs', cleanupStartedAt);
+        });
+      }
+      return cleanupPromise;
+    };
     let buffer: Buffer;
     try {
       if (this.s3) {
-        const head = await this.s3.send(new HeadObjectCommand({ Bucket: this.config.R2_BUCKET_NAME, Key: tempKey }));
-        if (head.Metadata?.owner !== ownerId || head.Metadata?.listing !== listingId || (head.ContentLength ?? 0) > this.config.MAX_IMAGE_SIZE_MB * 1024 * 1024) throw new AppError(400, 'INVALID_IMAGE', 'Image validation failed');
+        let stageStartedAt = performance.now();
         const object = await this.s3.send(new GetObjectCommand({ Bucket: this.config.R2_BUCKET_NAME, Key: tempKey }));
+        measure('r2GetHeadersMs', stageStartedAt);
+        const contentLength = object.ContentLength ?? 0;
+        if (object.Metadata?.owner !== ownerId || object.Metadata?.listing !== listingId || contentLength !== expectedByteSize || contentLength > this.config.MAX_IMAGE_SIZE_MB * 1024 * 1024) {
+          (object.Body as { destroy?: () => void } | undefined)?.destroy?.();
+          throw new AppError(400, 'INVALID_IMAGE', 'Image validation failed');
+        }
+        stageStartedAt = performance.now();
         buffer = Buffer.from(await object.Body!.transformToByteArray());
-      } else buffer = await readFile(this.localPath(tempKey));
-      if (buffer.length > this.config.MAX_IMAGE_SIZE_MB * 1024 * 1024) throw new AppError(413, 'IMAGE_TOO_LARGE', 'Image is too large');
+        measure('r2DownloadMs', stageStartedAt);
+      } else {
+        const stageStartedAt = performance.now();
+        buffer = await readFile(this.localPath(tempKey));
+        measure('localReadMs', stageStartedAt);
+      }
+      if (buffer.length !== expectedByteSize || buffer.length > this.config.MAX_IMAGE_SIZE_MB * 1024 * 1024) throw new AppError(400, 'UPLOAD_SIZE_MISMATCH', 'Uploaded file size did not match the request');
+      let stageStartedAt = performance.now();
       const detected = await fileTypeFromBuffer(buffer);
+      measure('signatureMs', stageStartedAt);
       if (!detected || !ALLOWED.has(detected.mime)) throw new AppError(400, 'INVALID_IMAGE_SIGNATURE', 'The file is not a supported image');
       const input = sharp(buffer, { failOn: 'error', limitInputPixels: false });
+      stageStartedAt = performance.now();
       const metadata = await input.metadata();
+      measure('metadataMs', stageStartedAt);
       if (!metadata.width || !metadata.height) throw new AppError(400, 'INVALID_IMAGE', 'Image validation failed');
       const pipeline = input.rotate().resize({ width: 2200, height: 2200, fit: 'inside', withoutEnlargement: true }).webp({ quality: 84 });
-      const sanitized = await pipeline.toBuffer();
-      const finalMeta = await sharp(sanitized).metadata();
+      stageStartedAt = performance.now();
+      const { data: sanitized, info: finalMeta } = await pipeline.toBuffer({ resolveWithObject: true });
+      measure('transformMs', stageStartedAt);
       const objectKey = `listings/${listingId}/${randomUUID()}.webp`;
-      if (this.s3) await this.s3.send(new PutObjectCommand({ Bucket: this.config.R2_BUCKET_NAME, Key: objectKey, Body: sanitized, ContentType: 'image/webp', ContentLength: sanitized.length, Metadata: { owner: ownerId, listing: listingId, private: 'true' } }));
-      else { const path = this.localPath(objectKey); await mkdir(dirname(path), { recursive: true }); await writeFile(path, sanitized, { flag: 'wx' }); }
-      return { objectKey, mimeType: 'image/webp', byteSize: sanitized.length, width: finalMeta.width!, height: finalMeta.height!, sourceSha256: createHash('sha256').update(buffer).digest('hex'), sourceProvenanceDetected: Boolean(metadata.xmp || metadata.exif || metadata.iptc) };
+      stageStartedAt = performance.now();
+      void startCleanup();
+      if (this.s3) {
+        await this.s3.send(new PutObjectCommand({ Bucket: this.config.R2_BUCKET_NAME, Key: objectKey, Body: sanitized, ContentType: 'image/webp', ContentLength: sanitized.length, Metadata: { owner: ownerId, listing: listingId, private: 'true' } }));
+        measure('r2PutMs', stageStartedAt);
+      } else {
+        const path = this.localPath(objectKey); await mkdir(dirname(path), { recursive: true }); await writeFile(path, sanitized, { flag: 'wx' });
+        measure('localWriteMs', stageStartedAt);
+      }
+      return { objectKey, mimeType: 'image/webp', byteSize: sanitized.length, width: finalMeta.width, height: finalMeta.height, sourceSha256: createHash('sha256').update(buffer).digest('hex'), sourceProvenanceDetected: Boolean(metadata.xmp || metadata.exif || metadata.iptc) };
+    } catch (error) {
+      outcome = error instanceof AppError ? error.code : 'failed';
+      throw error;
     } finally {
-      await this.delete(tempKey).catch(() => undefined);
+      await startCleanup();
+      const totalMs = Math.round(performance.now() - startedAt);
+      const details = { diagnosticId, outcome, totalMs, timings };
+      if (totalMs >= 1_000) logger.warn(details, 'slow listing image finalize');
+      else logger.debug(details, 'listing image finalize');
     }
   }
 

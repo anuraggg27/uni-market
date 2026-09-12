@@ -21,6 +21,32 @@ describe('listing photo allocation and retries', () => {
   const images = () => ctx.db.select().from(listingImages).where(eq(listingImages.listingId, listingId)).orderBy(listingImages.position);
   const presign = () => seller.agent.post(`/api/uploads/listings/${listingId}/presign`).set(seller.headers).send({ mimeType: 'image/jpeg', byteSize: 100 });
 
+  it('allocates a presign batch atomically in request order', async () => {
+    const files = [
+      { mimeType: 'image/jpeg', byteSize: 101 },
+      { mimeType: 'image/png', byteSize: 202 },
+      { mimeType: 'image/webp', byteSize: 303 },
+    ];
+    const response = await seller.agent.post(`/api/uploads/listings/${listingId}/presign-batch`).set(seller.headers).send({ files }).expect(201);
+    expect(response.body.data).toHaveLength(3);
+    expect(new Set(response.body.data.map((ticket: { imageId: string }) => ticket.imageId)).size).toBe(3);
+    const rows = await images();
+    expect(rows.map(row => ({ mimeType: row.mimeType, byteSize: row.byteSize, position: row.position }))).toEqual([
+      { ...files[0], position: 0 },
+      { ...files[1], position: 1 },
+      { ...files[2], position: 2 },
+    ]);
+    expect(response.body.data.map((ticket: { imageId: string }) => ticket.imageId)).toEqual(rows.map(row => row.id));
+  });
+
+  it('rejects a batch atomically when it would exceed the image limit', async () => {
+    await ctx.db.insert(listingImages).values(Array.from({ length: 7 }, (_, position) => ({ listingId, ownerId: seller.user.id, position, mimeType: 'image/jpeg', byteSize: 100 })));
+    const files = [{ mimeType: 'image/jpeg', byteSize: 100 }, { mimeType: 'image/jpeg', byteSize: 100 }];
+    const response = await seller.agent.post(`/api/uploads/listings/${listingId}/presign-batch`).set(seller.headers).send({ files }).expect(400);
+    expect(response.body.error.code).toBe('IMAGE_LIMIT_REACHED');
+    expect(await images()).toHaveLength(7);
+  });
+
   it('recovers from repeated failed finalizations on the same draft', async () => {
     for (let attempt = 0; attempt < 3; attempt++) {
       const rejected = await uploadImage(seller, listingId, Buffer.from('not an image'));
@@ -89,6 +115,12 @@ describe('listing photo allocation and retries', () => {
     await verifyPhone(other, '9987654321');
     const denied = await other.agent.post(url).set(other.headers).send(input).expect(404);
     expect(denied.body.error.code).toBe('LISTING_NOT_FOUND');
+    const batchUrl = `/api/uploads/listings/${listingId}/presign-batch`;
+    const batchInput = { files: [input] };
+    await request(ctx.app).post(batchUrl).send(batchInput).expect(401);
+    await seller.agent.post(batchUrl).send(batchInput).expect(403);
+    const batchDenied = await other.agent.post(batchUrl).set(other.headers).send(batchInput).expect(404);
+    expect(batchDenied.body.error.code).toBe('LISTING_NOT_FOUND');
     expect(await images()).toHaveLength(0);
   });
 });

@@ -47,9 +47,11 @@ export function EmptyState({
 }
 export function SubmitButton({
   pending,
+  pendingLabel,
   children,
 }: {
   pending: boolean;
+  pendingLabel?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -57,7 +59,7 @@ export function SubmitButton({
       {pending ? (
         <>
           <LoaderCircle className="spin" aria-hidden="true" />
-          Saving…
+          {pendingLabel ?? "Saving\u2026"}
         </>
       ) : (
         children

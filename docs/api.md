@@ -10,7 +10,7 @@ All JSON responses use `{ "data": ... }`. Errors use `{ "error": { "code", "mess
 - Privacy: `GET /api/account/export`, `POST /api/account/revoke-sessions`, `DELETE /api/account`.
 - Phone: `GET /api/phone/config`, `POST /api/phone/check-availability`, and `POST /api/phone/verify-provider`; local development also exposes `POST /api/phone/send|verify`.
 - Catalog/listings: `GET /api/categories`, `GET|POST /api/listings`, `GET /api/listings/:id`, `GET /api/my-listings`, `PATCH /api/listings/:id`, `POST /api/listings/:id/submit|withdraw|duplicate`.
-- Uploads: `POST /api/uploads/listings/:id/presign`, signed PUT, `POST /api/uploads/listings/:id/finalize`, `DELETE /api/uploads/listings/:listingId/images/:imageId`.
+- Uploads: `POST /api/uploads/listings/:id/presign` or `POST /api/uploads/listings/:id/presign-batch`, signed PUT, `POST /api/uploads/listings/:id/finalize`, `DELETE /api/uploads/listings/:listingId/:imageId`.
 - Saved/chat/blocking: `GET|POST|DELETE /api/favourites`, `GET|POST /api/conversations`, `GET|POST /api/conversations/:id/messages`, `POST|DELETE /api/blocks/:userId`.
 - Transactions/reputation: `GET|POST /api/transactions`, `POST /api/transactions/:id/accept|handover|complete|cancel`, `POST /api/transactions/:id/reviews`, `GET /api/sellers/:id`, `GET /api/leaderboard`.
 - Reports/notifications/support: `POST /api/reports`, notification list/read endpoints, support ticket list/create/detail/message/reopen endpoints.

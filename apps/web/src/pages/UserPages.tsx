@@ -115,6 +115,41 @@ function useAcademicDomains(enabled = true) {
   });
 }
 
+type SubmissionProgress =
+  | { phase: "idle" | "preparing" | "submitting" | "submitted" }
+  | { phase: "uploading" | "processing"; completed: number; total: number };
+
+type UploadTicket = {
+  imageId: string;
+  uploadUrl: string;
+  headers: Record<string, string>;
+};
+type PendingUpload = { file: File; ticket: UploadTicket };
+
+export async function mapWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  operation: (item: T, index: number) => Promise<void>,
+) {
+  let nextIndex = 0;
+  let firstError: unknown;
+  async function worker() {
+    while (firstError === undefined) {
+      const index = nextIndex++;
+      if (index >= items.length) return;
+      try {
+        await operation(items[index]!, index);
+      } catch (error) {
+        firstError ??= error;
+      }
+    }
+  }
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, () => worker()),
+  );
+  if (firstError !== undefined) throw firstError;
+}
+
 export function ListingFormPage({ edit = false }: { edit?: boolean }) {
   const { listingId } = useParams();
   const navigate = useNavigate();
@@ -132,6 +167,7 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
   const createdListingIdRef = useRef<string | null>(null);
   const uploadedFileKeysRef = useRef(new Set<string>());
   const [uploading, setUploading] = useState(false);
+  const [submissionProgress, setSubmissionProgress] = useState<SubmissionProgress>({ phase: "idle" });
   const [serverError, setServerError] = useState("");
   const form = useForm<
     z.input<typeof listingInputSchema>,
@@ -225,30 +261,70 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
       current.includes(imageId) ? current : [...current, imageId],
     );
   }
+  function fileKey(file: File) {
+    return `${file.name}:${file.size}:${file.lastModified}:${file.type}`;
+  }
   async function uploadFiles(id: string) {
-    for (const file of images) {
-      const fileKey = `${file.name}:${file.size}:${file.lastModified}:${file.type}`;
-      if (uploadedFileKeysRef.current.has(fileKey)) continue;
-      const ticket = await api<any>(`/api/uploads/listings/${id}/presign`, {
-        method: "POST",
-        ...jsonBody({ mimeType: file.type, byteSize: file.size }),
+    const pendingFiles = images.filter((file) => !uploadedFileKeysRef.current.has(fileKey(file)));
+    if (!pendingFiles.length) return;
+    await uploadPendingFiles(id, pendingFiles);
+  }
+  async function uploadPendingFiles(id: string, pendingFiles: File[]) {
+    const files = pendingFiles.map((file) => ({ mimeType: file.type, byteSize: file.size }));
+    const tickets = await api<UploadTicket[]>(`/api/uploads/listings/${id}/presign-batch`, {
+      method: "POST",
+      ...jsonBody({ files }),
+    });
+    if (tickets.length !== pendingFiles.length) {
+      await cleanupUploads(id, tickets);
+      throw new Error("Could not prepare every image upload");
+    }
+    const uploads = pendingFiles.map((file, index) => ({ file, ticket: tickets[index]! }));
+    await uploadToStorage(id, uploads);
+    await finalizeUploads(id, uploads);
+  }
+  async function cleanupUploads(id: string, tickets: UploadTicket[]) {
+    await mapWithConcurrency(tickets, 4, async (ticket) => {
+      await api(`/api/uploads/listings/${id}/${ticket.imageId}`, { method: "DELETE" }).catch(() => undefined);
+    });
+  }
+  async function uploadToStorage(id: string, uploads: PendingUpload[]) {
+    let completed = 0;
+    setSubmissionProgress({ phase: "uploading", completed, total: uploads.length });
+    try {
+      await mapWithConcurrency(uploads, 4, async ({ file, ticket }) => {
+        const response = await fetch(ticket.uploadUrl, { method: "PUT", headers: ticket.headers, body: file });
+        if (!response.ok) throw new Error(`${file.name}: image upload failed`);
+        completed += 1;
+        setSubmissionProgress({ phase: "uploading", completed, total: uploads.length });
       });
-      const uploaded = await fetch(ticket.uploadUrl, {
-        method: "PUT",
-        headers: ticket.headers,
-        body: file,
+    } catch (error) {
+      await cleanupUploads(id, uploads.map(({ ticket }) => ticket));
+      throw error;
+    }
+  }
+  async function finalizeUploads(id: string, uploads: PendingUpload[]) {
+    let completed = 0;
+    setSubmissionProgress({ phase: "processing", completed, total: uploads.length });
+    try {
+      await mapWithConcurrency(uploads, 3, async ({ ticket }) => {
+        await api(`/api/uploads/listings/${id}/finalize`, {
+          method: "POST",
+          ...jsonBody({ imageId: ticket.imageId }),
+        });
+        completed += 1;
+        setSubmissionProgress({ phase: "processing", completed, total: uploads.length });
       });
-      if (!uploaded.ok) throw new Error("Image upload failed");
-      await api(`/api/uploads/listings/${id}/finalize`, {
-        method: "POST",
-        ...jsonBody({ imageId: ticket.imageId }),
-      });
-      uploadedFileKeysRef.current.add(fileKey);
+      uploads.forEach(({ file }) => uploadedFileKeysRef.current.add(fileKey(file)));
+    } catch (error) {
+      await cleanupUploads(id, uploads.map(({ ticket }) => ticket));
+      throw error;
     }
   }
   async function submit(values: ListingInput) {
     setServerError("");
     setUploading(true);
+    setSubmissionProgress({ phase: "preparing" });
     try {
       if (edit && retainedExistingImages.length + images.length === 0) {
         throw new Error("Keep or add at least one product image.");
@@ -270,12 +346,15 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
       }
       if (images.length) await uploadFiles(listing.id);
       if (!edit) {
+        setSubmissionProgress({ phase: "submitting" });
         await api(`/api/listings/${listing.id}/submit`, { method: "POST" });
       }
-      toast.success(edit ? "Listing updated" : "Listing submitted for review");
+      setSubmissionProgress({ phase: "submitted" });
+      toast.success(edit ? "Listing updated ✓" : "Submitted ✓");
       navigate(`/listing/${listing.id}`);
     } catch (error: any) {
       setServerError(error.message);
+      setSubmissionProgress({ phase: "idle" });
     } finally {
       setUploading(false);
     }
@@ -292,6 +371,17 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
         <ErrorState error={existing.error} />
       </div>
     );
+  const submissionLabel = submissionProgress.phase === "preparing"
+    ? "Preparing listing\u2026"
+    : submissionProgress.phase === "uploading"
+      ? `Uploading photos\u2026 ${submissionProgress.completed}/${submissionProgress.total}`
+      : submissionProgress.phase === "processing"
+        ? `Processing photos\u2026 ${submissionProgress.completed}/${submissionProgress.total}`
+        : submissionProgress.phase === "submitting"
+          ? "Submitting for review\u2026"
+          : submissionProgress.phase === "submitted"
+            ? (edit ? "Saved \u2713" : "Submitted \u2713")
+            : (edit ? "Save changes" : "Submit for review");
   return (
     <div className="page listing-form-page">
       <div className="page-header listing-form-header">
@@ -600,11 +690,14 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
           </div>
         </fieldset>
         {serverError ? <p className="field-error">{serverError}</p> : null}
+        {submissionProgress.phase !== "idle" ? (
+          <p className="listing-submit-status" role="status" aria-live="polite">{submissionLabel}</p>
+        ) : null}
         <div className="listing-form-actions">
           <Link className="button secondary" to="/my-listings">
             Cancel
           </Link>
-          <SubmitButton pending={form.formState.isSubmitting || uploading}>
+          <SubmitButton pending={form.formState.isSubmitting || uploading} pendingLabel={submissionLabel}>
             {edit ? "Save changes" : "Submit for review"}
           </SubmitButton>
         </div>
