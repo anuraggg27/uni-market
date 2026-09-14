@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
@@ -59,7 +60,12 @@ const config = loadConfig({
   SMTP_FROM_EMAIL: "test@example.com",
   BOOTSTRAP_ADMIN_EMAILS: "moderator@example.test,support@example.test",
 });
-const app = createApp({ db, config, googleVerifier: verifier });
+const app = createApp({
+  db,
+  config,
+  googleVerifier: verifier,
+  webIndexHtml: readFileSync(resolve(process.cwd(), "apps/web/index.html"), "utf8"),
+});
 const server = createServer(app);
 app.set('io', attachSocket(server, db, config));
 server.listen(apiPort, "127.0.0.1");

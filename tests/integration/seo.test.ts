@@ -79,6 +79,10 @@ describe('production-style SEO routes', () => {
     expect(home.text).toContain('Find what you need around campus');
     expect(home.text).toContain(`/marketplace/listing/${activeId}`);
     expect(home.text).toContain('href="http://localhost:5173/marketplace"');
+    expect(home.text).toContain('<style id="seo-fallback-styles" data-seo>');
+    expect(home.text).toContain('class="seo-category-links"');
+    expect(home.text).toContain('class="seo-listing-grid"');
+    expect(home.text).toContain('class="seo-fallback-header"');
     expect(home.text).not.toContain('untrusted.example');
     expect(home.text).not.toContain('PRIVATE DRAFT TITLE');
     expect(home.headers['x-robots-tag']).toMatch(/^index/);

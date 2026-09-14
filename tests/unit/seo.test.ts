@@ -44,5 +44,11 @@ describe('SEO metadata and safe HTML', () => {
     expect(html.match(/name="description"/g)).toHaveLength(1);
     expect(html.match(/name="robots"/g)).toHaveLength(1);
     expect(html).toContain('$&');
+    expect(html).toContain('<style id="seo-fallback-styles" data-seo>');
+    expect(html).toContain('class="seo-fallback-header"');
+    expect(html).toContain('class="seo-fallback-main"');
+    expect(html).toContain('class="seo-fallback-footer"');
+    expect(html).not.toContain('<noscript');
+    expect(html).not.toContain(' hidden');
   });
 });
