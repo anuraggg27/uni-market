@@ -152,6 +152,7 @@ test('mobile homepage uses compact category shortcuts and horizontally scrollabl
 
 test('the shared Uni Rocks favicon is a publicly readable square PNG with an ICO fallback', async ({ page, request }) => {
   await page.goto('/marketplace/');
+  await expect(page.locator('head link[rel="manifest"]')).toHaveAttribute('href', '/marketplace/site.webmanifest');
   const icon = page.locator('head link[rel="icon"][sizes="96x96"]');
   const href = await icon.getAttribute('href');
   expect(href).toBeTruthy();
@@ -166,4 +167,15 @@ test('the shared Uni Rocks favicon is a publicly readable square PNG with an ICO
   const ico = await request.get(icoHref!);
   expect(ico.ok()).toBe(true);
   expect((await ico.body()).readUInt16LE(2)).toBe(1);
+
+  const rootIcon = await request.get(`http://127.0.0.1:${process.env.E2E_API_PORT ?? '4000'}/favicon.ico`, { maxRedirects: 0 });
+  expect(rootIcon.status()).toBe(200);
+  expect(rootIcon.headers()['content-type']).toContain('image/vnd.microsoft.icon');
+  const manifest = await request.get('/marketplace/site.webmanifest');
+  expect(manifest.ok()).toBe(true);
+  expect(manifest.headers()['content-type']).toContain('application/manifest+json');
+  expect((await manifest.json()).icons.map((entry: { src: string }) => entry.src)).toEqual([
+    '/marketplace/favicon-192x192.png',
+    '/marketplace/favicon-512x512.png',
+  ]);
 });

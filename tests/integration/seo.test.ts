@@ -40,11 +40,26 @@ describe('production-style SEO routes', () => {
     expect((await request(ctx.app).get('/marketplace/category/books/?page=2').expect(301)).headers.location).toBe('/marketplace/category/books?page=2');
     await request(ctx.app).get('/future-product').expect(404);
   });
-  it('exposes stable root favicon aliases without redirecting to HTML', async () => {
-    for (const [path, filename] of [['/favicon.ico', 'favicon.ico'], ['/favicon.png', 'favicon-96x96.png'], ['/apple-touch-icon.png', 'apple-touch-icon.png'], ['/favicon-96x96.png', 'favicon-96x96.png']]) {
-      const response = await request(ctx.app).get(path).expect(301);
-      expect(response.headers.location).toBe(`/marketplace/${filename}`);
+  it('serves stable root favicon and manifest URLs directly', async () => {
+    for (const [path, contentType] of [
+      ['/favicon.ico', 'image/vnd.microsoft.icon'],
+      ['/favicon.png', 'image/png'],
+      ['/favicon-16x16.png', 'image/png'],
+      ['/favicon-32x32.png', 'image/png'],
+      ['/favicon-192x192.png', 'image/png'],
+      ['/favicon-512x512.png', 'image/png'],
+      ['/apple-touch-icon.png', 'image/png'],
+      ['/site.webmanifest', 'application/manifest+json'],
+    ]) {
+      const response = await request(ctx.app).get(path).expect(200);
+      expect(response.headers['content-type']).toContain(contentType);
+      expect(response.headers.location).toBeUndefined();
     }
+    const manifest = await request(ctx.app).get('/site.webmanifest').expect(200);
+    expect(manifest.body.icons.map((icon: { src: string }) => icon.src)).toEqual([
+      '/marketplace/favicon-192x192.png',
+      '/marketplace/favicon-512x512.png',
+    ]);
   });
   it('publishes active categories, their products, breadcrumbs and sitemap entries', async () => {
     const [inactive] = await ctx.db.insert(categories).values({ name: 'Hidden category', slug: 'hidden-category', active: false }).returning();

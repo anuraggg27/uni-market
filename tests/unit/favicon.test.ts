@@ -5,6 +5,18 @@ import sharp from 'sharp';
 const publicRoot = new URL('../../apps/web/public/', import.meta.url);
 
 describe('shared Uni Rocks favicon assets', () => {
+  it('publishes one manifest containing only the current install icons', async () => {
+    const manifest = JSON.parse(await readFile(new URL('site.webmanifest', publicRoot), 'utf8'));
+    expect(manifest).toMatchObject({
+      start_url: '/marketplace/',
+      scope: '/marketplace/',
+      icons: [
+        { src: '/marketplace/favicon-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: '/marketplace/favicon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      ],
+    });
+  });
+
   it.each([16, 32, 48, 96, 180, 192, 512])('derives the rounded %ipx icon from the same Uni Rocks master', async (size) => {
     const master = new URL('brand/uni-rocks-logo.png', publicRoot);
     const icon = await readFile(new URL(size === 180 ? 'apple-touch-icon.png' : `favicon-${size}x${size}.png`, publicRoot));
