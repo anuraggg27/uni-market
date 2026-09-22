@@ -12,17 +12,19 @@ import { requireAuth } from '../middleware/auth.js';
 import { verifiedMsg91Identifier } from '../services/msg91.js';
 
 const emailInput = z.string().trim().email().max(254).transform((value) => value.toLowerCase());
-const onboardingInput = z.object({
-  displayName: z.string().trim().min(2).max(80),
-  avatarId: avatarIdSchema,
-  academicDomainId: z.string().uuid(),
-  campus: z.string().trim().max(120).nullable().optional(),
-  graduationYear: z.number().int().min(2020).max(2040).nullable().optional(),
+const eligibilityDeclarationsInput = z.object({
   adultAttested: z.literal(true),
   acceptTerms: z.literal(true),
   acknowledgePrivacy: z.literal(true),
   acceptCommunityRules: z.literal(true),
   policyVersion: z.literal(currentPolicyVersion),
+}).strict();
+const onboardingInput = eligibilityDeclarationsInput.extend({
+  displayName: z.string().trim().min(2).max(80),
+  avatarId: avatarIdSchema,
+  academicDomainId: z.string().uuid(),
+  campus: z.string().trim().max(120).nullable().optional(),
+  graduationYear: z.number().int().min(2020).max(2040).nullable().optional(),
 }).strict();
 
 function splitStudentEmail(value: string): { email: string; domain: string } {
@@ -126,6 +128,25 @@ export function eligibilityRouter(db: Database, config: AppConfig): Router {
         policy,
         version: currentPolicyVersion,
         source: 'ONBOARDING',
+      }))).onConflictDoNothing();
+    });
+    res.json({ data: { completed: true } });
+  }));
+
+  router.post('/eligibility/declarations', requireAuth, asyncRoute(async (req, res) => {
+    eligibilityDeclarationsInput.parse(req.body);
+    const now = new Date();
+    await db.transaction(async (tx) => {
+      const current = (await tx.select({ adultAttestedAt: users.adultAttestedAt }).from(users).where(eq(users.id, req.auth!.userId)).limit(1))[0];
+      if (!current) throw new AppError(404, 'USER_NOT_FOUND', 'Account not found');
+      if (!current.adultAttestedAt) {
+        await tx.update(users).set({ adultAttestedAt: now, updatedAt: now }).where(eq(users.id, req.auth!.userId));
+      }
+      await tx.insert(policyAcceptances).values(requiredOnboardingPolicies.map((policy) => ({
+        userId: req.auth!.userId,
+        policy,
+        version: currentPolicyVersion,
+        source: 'SETTINGS',
       }))).onConflictDoNothing();
     });
     res.json({ data: { completed: true } });

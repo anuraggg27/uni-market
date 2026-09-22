@@ -2983,6 +2983,22 @@ export function SettingsPage() {
       toast.success("Student email verified");
     },
   });
+  const saveEligibilityDeclarations = useMutation({
+    mutationFn: () => api("/api/eligibility/declarations", {
+      method: "POST",
+      ...jsonBody({
+        adultAttested: true,
+        acceptTerms: true,
+        acknowledgePrivacy: true,
+        acceptCommunityRules: true,
+        policyVersion: currentPolicyVersion,
+      }),
+    }),
+    onSuccess: async () => {
+      await refresh();
+      toast.success("Age and policy requirements saved");
+    },
+  });
   const revokeSessions = useMutation({
     mutationFn: () => api("/api/account/revoke-sessions", { method: "POST" }),
     onSuccess: () => {
@@ -3111,7 +3127,27 @@ export function SettingsPage() {
       <div className="settings-grid">
         <section id="age-policies-settings" className="settings-card settings-card-wide" aria-labelledby="age-policies-title" tabIndex={-1}>
           <header><span className="settings-card-icon"><ShieldCheck aria-hidden="true" /></span><div><h2 id="age-policies-title">Age & Policies</h2><p>Your marketplace eligibility declarations.</p></div></header>
-          {user?.eligibility?.adultAttested && user?.eligibility?.policiesAccepted ? <div className="verification-complete"><CheckCircle2 aria-hidden="true" /><div><strong>Your requirements are complete</strong><span>Your 18+ declaration and current policy acceptance are recorded.</span></div></div> : <div className="settings-card-form"><p className="verification-setup-note">Your age declaration or policy acceptance needs attention.</p><Link className="button secondary" to="/onboarding">Review Requirements</Link></div>}
+          {user?.eligibility?.adultAttested && user?.eligibility?.policiesAccepted ? <div className="verification-complete"><CheckCircle2 aria-hidden="true" /><div><strong>Your requirements are complete</strong><span>Your 18+ declaration and current policy acceptance are recorded.</span></div></div> : <form className="settings-card-form eligibility-declarations-form" onSubmit={(event) => { event.preventDefault(); saveEligibilityDeclarations.mutate(); }}>
+            <p className="verification-setup-note">Confirm both requirements here to finish this eligibility step.</p>
+            <div className="eligibility-policy-options">
+              <div className="eligibility-policy-option">
+                <input id="settings-adult-attested" name="adultAttested" type="checkbox" required defaultChecked={user?.eligibility?.adultAttested} disabled={user?.eligibility?.adultAttested} aria-describedby="settings-adult-attested-copy" />
+                <div className="eligibility-policy-copy">
+                  <label htmlFor="settings-adult-attested">I declare that I am at least 18 years old</label>
+                  <p id="settings-adult-attested-copy">You must be an adult to create listings or contact other members.</p>
+                </div>
+              </div>
+              <div className="eligibility-policy-option">
+                <input id="settings-policies-accepted" name="policiesAccepted" type="checkbox" required defaultChecked={user?.eligibility?.policiesAccepted} disabled={user?.eligibility?.policiesAccepted} aria-describedby="settings-policies-accepted-copy" />
+                <div className="eligibility-policy-copy">
+                  <label htmlFor="settings-policies-accepted">I accept the platform policies</label>
+                  <p id="settings-policies-accepted-copy">This includes the <Link to="/terms" target="_blank" rel="noreferrer">Terms of use</Link>, <Link to="/seller-policy" target="_blank" rel="noreferrer">Seller policy</Link>, <Link to="/privacy" target="_blank" rel="noreferrer">Privacy notice</Link>, <Link to="/community-rules" target="_blank" rel="noreferrer">Community rules</Link>, and <Link to="/prohibited-items" target="_blank" rel="noreferrer">prohibited-items rules</Link>.</p>
+                </div>
+              </div>
+            </div>
+            <SubmitButton pending={saveEligibilityDeclarations.isPending}>Save Requirements</SubmitButton>
+            {saveEligibilityDeclarations.error ? <p className="field-error" role="alert">{saveEligibilityDeclarations.error.message}</p> : null}
+          </form>}
         </section>
 
         <section id="phone-verification-settings" className="settings-card" aria-labelledby="phone-verification-title" tabIndex={-1}>

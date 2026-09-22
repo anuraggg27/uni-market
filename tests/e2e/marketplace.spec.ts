@@ -216,7 +216,10 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   await expect(page).toHaveURL(/settings/);
   await page.getByRole("button", { name: /Age & policies/ }).click();
   await expect(page.locator("#age-policies-settings")).toBeFocused();
-  await expect(page.locator(".eligibility-checks").getByRole("button", { name: /Mobile number/ })).toHaveCount(0);
+  const eligibilityChecks = page.locator(".eligibility-checks");
+  await expect(eligibilityChecks.getByRole("button")).toHaveCount(2);
+  await expect(eligibilityChecks.getByRole("button", { name: /Mobile number/ })).toHaveCount(0);
+  expect(await eligibilityChecks.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").length)).toBe(2);
   await expect(page.getByRole("heading", { name: "Mobile Number (optional)" })).toBeVisible();
   await page.getByRole("button", { name: /Student email/ }).click();
   await expect(page.locator("#student-email-settings")).toBeFocused();

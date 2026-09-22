@@ -5,7 +5,7 @@ import { createApp } from '../../apps/api/src/app';
 import * as schema from '../../apps/api/src/db/schema';
 import { RetentionWorker } from '../../apps/api/src/services/retention';
 import { GrievanceMonitor } from '../../apps/api/src/services/grievance-monitor';
-import { createDraft, login, makeRole, setup, uploadImage, verifyPhone } from './helper';
+import { createDraft, login, makeRole, setup, uploadImage, verifyMarketplaceEligibility, verifyPhone } from './helper';
 
 let ctx: Awaited<ReturnType<typeof setup>>;
 beforeEach(async () => { ctx = await setup(); });
@@ -51,6 +51,50 @@ describe('India compliance controls', () => {
     expect(mismatch.body.error.code).toBe('STUDENT_EMAIL_DOMAIN_MISMATCH');
     await auth.agent.post('/api/student-email/send').set(auth.headers).send({ email: 'student@stu.upes.ac.in' }).expect(200);
     await auth.agent.post('/api/student-email/verify').set(auth.headers).send({ email: 'student@stu.upes.ac.in', code: '999999' }).expect(200);
+  });
+
+  it('records missing age and policy declarations from settings without duplicating acceptance evidence', async () => {
+    const auth = await login(ctx.app, 'settings-declarations');
+    await verifyMarketplaceEligibility(auth);
+    await ctx.db.update(schema.users).set({ adultAttestedAt: null }).where(eq(schema.users.id, auth.user.id));
+    await ctx.db.delete(schema.policyAcceptances).where(eq(schema.policyAcceptances.userId, auth.user.id));
+
+    const incomplete = await auth.agent.get('/api/auth/session').expect(200);
+    expect(incomplete.body.data).toMatchObject({
+      marketplaceEligible: false,
+      eligibility: { adultAttested: false, policiesAccepted: false, studentEmailVerified: true },
+    });
+    await auth.agent.post('/api/eligibility/declarations').set(auth.headers).send({
+      adultAttested: false,
+      acceptTerms: true,
+      acknowledgePrivacy: true,
+      acceptCommunityRules: true,
+      policyVersion: '2026-08-27',
+    }).expect(400);
+
+    const declarations = {
+      adultAttested: true,
+      acceptTerms: true,
+      acknowledgePrivacy: true,
+      acceptCommunityRules: true,
+      policyVersion: '2026-08-27',
+    };
+    await auth.agent.post('/api/eligibility/declarations').set(auth.headers).send(declarations).expect(200);
+    const afterFirstSave = (await ctx.db.select({ adultAttestedAt: schema.users.adultAttestedAt }).from(schema.users).where(eq(schema.users.id, auth.user.id)))[0]!;
+    await auth.agent.post('/api/eligibility/declarations').set(auth.headers).send(declarations).expect(200);
+
+    const session = await auth.agent.get('/api/auth/session').expect(200);
+    expect(session.body.data).toMatchObject({
+      phoneVerifiedAt: null,
+      marketplaceEligible: true,
+      eligibility: { adultAttested: true, policiesAccepted: true, studentEmailVerified: true },
+    });
+    const acceptanceRows = await ctx.db.select().from(schema.policyAcceptances).where(eq(schema.policyAcceptances.userId, auth.user.id));
+    expect(acceptanceRows).toHaveLength(3);
+    expect(new Set(acceptanceRows.map(({ policy }) => policy))).toEqual(new Set(['TERMS', 'PRIVACY', 'COMMUNITY_RULES']));
+    expect(acceptanceRows.every(({ source }) => source === 'SETTINGS')).toBe(true);
+    const afterSecondSave = (await ctx.db.select({ adultAttestedAt: schema.users.adultAttestedAt }).from(schema.users).where(eq(schema.users.id, auth.user.id)))[0]!;
+    expect(afterSecondSave.adultAttestedAt?.getTime()).toBe(afterFirstSave.adultAttestedAt?.getTime());
   });
 
   it('clears student-email verification when the selected institution changes', async () => {
