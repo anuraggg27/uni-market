@@ -83,6 +83,21 @@ describe('operational monitoring', () => {
     expect(writes.at(-1).body).toEqual({ state: 'closed', state_reason: 'completed' });
   });
 
+  it('distinguishes manual alert tests from automatically recovered incidents', async () => {
+    const bodies: string[] = [];
+    const client = async (route: string, method = 'GET', body?: any) => {
+      if (method === 'GET') return [];
+      if (route === 'issues') bodies.push(body.body);
+    };
+
+    await reconcileIncident(client, 'Alert delivery test', ['Confirm delivery'], 'https://github.com/run/test');
+    await reconcileIncident(client, 'Production health', ['Disk low'], 'https://github.com/run/incident');
+
+    expect(bodies[0]).toContain('This test issue requires manual acknowledgement and closure.');
+    expect(bodies[0]).not.toContain('closes automatically');
+    expect(bodies[1]).toContain('This issue closes automatically once checks recover.');
+  });
+
   it('requires a recent successful restore and matching private R2 backup objects', async () => {
     const now = Date.now();
     const client = async (route: string) => route.includes('/runs?')

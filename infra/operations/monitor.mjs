@@ -109,7 +109,10 @@ export async function reconcileIncident(client, kind, issues, runUrl, assignees 
     }
     return;
   }
-  const body = `${marker}\n${fingerprint}\nAutomated checks need an admin to investigate:\n\n${issues.map((item) => `- ${item}`).join('\n')}\n\n[Workflow run](${runUrl}) · Runbook: docs/recovery-and-alerts.md\n\nNo customer data or provider error payloads are included. This issue closes automatically once checks recover.`;
+  const resolution = kind === 'Alert delivery test'
+    ? 'This test issue requires manual acknowledgement and closure.'
+    : 'This issue closes automatically once checks recover.';
+  const body = `${marker}\n${fingerprint}\nAutomated checks need an admin to investigate:\n\n${issues.map((item) => `- ${item}`).join('\n')}\n\n[Workflow run](${runUrl}) · Runbook: docs/recovery-and-alerts.md\n\nNo customer data or provider error payloads are included. ${resolution}`;
   if (!existing) await client('issues', 'POST', { title, body, ...(assignees.length ? { assignees } : {}) });
   else if (!existing.body.includes(fingerprint)) {
     await client(`issues/${existing.number}`, 'PATCH', { body });
