@@ -56,8 +56,8 @@ afterEach(async () => { await rm(directory, { recursive: true, force: true }); }
 
 describe('private R2 database backups', () => {
   it('uses distinct bucket-scoped credentials and forbids unsafe endpoints, paths and photo buckets', () => {
-    expect(r2BackupConfiguration(env).client).toMatchObject({ region: 'auto', credentials: { accessKeyId: 'writer-id' } });
-    expect(r2BackupConfiguration(env, true).client.credentials.accessKeyId).toBe('reader-id');
+    expect(r2BackupConfiguration(env).client).toMatchObject({ region: 'auto', maxAttempts: 1, credentials: { accessKeyId: 'writer-id' } });
+    expect(r2BackupConfiguration(env, true).client).toMatchObject({ maxAttempts: 3, credentials: { accessKeyId: 'reader-id' } });
     expect(() => r2BackupConfiguration({ ...env, R2_BACKUP_ENDPOINT: 'http://localhost:9000' })).toThrow();
     expect(() => r2BackupConfiguration({ ...env, R2_BACKUP_ENDPOINT: 'https://storage.example.com' })).toThrow();
     expect(() => r2BackupConfiguration({ ...env, R2_BACKUP_BUCKET: 'uni-market-photos' })).toThrow();

@@ -24,8 +24,8 @@ export function r2BackupConfiguration(env = process.env, readOnly = false) {
   if (!accessKeyId || !secretAccessKey) throw new Error('Dedicated R2 backup credentials are missing');
   return { bucket, client: {
     region: 'auto', endpoint: endpoint.origin, credentials: { accessKeyId, secretAccessKey },
-    // A failed streaming PUT needs a fresh stream; fail this run instead of retrying consumed bytes.
-    maxAttempts: 1, requestChecksumCalculation: 'WHEN_REQUIRED', responseChecksumValidation: 'WHEN_REQUIRED',
+    // A failed streaming PUT needs a fresh stream, while read-only monitoring can safely retry transient R2 failures.
+    maxAttempts: readOnly ? 3 : 1, requestChecksumCalculation: 'WHEN_REQUIRED', responseChecksumValidation: 'WHEN_REQUIRED',
   } };
 }
 
