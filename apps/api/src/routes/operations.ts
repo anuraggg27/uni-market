@@ -21,7 +21,7 @@ import type { Database } from "../db/client.js";
 import type { AppConfig } from "../config.js";
 import {
   adminAuditLogs,
-  analyticsDailyPages,
+  analyticsDailyPageVisitors,
   analyticsDailyReferrers,
   analyticsDailyVisitors,
   categories,
@@ -641,43 +641,43 @@ export function adminRouter(
         ? new Date(Date.now() - (days - 1) * 24 * 60 * 60_000).toISOString().slice(0, 10)
         : null;
       const visitorRange = fromDay ? gte(analyticsDailyVisitors.day, fromDay) : sql`true`;
-      const pageRange = fromDay ? gte(analyticsDailyPages.day, fromDay) : sql`true`;
+      const pageRange = fromDay ? gte(analyticsDailyPageVisitors.day, fromDay) : sql`true`;
       const referrerRange = fromDay ? gte(analyticsDailyReferrers.day, fromDay) : sql`true`;
-      const [dailyRows, pageRows, referrerRows, deviceRows, firstRows] = await Promise.all([
+      const uniqueIdentity = sql`coalesce(${analyticsDailyVisitors.identityHash}, ${analyticsDailyVisitors.visitorHash})`;
+      const [dailyRows, pageRows, referrerRows, deviceRows, firstRows, uniqueRows] = await Promise.all([
         db.select({
           date: analyticsDailyVisitors.day,
-          views: sql<number>`sum(${analyticsDailyVisitors.pageViews})`,
           visitors: count(),
         }).from(analyticsDailyVisitors).where(visitorRange).groupBy(analyticsDailyVisitors.day).orderBy(asc(analyticsDailyVisitors.day)),
         db.select({
-          route: analyticsDailyPages.route,
-          views: sql<number>`sum(${analyticsDailyPages.views})`,
-        }).from(analyticsDailyPages).where(pageRange).groupBy(analyticsDailyPages.route).orderBy(desc(sql`sum(${analyticsDailyPages.views})`)).limit(8),
+          route: analyticsDailyPageVisitors.route,
+          visitors: sql<number>`count(distinct ${analyticsDailyPageVisitors.identityHash})`,
+        }).from(analyticsDailyPageVisitors).where(pageRange).groupBy(analyticsDailyPageVisitors.route).orderBy(desc(sql`count(distinct ${analyticsDailyPageVisitors.identityHash})`)).limit(8),
         db.select({
           source: analyticsDailyReferrers.source,
           visits: sql<number>`sum(${analyticsDailyReferrers.visits})`,
         }).from(analyticsDailyReferrers).where(referrerRange).groupBy(analyticsDailyReferrers.source).orderBy(desc(sql`sum(${analyticsDailyReferrers.visits})`)).limit(8),
         db.select({
           device: analyticsDailyVisitors.deviceType,
-          visitors: count(),
-        }).from(analyticsDailyVisitors).where(visitorRange).groupBy(analyticsDailyVisitors.deviceType).orderBy(desc(count())),
+          visitors: sql<number>`count(distinct ${uniqueIdentity})`,
+        }).from(analyticsDailyVisitors).where(visitorRange).groupBy(analyticsDailyVisitors.deviceType).orderBy(desc(sql`count(distinct ${uniqueIdentity})`)),
         db.select({ date: sql<string | null>`min(${analyticsDailyVisitors.day})` }).from(analyticsDailyVisitors),
+        db.select({ visitors: sql<number>`count(distinct ${uniqueIdentity})` }).from(analyticsDailyVisitors).where(visitorRange),
       ]);
       const trackingStartedAt = firstRows[0]?.date ?? null;
       const seriesStart = trackingStartedAt && fromDay
         ? (trackingStartedAt > fromDay ? trackingStartedAt : fromDay)
         : trackingStartedAt;
-      const rowsByDay = new Map(dailyRows.map((row) => [row.date, { views: Number(row.views), visitors: Number(row.visitors) }]));
-      const series: Array<{ date: string; views: number; visitors: number }> = [];
+      const rowsByDay = new Map(dailyRows.map((row) => [row.date, Number(row.visitors)]));
+      const series: Array<{ date: string; visitors: number }> = [];
       if (seriesStart && trackingStartedAt) {
         for (let cursor = new Date(`${seriesStart}T00:00:00.000Z`); cursor <= new Date(`${today}T00:00:00.000Z`); cursor = new Date(cursor.getTime() + 24 * 60 * 60_000)) {
           const date = cursor.toISOString().slice(0, 10);
-          series.push({ date, views: rowsByDay.get(date)?.views ?? 0, visitors: rowsByDay.get(date)?.visitors ?? 0 });
+          series.push({ date, visitors: rowsByDay.get(date) ?? 0 });
         }
       }
-      const views = series.reduce((sum, item) => sum + item.views, 0);
       const visitorDays = series.reduce((sum, item) => sum + item.visitors, 0);
-      const todayRow = rowsByDay.get(today) ?? { views: 0, visitors: 0 };
+      const todayVisitors = rowsByDay.get(today) ?? 0;
       res.json({
         data: {
           range,
@@ -685,15 +685,13 @@ export function adminRouter(
           to: today,
           trackingStartedAt,
           summary: {
-            views,
-            visitorDays,
+            uniqueVisitors: Number(uniqueRows[0]?.visitors ?? 0),
             averageDailyVisitors: series.length ? Number((visitorDays / series.length).toFixed(1)) : 0,
             peakDailyVisitors: series.reduce((peak, item) => Math.max(peak, item.visitors), 0),
-            todayViews: todayRow.views,
-            todayVisitors: todayRow.visitors,
+            todayVisitors,
           },
           series,
-          topPages: pageRows.map((row) => ({ route: row.route, views: Number(row.views) })),
+          topPages: pageRows.map((row) => ({ route: row.route, visitors: Number(row.visitors) })),
           referrers: referrerRows.map((row) => ({ source: row.source, visits: Number(row.visits) })),
           devices: deviceRows.map((row) => ({ device: row.device, visitors: Number(row.visitors) })),
         },

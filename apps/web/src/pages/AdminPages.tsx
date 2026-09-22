@@ -27,7 +27,6 @@ import {
   Clock3,
   Database,
   Dumbbell,
-  Eye,
   FileCheck2,
   ExternalLink,
   Flag,
@@ -201,15 +200,13 @@ type TrafficAnalytics = {
   to: string;
   trackingStartedAt: string | null;
   summary: {
-    views: number;
-    visitorDays: number;
+    uniqueVisitors: number;
     averageDailyVisitors: number;
     peakDailyVisitors: number;
-    todayViews: number;
     todayVisitors: number;
   };
-  series: Array<{ date: string; views: number; visitors: number }>;
-  topPages: Array<{ route: string; views: number }>;
+  series: Array<{ date: string; visitors: number }>;
+  topPages: Array<{ route: string; visitors: number }>;
   referrers: Array<{ source: string; visits: number }>;
   devices: Array<{ device: string; visitors: number }>;
 };
@@ -247,14 +244,14 @@ function trafficDateLabel(value: string) {
 
 function bucketTrafficSeries(series: TrafficAnalytics["series"]) {
   const bucketSize = Math.max(1, Math.ceil(series.length / 56));
-  const buckets: Array<{ label: string; views: number; visitors: number }> = [];
+  const buckets: Array<{ label: string; visitors: number; average: boolean }> = [];
   for (let index = 0; index < series.length; index += bucketSize) {
     const rows = series.slice(index, index + bucketSize);
     const end = rows.at(-1)!;
     buckets.push({
       label: rows.length === 1 ? trafficDateLabel(rows[0]!.date) : `${trafficDateLabel(rows[0]!.date)}–${trafficDateLabel(end.date)}`,
-      views: Number((rows.reduce((sum, row) => sum + row.views, 0) / rows.length).toFixed(1)),
       visitors: Number((rows.reduce((sum, row) => sum + row.visitors, 0) / rows.length).toFixed(1)),
+      average: rows.length > 1,
     });
   }
   return buckets;
@@ -263,15 +260,15 @@ function bucketTrafficSeries(series: TrafficAnalytics["series"]) {
 function TrafficAnalyticsPanel({ range, setRange, query }: { range: TrafficRange; setRange: (range: TrafficRange) => void; query: any }) {
   const data = query.data as TrafficAnalytics | undefined;
   const buckets = data ? bucketTrafficSeries(data.series) : [];
-  const chartMaximum = Math.max(1, ...buckets.flatMap((item) => [item.views, item.visitors]));
-  const topPageMaximum = Math.max(1, ...(data?.topPages.map((item) => item.views) ?? []));
+  const chartMaximum = Math.max(1, ...buckets.map((item) => item.visitors));
+  const topPageMaximum = Math.max(1, ...(data?.topPages.map((item) => item.visitors) ?? []));
   const deviceTotal = data?.devices.reduce((sum, item) => sum + item.visitors, 0) ?? 0;
   return (
     <section className="admin-traffic" aria-labelledby="admin-traffic-title">
       <div className="admin-traffic-heading">
         <div>
           <h2 id="admin-traffic-title">Website traffic</h2>
-          <p>First-party page views and anonymous daily visitors retained in the marketplace database.</p>
+          <p>Anonymous browser visitors retained beyond Cloudflare's 30-day dashboard window.</p>
         </div>
         <div className="admin-traffic-ranges" role="group" aria-label="Traffic date range">
           {trafficRanges.map((option) => (
@@ -293,20 +290,19 @@ function TrafficAnalyticsPanel({ range, setRange, query }: { range: TrafficRange
       ) : (
         <>
           <div className="admin-traffic-summary" aria-label="Traffic summary">
-            <article><span><Eye aria-hidden="true" /></span><p><strong>{compactMetric(data.summary.views)}</strong><b>Page views</b><small>{trafficRangeLabel(range)}</small></p></article>
-            <article><span><Users aria-hidden="true" /></span><p><strong>{compactMetric(data.summary.averageDailyVisitors)}</strong><b>Avg. visitors/day</b><small>Peak {compactMetric(data.summary.peakDailyVisitors)}</small></p></article>
-            <article><span><CalendarDays aria-hidden="true" /></span><p><strong>{compactMetric(data.summary.todayViews)}</strong><b>Views today</b><small>UTC day</small></p></article>
-            <article><span><Activity aria-hidden="true" /></span><p><strong>{compactMetric(data.summary.todayVisitors)}</strong><b>Visitors today</b><small>Unique today</small></p></article>
+            <article><span><Users aria-hidden="true" /></span><p><strong>{compactMetric(data.summary.uniqueVisitors)}</strong><b>Unique visitors</b><small>{trafficRangeLabel(range)}</small></p></article>
+            <article><span><Activity aria-hidden="true" /></span><p><strong>{compactMetric(data.summary.averageDailyVisitors)}</strong><b>Avg. visitors/day</b><small>Selected range</small></p></article>
+            <article><span><UserPlus aria-hidden="true" /></span><p><strong>{compactMetric(data.summary.peakDailyVisitors)}</strong><b>Peak visitors/day</b><small>Selected range</small></p></article>
+            <article><span><CalendarDays aria-hidden="true" /></span><p><strong>{compactMetric(data.summary.todayVisitors)}</strong><b>Visitors today</b><small>Unique today</small></p></article>
           </div>
           <div className="admin-traffic-chart-panel">
             <div className="admin-traffic-subheading">
-              <div><h3>Daily traffic</h3><p>{buckets.length < data.series.length ? "Daily averages grouped for readability" : "Page views and unique visitors by UTC day"}</p></div>
-              <div className="admin-traffic-legend"><span className="is-views">Page views</span><span className="is-visitors">Visitors</span></div>
+              <div><h3>Daily unique visitors</h3><p>{buckets.length < data.series.length ? "Daily averages grouped for readability" : "One count per browser in each UTC day"}</p></div>
+              <div className="admin-traffic-legend"><span className="is-visitors">Unique visitors</span></div>
             </div>
             <div className="admin-traffic-chart" role="img" aria-label={`Traffic chart for ${trafficRangeLabel(range)}`}>
               {buckets.map((item, index) => (
-                <div className="admin-traffic-bar-group" aria-label={`${item.label}: ${item.views} average page views and ${item.visitors} average daily visitors`} title={`${item.label} · ${item.views} views · ${item.visitors} visitors`} key={`${item.label}-${index}`}>
-                  <span className="is-views" style={{ height: item.views ? `${Math.max(3, (item.views / chartMaximum) * 100)}%` : "2px" }} />
+                <div className="admin-traffic-bar-group" aria-label={`${item.label}: ${item.visitors} ${item.average ? "average daily " : ""}unique visitors`} title={`${item.label} · ${item.visitors} ${item.average ? "average daily " : ""}unique visitors`} key={`${item.label}-${index}`}>
                   <span className="is-visitors" style={{ height: item.visitors ? `${Math.max(3, (item.visitors / chartMaximum) * 100)}%` : "2px" }} />
                 </div>
               ))}
@@ -315,19 +311,19 @@ function TrafficAnalyticsPanel({ range, setRange, query }: { range: TrafficRange
           </div>
           <div className="admin-traffic-breakdown">
             <section aria-labelledby="top-pages-title">
-              <div className="admin-traffic-subheading"><div><h3 id="top-pages-title">Top pages</h3><p>Views in this range</p></div></div>
-              {data.topPages.length ? <ol>{data.topPages.map((item) => <li key={item.route}><div><b>{trafficRouteLabel(item.route)}</b><span>{compactMetric(item.views)}</span></div><i style={{ width: `${Math.max(3, (item.views / topPageMaximum) * 100)}%` }} /></li>)}</ol> : <p className="admin-traffic-list-empty">No page views yet.</p>}
+              <div className="admin-traffic-subheading"><div><h3 id="top-pages-title">Top pages</h3><p>Unique visitors per page</p></div></div>
+              {data.topPages.length ? <ol>{data.topPages.map((item) => <li key={item.route}><div><b>{trafficRouteLabel(item.route)}</b><span>{compactMetric(item.visitors)}</span></div><i style={{ width: `${Math.max(3, (item.visitors / topPageMaximum) * 100)}%` }} /></li>)}</ol> : <p className="admin-traffic-list-empty">No unique page visitors yet.</p>}
             </section>
             <section aria-labelledby="referrers-title">
-              <div className="admin-traffic-subheading"><div><h3 id="referrers-title">Traffic sources</h3><p>Landing visits in this range</p></div></div>
+              <div className="admin-traffic-subheading"><div><h3 id="referrers-title">Traffic sources</h3><p>Daily unique arrivals</p></div></div>
               {data.referrers.length ? <ol>{data.referrers.map((item) => <li key={item.source}><div><b>{item.source}</b><span>{compactMetric(item.visits)}</span></div></li>)}</ol> : <p className="admin-traffic-list-empty">No landing sources yet.</p>}
             </section>
             <section aria-labelledby="devices-title">
-              <div className="admin-traffic-subheading"><div><h3 id="devices-title">Devices</h3><p>Share of daily visitors</p></div><Globe2 aria-hidden="true" /></div>
+              <div className="admin-traffic-subheading"><div><h3 id="devices-title">Devices</h3><p>Share of unique visitors</p></div><Globe2 aria-hidden="true" /></div>
               {data.devices.length ? <ol>{data.devices.map((item) => <li key={item.device}><div><b>{item.device.replace(/^./, (character) => character.toUpperCase())}</b><span>{deviceTotal ? Math.round((item.visitors / deviceTotal) * 100) : 0}%</span></div></li>)}</ol> : <p className="admin-traffic-list-empty">No device data yet.</p>}
             </section>
           </div>
-          <p className="admin-traffic-note">Tracking began {trafficDateLabel(data.trackingStartedAt)}. Visitors are deduplicated only within each UTC day; raw IP addresses and reusable cross-day visitor identifiers are not stored. Browser privacy opt-outs are respected.</p>
+          <p className="admin-traffic-note">Tracking began {trafficDateLabel(data.trackingStartedAt)}. Reloading does not add another visitor or page count. A visitor represents one browser profile, so clearing its storage or changing browser or device can count again. The stored identifier is secret-keyed; raw identifiers and IP addresses are not retained. Browser privacy opt-outs are respected.</p>
         </>
       )}
     </section>

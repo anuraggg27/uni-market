@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
-import { sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import type { AppConfig } from '../config.js';
 import type { Database } from '../db/client.js';
-import { analyticsDailyPages, analyticsDailyReferrers, analyticsDailyVisitors } from '../db/schema.js';
+import { analyticsDailyPages, analyticsDailyPageVisitors, analyticsDailyReferrers, analyticsDailyVisitors } from '../db/schema.js';
 import { keyedHash } from '../lib/crypto.js';
 import { asyncRoute } from '../lib/errors.js';
 
@@ -109,17 +109,24 @@ export function analyticsRouter(db: Database, config: AppConfig): Router {
     const now = new Date();
     const day = now.toISOString().slice(0, 10);
     const visitorHash = keyedHash(`analytics:${day}:${input.visitorId}`, config.SESSION_SECRET);
+    const identityHash = keyedHash(`analytics-visitor:${input.visitorId}`, config.SESSION_SECRET);
     const deviceType = analyticsDeviceType(userAgent);
     await db.transaction(async (tx) => {
-      await tx.insert(analyticsDailyVisitors).values({ day, visitorHash, pageViews: 1, deviceType, firstSeenAt: now, lastSeenAt: now }).onConflictDoUpdate({
-        target: [analyticsDailyVisitors.day, analyticsDailyVisitors.visitorHash],
-        set: { pageViews: sql`${analyticsDailyVisitors.pageViews} + 1`, lastSeenAt: now },
-      });
-      await tx.insert(analyticsDailyPages).values({ day, route, views: 1 }).onConflictDoUpdate({
-        target: [analyticsDailyPages.day, analyticsDailyPages.route],
-        set: { views: sql`${analyticsDailyPages.views} + 1` },
-      });
-      if (input.landing) {
+      const insertedVisitor = await tx.insert(analyticsDailyVisitors).values({ day, visitorHash, identityHash, pageViews: 1, deviceType, firstSeenAt: now, lastSeenAt: now }).onConflictDoNothing().returning({ visitorHash: analyticsDailyVisitors.visitorHash });
+      if (!insertedVisitor.length) {
+        await tx.update(analyticsDailyVisitors).set({ identityHash, lastSeenAt: now }).where(and(eq(analyticsDailyVisitors.day, day), eq(analyticsDailyVisitors.visitorHash, visitorHash)));
+      }
+      const insertedPage = await tx.insert(analyticsDailyPageVisitors).values({ day, route, identityHash }).onConflictDoNothing().returning({ route: analyticsDailyPageVisitors.route });
+      if (insertedPage.length) {
+        if (!insertedVisitor.length) {
+          await tx.update(analyticsDailyVisitors).set({ pageViews: sql`${analyticsDailyVisitors.pageViews} + 1` }).where(and(eq(analyticsDailyVisitors.day, day), eq(analyticsDailyVisitors.visitorHash, visitorHash)));
+        }
+        await tx.insert(analyticsDailyPages).values({ day, route, views: 1 }).onConflictDoUpdate({
+          target: [analyticsDailyPages.day, analyticsDailyPages.route],
+          set: { views: sql`${analyticsDailyPages.views} + 1` },
+        });
+      }
+      if (input.landing && insertedVisitor.length) {
         const source = referrerSource(input.referrerHost, config);
         await tx.insert(analyticsDailyReferrers).values({ day, source, visits: 1 }).onConflictDoUpdate({
           target: [analyticsDailyReferrers.day, analyticsDailyReferrers.source],

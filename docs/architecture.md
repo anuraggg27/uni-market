@@ -28,7 +28,7 @@ The initial migration creates 23 tables: users, OAuth accounts, sessions, roles,
 
 Moderation and lifecycle are separate axes. Public discovery always filters `APPROVED` plus `ACTIVE`, `RESERVED`, or `SOLD` where the view specifically supports historical status. Search uses parameterized PostgreSQL predicates and indexed category, state, price, location, seller and creation fields.
 
-First-party traffic analytics are stored as daily PostgreSQL aggregates for long-term reporting in the admin dashboard. The browser rotates a random identifier each UTC day; the API converts it to a secret-keyed hash before counting a daily visitor. Raw IP addresses and reusable cross-day visitor identifiers are not stored in analytics tables. Do Not Track and Global Privacy Control opt out of collection.
+First-party traffic analytics are stored in PostgreSQL for long-term reporting in the admin dashboard. The browser keeps a random identifier and the API converts it to separate secret-keyed daily and reusable hashes. This deduplicates one browser across reloads and reporting dates without storing its raw identifier or IP address. Per-route records allow each browser to count only once per route per UTC day. Do Not Track and Global Privacy Control opt out of collection.
 
 ## Critical flows
 

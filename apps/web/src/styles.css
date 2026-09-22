@@ -10230,14 +10230,9 @@ html.dark .hero-campus-background {
   content: "";
 }
 
-.admin-traffic-legend .is-views::before,
-.admin-traffic-chart .is-views {
-  background: var(--color-accent);
-}
-
 .admin-traffic-legend .is-visitors::before,
 .admin-traffic-chart .is-visitors {
-  background: var(--color-success);
+  background: var(--color-accent);
 }
 
 .admin-traffic-chart {

@@ -14,7 +14,8 @@ All JSON responses use `{ "data": ... }`. Errors use `{ "error": { "code", "mess
 - Saved/chat/blocking: `GET|POST|DELETE /api/favourites`, `GET|POST /api/conversations`, `GET|POST /api/conversations/:id/messages`, `POST|DELETE /api/blocks/:userId`.
 - Transactions/reputation: `GET|POST /api/transactions`, `POST /api/transactions/:id/accept|handover|complete|cancel`, `POST /api/transactions/:id/reviews`, `GET /api/sellers/:id`, `GET /api/leaderboard`.
 - Reports/notifications/support: `POST /api/reports`, notification list/read endpoints, support ticket list/create/detail/message/reopen endpoints.
-- Admin: `/api/admin/dashboard`, listing queue/detail/decision, statutory grievance queues, reports/detail/resolve, users/detail/suspend, reviews/hide, support/reply/escalate, audit logs, categories, academic domains, provider reviews, legal holds, staff-access reviews and compliance readiness.
+- Analytics: `POST /api/analytics/page-view` records one visit per browser, route and UTC day; `GET /api/admin/analytics?range=7|30|90|365|all` returns staff-only unique-visitor history.
+- Admin: `/api/admin/dashboard`, `/api/admin/analytics`, listing queue/detail/decision, statutory grievance queues, reports/detail/resolve, users/detail/suspend, reviews/hide, support/reply/escalate, audit logs, categories, academic domains, provider reviews, legal holds, staff-access reviews and compliance readiness.
 
 Public listing query parameters are `q`, `category`, `minPrice`, `maxPrice`, `condition`, `location`, `negotiable`, `sort`, `page` and `limit`. Only approved, eligible listings are returned. Message, notification and audit histories are paginated.
 

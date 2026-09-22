@@ -52,6 +52,28 @@ test("admin dashboard preserves real data and stays responsive at supported widt
   const context = await browser.newContext();
   await signInAsAdmin(context);
   const page = await context.newPage();
+  await page.route("**/api/admin/analytics?range=90", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        data: {
+          range: "90",
+          from: "2026-09-20",
+          to: "2026-09-22",
+          trackingStartedAt: "2026-09-20",
+          summary: { uniqueVisitors: 10, averageDailyVisitors: 4, peakDailyVisitors: 6, todayVisitors: 5 },
+          series: [
+            { date: "2026-09-20", visitors: 3 },
+            { date: "2026-09-21", visitors: 4 },
+            { date: "2026-09-22", visitors: 5 },
+          ],
+          topPages: [{ route: "/browse", visitors: 8 }, { route: "/listing/:id", visitors: 6 }],
+          referrers: [{ source: "Direct", visits: 7 }, { source: "Organic search", visits: 3 }],
+          devices: [{ device: "mobile", visitors: 8 }, { device: "desktop", visitors: 2 }],
+        },
+      }),
+    });
+  });
   await page.goto("/marketplace/admin");
 
   await expect(
@@ -60,7 +82,8 @@ test("admin dashboard preserves real data and stays responsive at supported widt
   await expect(page.locator(".admin-summary-card")).toHaveCount(4);
   await expect(page.locator(".admin-detail-metric")).toHaveCount(13);
   await expect(page.getByRole("heading", { name: "Website traffic" })).toBeVisible();
-  await expect(page.getByText("Traffic collection has started")).toBeVisible();
+  await expect(page.getByText("Unique visitors", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Page views")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "All time" })).toBeVisible();
   await expect(
     page.getByRole("link", { name: "Review pending listings" }),

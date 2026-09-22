@@ -2,29 +2,31 @@ import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { publicApi } from '../api';
 
-const STORAGE_KEY = 'uni-market:daily-analytics-id';
+const STORAGE_KEY = 'uni-market:analytics-id';
+const LEGACY_STORAGE_KEY = 'uni-market:daily-analytics-id';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-let fallbackVisitor: { day: string; id: string } | undefined;
+let fallbackVisitorId: string | undefined;
 let lastTracked: { path: string; at: number } | undefined;
 let landingTracked = false;
 
-function utcDay(now = new Date()): string {
-  return now.toISOString().slice(0, 10);
-}
-
-export function dailyAnalyticsVisitorId(now = new Date()): string {
-  const day = utcDay(now);
+export function analyticsVisitorId(): string {
   try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as { day?: unknown; id?: unknown } | null;
-    if (stored?.day === day && typeof stored.id === 'string' && UUID_PATTERN.test(stored.id)) return stored.id;
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored && UUID_PATTERN.test(stored)) return stored;
+    const legacy = JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY) ?? 'null') as { id?: unknown } | null;
+    if (typeof legacy?.id === 'string' && UUID_PATTERN.test(legacy.id)) {
+      localStorage.setItem(STORAGE_KEY, legacy.id);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+      fallbackVisitorId = legacy.id;
+      return legacy.id;
+    }
   } catch {
-    // Storage can be unavailable in hardened browser modes; the in-memory fallback still avoids duplicate route counts.
+    // Storage can be unavailable in hardened browser modes; use one identifier until this page closes.
   }
-  if (fallbackVisitor?.day === day) return fallbackVisitor.id;
-  const record = { day, id: crypto.randomUUID() };
-  fallbackVisitor = record;
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(record)); } catch { /* use the in-memory value */ }
-  return record.id;
+  if (fallbackVisitorId) return fallbackVisitorId;
+  fallbackVisitorId = crypto.randomUUID();
+  try { localStorage.setItem(STORAGE_KEY, fallbackVisitorId); } catch { /* use the in-memory value */ }
+  return fallbackVisitorId;
 }
 
 export function analyticsTrackingAllowed(): boolean {
@@ -56,7 +58,7 @@ export function AnalyticsTracker() {
       keepalive: true,
       body: JSON.stringify({
         path: pathname,
-        visitorId: dailyAnalyticsVisitorId(),
+        visitorId: analyticsVisitorId(),
         landing,
         referrerHost: landing ? externalReferrerHost() : null,
       }),

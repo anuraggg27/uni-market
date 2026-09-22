@@ -56,13 +56,13 @@ const analytics = {
   from: "2026-09-20",
   to: "2026-09-22",
   trackingStartedAt: "2026-09-20",
-  summary: { views: 24, visitorDays: 12, averageDailyVisitors: 4, peakDailyVisitors: 6, todayViews: 9, todayVisitors: 5 },
+  summary: { uniqueVisitors: 10, averageDailyVisitors: 4, peakDailyVisitors: 6, todayVisitors: 5 },
   series: [
-    { date: "2026-09-20", views: 6, visitors: 3 },
-    { date: "2026-09-21", views: 9, visitors: 4 },
-    { date: "2026-09-22", views: 9, visitors: 5 },
+    { date: "2026-09-20", visitors: 3 },
+    { date: "2026-09-21", visitors: 4 },
+    { date: "2026-09-22", visitors: 5 },
   ],
-  topPages: [{ route: "/browse", views: 14 }, { route: "/listing/:id", views: 10 }],
+  topPages: [{ route: "/browse", visitors: 8 }, { route: "/listing/:id", visitors: 6 }],
   referrers: [{ source: "Direct", visits: 7 }, { source: "Organic search", visits: 3 }],
   devices: [{ device: "mobile", visitors: 8 }, { device: "desktop", visitors: 4 }],
 };
@@ -127,9 +127,10 @@ describe("AdminDashboard", () => {
     expect(await screen.findByRole("heading", { name: "Website traffic" })).toBeVisible();
     const traffic = screen.getByRole("region", { name: "Website traffic" });
     const trafficSummary = within(traffic).getByLabelText("Traffic summary");
-    expect(within(trafficSummary).getByText("Page views")).toBeVisible();
-    expect(within(trafficSummary).getByText("24")).toBeVisible();
+    expect(within(trafficSummary).getByText("Unique visitors")).toBeVisible();
+    expect(within(trafficSummary).getByText("10")).toBeVisible();
     expect(within(trafficSummary).getByText("Avg. visitors/day")).toBeVisible();
+    expect(within(traffic).queryByText("Page views")).not.toBeInTheDocument();
     expect(within(traffic).getByText("Browse")).toBeVisible();
     expect(within(traffic).getByText("Organic search")).toBeVisible();
     expect(within(traffic).getByRole("button", { name: "1 year" })).toHaveAttribute("aria-pressed", "false");

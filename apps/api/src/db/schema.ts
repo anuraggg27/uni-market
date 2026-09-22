@@ -484,11 +484,12 @@ export const staffAccessReviews = pgTable('staff_access_reviews', {
 }, (table) => [index('staff_access_review_subject_idx').on(table.subjectUserId, table.reviewedAt)]);
 
 // Anonymous traffic analytics are deliberately aggregated by UTC day. The
-// visitor hash is derived from a browser-generated daily identifier and a
-// server secret, so it cannot be used to follow a visitor across days.
+// reusable identity hash is derived from a browser-generated random identifier
+// and a server secret; the raw identifier and IP address are never stored.
 export const analyticsDailyVisitors = pgTable('analytics_daily_visitors', {
   day: date('day', { mode: 'string' }).notNull(),
   visitorHash: text('visitor_hash').notNull(),
+  identityHash: text('identity_hash'),
   pageViews: integer('page_views').default(1).notNull(),
   deviceType: text('device_type').notNull(),
   firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).defaultNow().notNull(),
@@ -496,8 +497,21 @@ export const analyticsDailyVisitors = pgTable('analytics_daily_visitors', {
 }, (table) => [
   primaryKey({ columns: [table.day, table.visitorHash] }),
   index('analytics_daily_visitors_day_idx').on(table.day),
+  index('analytics_daily_visitors_identity_idx').on(table.day, table.identityHash),
   index('analytics_daily_visitors_device_idx').on(table.day, table.deviceType),
   check('analytics_daily_visitors_page_views_positive', sql`${table.pageViews} > 0`),
+]);
+
+// A browser can contribute only once to a route on a given UTC day. This is
+// the source of truth for top-page visitor counts and makes reloads idempotent.
+export const analyticsDailyPageVisitors = pgTable('analytics_daily_page_visitors', {
+  day: date('day', { mode: 'string' }).notNull(),
+  route: text('route').notNull(),
+  identityHash: text('identity_hash').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.day, table.route, table.identityHash] }),
+  index('analytics_daily_page_visitors_day_idx').on(table.day),
+  index('analytics_daily_page_visitors_identity_idx').on(table.identityHash),
 ]);
 
 export const analyticsDailyPages = pgTable('analytics_daily_pages', {
