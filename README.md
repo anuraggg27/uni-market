@@ -1,6 +1,6 @@
 # Uni Market
 
-A mobile-first independent marketplace where eligible adult students can buy and sell used physical products, communicate privately, and complete offline exchanges. Any verified Google account may sign in; marketplace actions additionally require a verified Indian phone number, a separately verified student email from the reviewed academic-domain registry, an explicit 18+ declaration, and current policy acceptance.
+A mobile-first independent marketplace where eligible adult students can buy and sell used physical products, communicate privately, and complete offline exchanges. Any verified Google account may sign in; marketplace actions additionally require a separately verified student email from the reviewed academic-domain registry, an explicit 18+ declaration, and current policy acceptance. Phone verification is an optional trust signal.
 
 Uni Market is not affiliated with, endorsed by, sponsored by, or operated by any university, college, or educational institution. Institution names and email domains are used only to verify eligibility.
 

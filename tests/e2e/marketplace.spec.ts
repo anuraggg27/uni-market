@@ -205,7 +205,7 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   browser,
 }) => {
   const seller = await browser.newContext();
-  await signIn(seller, "seller-journey", { profile: false, phone: false });
+  const auth = await signIn(seller, "seller-journey", { profile: false, phone: false });
   const page = await seller.newPage();
   await page.goto(marketplacePath("/onboarding"));
   await page.getByLabel("Display name").fill("Journey Seller");
@@ -216,13 +216,8 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   await expect(page).toHaveURL(/settings/);
   await page.getByRole("button", { name: /Age & policies/ }).click();
   await expect(page.locator("#age-policies-settings")).toBeFocused();
-  await page.getByRole("button", { name: /Mobile number/ }).click();
-  await expect(page.locator("#phone-verification-settings")).toBeFocused();
-  await page.getByLabel("Indian mobile number").fill("9876500001");
-  await page.getByRole("button", { name: "Send code" }).click();
-  await page.getByLabel("6-digit code").fill("999999");
-  await page.getByRole("button", { name: "Verify phone" }).click();
-  await expect(page.getByText("Your phone is verified")).toBeVisible();
+  await expect(page.locator(".eligibility-checks").getByRole("button", { name: /Mobile number/ })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Mobile Number (optional)" })).toBeVisible();
   await page.getByRole("button", { name: /Student email/ }).click();
   await expect(page.locator("#student-email-settings")).toBeFocused();
   await page.getByRole("textbox", { name: "Student email" }).fill("journey");
@@ -230,6 +225,9 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   await page.getByLabel("6-digit email code").fill("999999");
   await page.getByRole("button", { name: "Verify student email" }).click();
   await expect(page.getByText(/@students\.example\.edu is verified/)).toBeVisible();
+  await expect(page.getByText("You can list, message, and transact.")).toBeVisible();
+  const session = (await (await auth.request.get(`${API}/api/auth/session`)).json()).data;
+  expect(session).toMatchObject({ phoneVerifiedAt: null, marketplaceEligible: true });
   await page.goto(marketplacePath("/sell"));
   await page.getByLabel("Title").fill("Engineering mechanics book");
   await page

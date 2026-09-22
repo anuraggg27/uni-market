@@ -34,7 +34,7 @@ export function sessionMiddleware(db: Database, config: AppConfig): RequestHandl
     const adultAttested = Boolean(row.adultAttestedAt);
     const roles = roleRows.map((item) => item.role as Role);
     const staffVerified = !roles.some((role) => role !== 'USER') || Boolean(row.staffVerifiedAt && row.staffVerifiedAt > new Date(Date.now() - 8 * 60 * 60_000));
-    req.auth = { userId: row.userId, sessionId: row.sessionId, roles, phoneVerified: Boolean(row.phoneVerifiedAt), studentEmailVerified, adultAttested, policiesAccepted, marketplaceEligible: Boolean(row.phoneVerifiedAt) && studentEmailVerified && adultAttested && policiesAccepted, staffVerified, suspended: Boolean(row.suspendedAt) };
+    req.auth = { userId: row.userId, sessionId: row.sessionId, roles, phoneVerified: Boolean(row.phoneVerifiedAt), studentEmailVerified, adultAttested, policiesAccepted, marketplaceEligible: studentEmailVerified && adultAttested && policiesAccepted, staffVerified, suspended: Boolean(row.suspendedAt) };
     next();
   };
 }
@@ -47,7 +47,6 @@ export const requireAuth: RequestHandler = (req, _res, next) => {
 export const requireVerified: RequestHandler = (req, _res, next) => {
   if (!req.auth) { next(new AppError(401, 'AUTH_REQUIRED', 'Sign in to continue')); return; }
   if (req.auth.suspended) { next(new AppError(403, 'ACCOUNT_SUSPENDED', 'Your account is currently suspended')); return; }
-  if (!req.auth.phoneVerified) { next(new AppError(403, 'PHONE_VERIFICATION_REQUIRED', 'Verify your phone number to continue')); return; }
   if (!req.auth.studentEmailVerified) { next(new AppError(403, 'STUDENT_EMAIL_VERIFICATION_REQUIRED', 'Verify an approved student email to continue')); return; }
   if (!req.auth.adultAttested) { next(new AppError(403, 'AGE_ATTESTATION_REQUIRED', 'Confirm that you are at least 18 years old to continue')); return; }
   if (!req.auth.policiesAccepted) { next(new AppError(403, 'POLICY_ACCEPTANCE_REQUIRED', 'Accept the current platform policies to continue')); return; }

@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import request from 'supertest';
 import * as schema from '../../apps/api/src/db/schema';
 import { attachSocket } from '../../apps/api/src/socket';
-import { createDraft, login, makeRole, setup, uploadImage, verifyPhone } from './helper';
+import { createDraft, login, makeRole, setup, uploadImage, verifyMarketplaceEligibility, verifyPhone } from './helper';
 
 let ctx:Awaited<ReturnType<typeof setup>>;let seller:Awaited<ReturnType<typeof login>>;let buyer:Awaited<ReturnType<typeof login>>;let listing:any;
 beforeEach(async()=>{ctx=await setup();seller=await login(ctx.app,'chat-seller');buyer=await login(ctx.app,'chat-buyer');await verifyPhone(seller);await verifyPhone(buyer,'9987654321');listing=await createDraft(seller,ctx.category.id);await uploadImage(seller,listing.id);await seller.agent.post(`/api/listings/${listing.id}/submit`).set(seller.headers);const mod=await login(ctx.app,'chat-moderator');await makeRole(ctx.db,mod.user.id,'MODERATOR');await mod.agent.post(`/api/admin/listings/${listing.id}/decision`).set(mod.headers).send({decision:'APPROVE',internalReason:'Listing complies with marketplace policy'}).expect(200);});afterEach(async()=>ctx?.client.close());
@@ -91,7 +91,26 @@ describe('chat acceptance',()=>{
   });
   it('saves favourites idempotently, lists them privately and keeps the listing counter accurate',async()=>{await buyer.agent.post(`/api/favourites/${listing.id}`).set(buyer.headers).expect(201);await buyer.agent.post(`/api/favourites/${listing.id}`).set(buyer.headers).expect(200);const saved=await buyer.agent.get('/api/favourites').expect(200);expect(saved.body.data).toHaveLength(1);expect(saved.body.data[0]).toMatchObject({id:listing.id,favouriteCount:1});expect(saved.body.data[0].coverImageUrl).toContain('/api/uploads/local-read');expect((await ctx.db.select().from(schema.listings).where(eq(schema.listings.id,listing.id)))[0]?.favouriteCount).toBe(1);await buyer.agent.delete(`/api/favourites/${listing.id}`).set(buyer.headers).expect(204);await buyer.agent.delete(`/api/favourites/${listing.id}`).set(buyer.headers).expect(204);expect((await ctx.db.select().from(schema.listings).where(eq(schema.listings.id,listing.id)))[0]?.favouriteCount).toBe(0);expect((await buyer.agent.get('/api/favourites')).body.data).toEqual([]);});
   it('does not allow unavailable drafts to be favourited',async()=>{const draft=await createDraft(seller,ctx.category.id,{title:'Private draft listing'});const response=await buyer.agent.post(`/api/favourites/${draft.id}`).set(buyer.headers).expect(404);expect(response.body.error.code).toBe('LISTING_UNAVAILABLE');expect(await ctx.db.select().from(schema.favourites)).toHaveLength(0);});
-  it('CHAT-01 requires phone verification',async()=>{const user=await login(ctx.app,'chat-unverified');await user.agent.post('/api/conversations').set(user.headers).send({listingId:listing.id}).expect(403);});
+  it('CHAT-01 requires student marketplace eligibility',async()=>{const user=await login(ctx.app,'chat-ineligible');const response=await user.agent.post('/api/conversations').set(user.headers).send({listingId:listing.id}).expect(403);expect(response.body.error.code).toBe('STUDENT_EMAIL_VERIFICATION_REQUIRED');});
+  it('allows messaging and socket access with no verified phone',async()=>{
+    const user=await login(ctx.app,'chat-without-phone');
+    await verifyMarketplaceEligibility(user);
+    const row=(await ctx.db.select().from(schema.users).where(eq(schema.users.id,user.user.id)))[0];
+    expect(row?.phoneVerifiedAt).toBeNull();
+    await user.agent.post('/api/conversations').set(user.headers).send({listingId:listing.id}).expect(201);
+    const server=createServer(ctx.app);const io=attachSocket(server,ctx.db,ctx.config);ctx.app.set('io',io);
+    await new Promise<void>((resolve)=>server.listen(0,resolve));
+    const address=server.address();const port=typeof address==='object'&&address?address.port:0;
+    const socket=socketClient(`http://127.0.0.1:${port}`,{extraHeaders:{Cookie:user.cookie},transports:['websocket'],autoConnect:false});
+    try {
+      await new Promise<void>((resolve,reject)=>{socket.once('connect',resolve);socket.once('connect_error',reject);socket.connect();});
+      expect(socket.connected).toBe(true);
+    } finally {
+      socket.close();
+      await new Promise<void>((resolve)=>io.close(()=>resolve()));
+      await new Promise<void>((resolve)=>server.close(()=>resolve()));
+    }
+  });
   it('CHAT-02 returns one unique conversation for repeated starts',async()=>{const first=await buyer.agent.post('/api/conversations').set(buyer.headers).send({listingId:listing.id}).expect(201);const second=await buyer.agent.post('/api/conversations').set(buyer.headers).send({listingId:listing.id}).expect(200);expect(second.body.data.id).toBe(first.body.data.id);expect(await ctx.db.select().from(schema.conversations)).toHaveLength(1);});
   it('CHAT-03 rejects unrelated conversation reads',async()=>{const c=await conversation();const outsider=await login(ctx.app,'chat-outsider');await verifyPhone(outsider,'9976543210');await outsider.agent.get(`/api/conversations/${c.id}/messages`).expect(403);});
   it('CHAT-04 websocket rejects arbitrary room subscriptions',async()=>{const c=await conversation();const outsider=await login(ctx.app,'socket-outsider');await verifyPhone(outsider,'9965432109');const server=createServer(ctx.app);const io=attachSocket(server,ctx.db,ctx.config);await new Promise<void>((resolve)=>server.listen(0,resolve));const address=server.address();const port=typeof address==='object'&&address?address.port:0;const socket=socketClient(`http://127.0.0.1:${port}`,{extraHeaders:{Cookie:outsider.cookie},transports:['websocket']});const result=await new Promise<any>((resolve,reject)=>{socket.on('connect',()=>socket.emit('conversation:subscribe',c.id,resolve));socket.on('connect_error',reject);});expect(result.ok).toBe(false);socket.close();await new Promise<void>((resolve)=>io.close(()=>resolve()));await new Promise<void>((resolve)=>server.close(()=>resolve()));});

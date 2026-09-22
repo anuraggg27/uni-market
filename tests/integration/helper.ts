@@ -51,7 +51,7 @@ export async function login(app: ReturnType<typeof createApp>, credential: strin
   return { agent, user: me.body.data, csrf: csrf.body.data.csrfToken as string, cookie: String(cookie).split(';')[0], headers: { 'x-csrf-token': csrf.body.data.csrfToken as string } };
 }
 
-export async function verifyPhone(auth: Awaited<ReturnType<typeof login>>, phone = '9876543210') {
+export async function verifyMarketplaceEligibility(auth: Awaited<ReturnType<typeof login>>) {
   const domains = await auth.agent.get('/api/academic-domains').expect(200);
   const academicDomain = domains.body.data.find((entry: { domain: string }) => entry.domain === 'students.example.edu');
   if (!academicDomain) throw new Error('Expected test academic domain');
@@ -67,11 +67,16 @@ export async function verifyPhone(auth: Awaited<ReturnType<typeof login>>, phone
     acceptCommunityRules: true,
     policyVersion: '2026-08-27',
   });
-  await auth.agent.post('/api/phone/send').set(auth.headers).send({ phone }).expect(200);
-  await auth.agent.post('/api/phone/verify').set(auth.headers).send({ phone, code: '999999' }).expect(200);
   const studentEmail = `${auth.user.id}@students.example.edu`;
   await auth.agent.post('/api/student-email/send').set(auth.headers).send({ email: studentEmail }).expect(200);
   await auth.agent.post('/api/student-email/verify').set(auth.headers).send({ email: studentEmail, code: '999999' }).expect(200);
+  return onboarding;
+}
+
+export async function verifyPhone(auth: Awaited<ReturnType<typeof login>>, phone = '9876543210') {
+  const onboarding = await verifyMarketplaceEligibility(auth);
+  await auth.agent.post('/api/phone/send').set(auth.headers).send({ phone }).expect(200);
+  await auth.agent.post('/api/phone/verify').set(auth.headers).send({ phone, code: '999999' }).expect(200);
   return onboarding;
 }
 

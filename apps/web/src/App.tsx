@@ -110,7 +110,7 @@ export function App() {
             <Route
               path="sell"
               element={
-                <RequireAuth phone>
+                <RequireAuth eligible>
                   <ListingFormPage />
                 </RequireAuth>
               }
@@ -118,7 +118,7 @@ export function App() {
             <Route
               path="listing/:listingId/edit"
               element={
-                <RequireAuth phone>
+                <RequireAuth eligible>
                   <ListingFormPage edit />
                 </RequireAuth>
               }
@@ -142,7 +142,7 @@ export function App() {
             <Route
               path="chats"
               element={
-                <RequireAuth phone>
+                <RequireAuth eligible>
                   <ChatsPage />
                 </RequireAuth>
               }
@@ -150,7 +150,7 @@ export function App() {
             <Route
               path="chats/:conversationId"
               element={
-                <RequireAuth phone>
+                <RequireAuth eligible>
                   <ChatsPage />
                 </RequireAuth>
               }
@@ -158,7 +158,7 @@ export function App() {
             <Route
               path="requests"
               element={
-                <RequireAuth phone>
+                <RequireAuth eligible>
                   <RequestsPage />
                 </RequireAuth>
               }
@@ -183,7 +183,7 @@ export function App() {
             <Route
               path="support"
               element={
-                <RequireAuth phone>
+                <RequireAuth eligible>
                   <SupportPage />
                 </RequireAuth>
               }
@@ -191,7 +191,7 @@ export function App() {
             <Route
               path="support/:ticketId"
               element={
-                <RequireAuth phone>
+                <RequireAuth eligible>
                   <SupportDetailPage />
                 </RequireAuth>
               }

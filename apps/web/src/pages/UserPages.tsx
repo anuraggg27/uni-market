@@ -2826,7 +2826,7 @@ export function SettingsPage() {
   const [studentResendCooldown, setStudentResendCooldown] = useState(0);
   const [studentRequestId, setStudentRequestId] = useState<string>();
   const [activeVerification, setActiveVerification] = useState<"phone" | "student">(
-    user?.phoneVerifiedAt ? "student" : "phone",
+    user?.studentEmailVerifiedAt ? "phone" : "student",
   );
   const [captchaInitializationError, setCaptchaInitializationError] = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
@@ -3028,10 +3028,10 @@ export function SettingsPage() {
     return () => window.clearTimeout(timer);
   }, [studentResendCooldown]);
   useEffect(() => {
-    if (user?.phoneVerifiedAt && !user.studentEmailVerifiedAt) {
+    if (!user?.studentEmailVerifiedAt) {
       setActiveVerification("student");
     }
-  }, [user?.phoneVerifiedAt, user?.studentEmailVerifiedAt]);
+  }, [user?.studentEmailVerifiedAt]);
   useEffect(() => {
     if (!user?.marketplaceEligible) return;
     const intent = pendingContact();
@@ -3076,7 +3076,6 @@ export function SettingsPage() {
   const studentOtpLength = studentVerificationConfig.data?.otpLength ?? 6;
   const eligibilityItems = [
     { label: "Age & policies", detail: "18+ declaration and current policies", complete: Boolean(user?.eligibility?.adultAttested && user?.eligibility?.policiesAccepted), targetId: "age-policies-settings" },
-    { label: "Mobile number", detail: "Verified Indian mobile number", complete: Boolean(user?.eligibility?.phoneVerified), targetId: "phone-verification-settings", verification: "phone" as const },
     { label: "Student email", detail: "Verified academic email address", complete: Boolean(user?.eligibility?.studentEmailVerified), targetId: "student-email-settings", verification: "student" as const },
   ];
   function scrollToEligibility(targetId: string, verification?: "phone" | "student") {
@@ -3106,7 +3105,7 @@ export function SettingsPage() {
         <div className="eligibility-checks">
           {eligibilityItems.map((item) => <button type="button" className={item.complete ? "is-complete" : ""} key={item.label} aria-controls={item.targetId} onClick={() => scrollToEligibility(item.targetId, item.verification)}>{item.complete ? <CheckCircle2 aria-hidden="true" /> : <Circle aria-hidden="true" />}<span><strong>{item.label}</strong><span>{item.detail}</span></span><ChevronRight className="eligibility-check-chevron" aria-hidden="true" /></button>)}
         </div>
-        <p className="eligibility-guidance">{user?.marketplaceEligible ? "You can list, message, and transact." : "Complete all 3 checks to use marketplace features. Your Google sign-in and student email can be different."}</p>
+        <p className="eligibility-guidance">{user?.marketplaceEligible ? "You can list, message, and transact." : "Complete both requirements to use marketplace features. Your Google sign-in and student email can be different."}</p>
       </section>
 
       <div className="settings-grid">
@@ -3116,7 +3115,7 @@ export function SettingsPage() {
         </section>
 
         <section id="phone-verification-settings" className="settings-card" aria-labelledby="phone-verification-title" tabIndex={-1}>
-          <header><span className="settings-card-icon"><Smartphone aria-hidden="true" /></span><div><h2 id="phone-verification-title">Mobile Number</h2><p>Kept private and used for account trust.</p></div></header>
+          <header><span className="settings-card-icon"><Smartphone aria-hidden="true" /></span><div><h2 id="phone-verification-title">Mobile Number <small>(optional)</small></h2><p>Kept private and available as an additional trust signal.</p></div></header>
           {user?.phoneVerifiedAt ? <div className="verification-complete"><CheckCircle2 aria-hidden="true" /><div><strong>Your phone is verified</strong><span>Your Indian mobile number is confirmed.</span></div></div> : <div className="settings-card-form" onFocusCapture={() => setActiveVerification("phone")}>
             <label className="field"><span>Indian mobile number</span><input name="phone" type="tel" value={phone} onChange={(event) => { setPhone(event.target.value); if (codeSent) { setCodeSent(false); setCode(""); setRequestId(undefined); setResendCooldown(0); } }} placeholder="e.g. 98765 43210…" inputMode="tel" autoComplete="tel" disabled={send.isPending || verify.isPending} /></label>
             {activeVerification === "phone" && !codeSent ? <div id="msg91-phone-captcha" className="msg91-captcha-slot" /> : null}

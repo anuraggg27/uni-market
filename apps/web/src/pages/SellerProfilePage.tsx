@@ -160,7 +160,7 @@ export function SellerProfilePage() {
           </div>
         </aside>
 
-        {user?.phoneVerifiedAt && user.id !== sellerId ? (
+        {user?.marketplaceEligible && user.id !== sellerId ? (
           <div className="seller-profile-report">
             <ReportButton targetType="USER" targetId={sellerId!} label="Report seller" />
           </div>
@@ -256,7 +256,7 @@ export function SellerProfilePage() {
                         year: "numeric",
                       })}
                     </time>
-                    {user?.phoneVerifiedAt ? (
+                    {user?.marketplaceEligible ? (
                       <ReportButton
                         targetType="REVIEW"
                         targetId={review.id}

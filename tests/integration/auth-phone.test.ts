@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import * as schema from '../../apps/api/src/db/schema';
 import { OtpService } from '../../apps/api/src/services/otp';
-import { login, setup, verifyPhone } from './helper';
+import { login, setup, verifyMarketplaceEligibility, verifyPhone } from './helper';
 
 let ctx: Awaited<ReturnType<typeof setup>>;
 beforeEach(async()=>{ctx=await setup();});afterEach(async()=>{vi.restoreAllMocks();await ctx?.client.close();});
@@ -47,7 +47,8 @@ describe('authentication acceptance',()=>{
 });
 
 describe('phone verification acceptance',()=>{
-  it('PHONE-01 blocks protected actions before verification',async()=>{const auth=await login(ctx.app,'unverified-user');const response=await auth.agent.post('/api/listings').set(auth.headers).send({}).expect(403);expect(response.body.error.code).toBe('PHONE_VERIFICATION_REQUIRED');});
+  it('allows marketplace actions without phone verification after student eligibility is complete',async()=>{const auth=await login(ctx.app,'phone-optional-user');await verifyMarketplaceEligibility(auth);const session=await auth.agent.get('/api/auth/session').expect(200);expect(session.body.data).toMatchObject({phoneVerifiedAt:null,marketplaceEligible:true,eligibility:{phoneVerified:false,studentEmailVerified:true,adultAttested:true,policiesAccepted:true}});const response=await auth.agent.post('/api/listings').set(auth.headers).send({});expect(response.status).toBe(400);expect(response.body.error.code).not.toBe('PHONE_VERIFICATION_REQUIRED');});
+  it('still blocks marketplace actions until required student eligibility is complete',async()=>{const auth=await login(ctx.app,'ineligible-user');const response=await auth.agent.post('/api/listings').set(auth.headers).send({}).expect(403);expect(response.body.error.code).toBe('STUDENT_EMAIL_VERIFICATION_REQUIRED');});
   it('exposes development mode without leaking provider credentials',async()=>{const auth=await login(ctx.app,'phone-config');const response=await auth.agent.get('/api/phone/config').expect(200);expect(response.body.data).toEqual({provider:'development',otpLength:6,retryAfter:60});expect(JSON.stringify(response.body)).not.toContain('tokenAuth');});
   it('PHONE-02 and PHONE-07 verify normalized phone with single-use development OTP and no provider call',async()=>{const auth=await login(ctx.app,'phone-valid');await verifyPhone(auth).then((r)=>expect(r.status).toBe(200));const user=(await ctx.db.select().from(schema.users).where(eq(schema.users.id,auth.user.id)))[0];expect(user?.phoneE164).toBe('+919876543210');expect(user?.phoneVerifiedAt).toBeTruthy();const second=await auth.agent.post('/api/phone/verify').set(auth.headers).send({phone:'9876543210',code:'999999'}).expect(400);expect(second.body.error.code).toBe('OTP_INVALID');});
   it('PHONE-03 locks after maximum incorrect attempts without exposing details',async()=>{const auth=await login(ctx.app,'phone-attempts');await auth.agent.post('/api/phone/send').set(auth.headers).send({phone:'9876543210'}).expect(200);for(let i=0;i<5;i++){const response=await auth.agent.post('/api/phone/verify').set(auth.headers).send({phone:'9876543210',code:'111111'}).expect(400);expect(response.body.error.message).toBe('The verification code could not be accepted');}const row=(await ctx.db.select().from(schema.phoneVerifications))[0];expect(row?.attempts).toBe(5);expect(row?.invalidatedAt).toBeTruthy();});

@@ -38,7 +38,7 @@ This assessment assumes the following product boundaries. A change to any bounda
 - The platform does not collect money, charge transaction fees, provide escrow, arrange shipping, guarantee goods, or act as seller.
 - The initial user base is below the significant social media intermediary threshold.
 
-At the time of the baseline, the product contradicted two of these assumptions: it accepted any verified Google account for marketplace activity and did not capture an 18+ attestation. The remediated flow permits ordinary Google sign-in for browsing but gates marketplace activity on a separately verified student email, Indian phone, explicit 18+ declaration, and current policy acceptance.
+At the time of the baseline, the product contradicted two of these assumptions: it accepted any verified Google account for marketplace activity and did not capture an 18+ attestation. The remediated flow permits ordinary Google sign-in for browsing but gates marketplace activity on a separately verified student email, explicit 18+ declaration, and current policy acceptance. Indian phone verification is optional.
 
 ## 3. Method and limitations
 

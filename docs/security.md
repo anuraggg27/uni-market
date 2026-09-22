@@ -6,7 +6,7 @@ Google tokens are verified for signature, issuer, audience, expiry and `email_ve
 
 Roles come only from `user_roles`. Public profile updates use an allowlisted schema and cannot assign roles. Suspended users are rejected by protected middleware and Socket.IO. Support staff see only assigned/unassigned support tickets and cannot browse or moderate private conversations.
 
-Ordinary verified Google accounts may sign in and browse. Listing, messaging, transactions, favourites, reviews and member support additionally require a separately verified Indian phone, an approved academic-email OTP no older than 12 months, an explicit 18+ declaration and acceptance of the current policy version. Staff administration is role-gated and requires a Google-authenticated staff session no older than eight hours.
+Ordinary verified Google accounts may sign in and browse. Listing, messaging, transactions, favourites, reviews and member support additionally require an approved academic-email OTP no older than 12 months, an explicit 18+ declaration and acceptance of the current policy version. Indian phone verification is optional and provides an additional trust signal. Staff administration is role-gated and requires a Google-authenticated staff session no older than eight hours.
 
 ## Input, output and privacy
 
@@ -14,7 +14,7 @@ Zod validates request bodies, params and query strings. Drizzle parameterizes da
 
 ## OTP and academic domains
 
-Codes expire in five minutes, are HMAC-hashed, single-use and invalidated on resend/success. Attempts, cooldowns and per-user/phone/IP limits are server-side. Phone numbers are normalized to E.164 and verified numbers are unique. Responses avoid phone enumeration. `DEV_MODE=true` never calls 2Factor and only accepts `999999`; production refuses that configuration.
+Optional phone-verification codes expire in five minutes, are HMAC-hashed, single-use and invalidated on resend/success. Attempts, cooldowns and per-user/phone/IP limits are server-side. Phone numbers are normalized to E.164 and verified numbers are unique. Responses avoid phone enumeration. `DEV_MODE=true` never calls 2Factor and only accepts `999999`; production refuses that configuration.
 
 Student-email codes expire after ten minutes. Email addresses are encrypted at rest and a keyed hash enforces one verified account per address without exposing the value. Only active exact domains, or explicitly approved subdomains, in the staff-reviewed academic-domain registry are accepted. Verification expires after 12 months or immediately when the domain is disabled.
 
