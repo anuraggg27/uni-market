@@ -11,9 +11,10 @@ import { requireAuth, requireVerified } from '../middleware/auth.js';
 import { keyedHash, safeEqual } from '../lib/crypto.js';
 import { AppError, asyncRoute } from '../lib/errors.js';
 import { queueUserEmail } from '../services/email-preferences.js';
-import { notifyNotifications } from '../services/notification-events.js';
+import { notifyAvatarAchievement, notifyNotifications } from '../services/notification-events.js';
 import { getReputation } from '../services/reputation.js';
 import { getListingCoverUrls } from '../services/listing-images.js';
+import { unlockAvatarAchievement } from '../services/avatar-achievements.js';
 
 type TransactionRow = typeof transactions.$inferSelect;
 
@@ -167,10 +168,12 @@ export function transactionsRouter(db: Database, config: AppConfig, storage: Sto
         queueUserEmail(tx, { recipientUserId: updated.buyerId, template: 'transaction-completed-buyer', payload: { transactionId: updated.id, listingId: sold.id, listingTitle: sold.title }, dedupeKey: `transaction-completed-buyer:${updated.id}` }),
         queueUserEmail(tx, { recipientUserId: updated.sellerId, template: 'transaction-completed-seller', payload: { transactionId: updated.id, listingId: sold.id, listingTitle: sold.title }, dedupeKey: `transaction-completed-seller:${updated.id}` }),
       ]);
-      return updated;
+      const avatarAchievementUnlocked = await unlockAvatarAchievement(tx, updated.buyerId, 'FIRST_PURCHASE');
+      return { transaction: updated, avatarAchievementUnlocked };
     });
-    notifyTransactionChange(req, completed);
-    res.json({ data: publicTransaction(completed, req.auth!.userId, config) });
+    notifyTransactionChange(req, completed.transaction);
+    if (completed.avatarAchievementUnlocked) notifyAvatarAchievement(req.app.get('io'), completed.transaction.buyerId, 'FIRST_PURCHASE');
+    res.json({ data: publicTransaction(completed.transaction, req.auth!.userId, config) });
   }));
 
   router.post('/transactions/:id/exchange-code/rotate', requireVerified, asyncRoute(async (req, res) => {
@@ -201,10 +204,12 @@ export function transactionsRouter(db: Database, config: AppConfig, storage: Sto
         queueUserEmail(tx, { recipientUserId: updated.buyerId, template: 'transaction-completed-buyer', payload: { transactionId: updated.id, listingId: sold.id, listingTitle: sold.title }, dedupeKey: `transaction-completed-buyer:${updated.id}` }),
         queueUserEmail(tx, { recipientUserId: updated.sellerId, template: 'transaction-completed-seller', payload: { transactionId: updated.id, listingId: sold.id, listingTitle: sold.title }, dedupeKey: `transaction-completed-seller:${updated.id}` }),
       ]);
-      return updated;
+      const avatarAchievementUnlocked = await unlockAvatarAchievement(tx, updated.buyerId, 'FIRST_PURCHASE');
+      return { transaction: updated, avatarAchievementUnlocked };
     });
-    notifyTransactionChange(req, completed);
-    res.json({ data: publicTransaction(completed, req.auth!.userId, config) });
+    notifyTransactionChange(req, completed.transaction);
+    if (completed.avatarAchievementUnlocked) notifyAvatarAchievement(req.app.get('io'), completed.transaction.buyerId, 'FIRST_PURCHASE');
+    res.json({ data: publicTransaction(completed.transaction, req.auth!.userId, config) });
   }));
 
   router.post('/transactions/:id/cancel', requireVerified, asyncRoute(async (req, res) => {

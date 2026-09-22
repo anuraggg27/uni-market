@@ -12,14 +12,25 @@ export const reportReasons = ['CSAM_CHILD_SAFETY', 'NON_CONSENSUAL_INTIMATE_IMAG
 
 export const currentPolicyVersion = '2026-08-27';
 export const requiredOnboardingPolicies = ['TERMS', 'PRIVACY', 'COMMUNITY_RULES'] as const;
+export const avatarAchievementIds = ['FIRST_LISTING', 'FIRST_PURCHASE'] as const;
+export type AvatarAchievementId = typeof avatarAchievementIds[number];
 export const avatarIds = [
   'avatar-01', 'avatar-02', 'avatar-03', 'avatar-04', 'avatar-05',
   'avatar-06', 'avatar-07', 'avatar-08', 'avatar-09', 'avatar-10',
   'avatar-11', 'avatar-12', 'avatar-13', 'avatar-14', 'avatar-15',
   'avatar-16', 'avatar-17', 'avatar-18', 'avatar-19', 'avatar-20',
+  'unlock_listing_female', 'unlock_listing_male',
+  'unlock_purchase_female', 'unlock_purchase_male',
 ] as const;
 export type AvatarId = typeof avatarIds[number];
-export const avatars: readonly { id: AvatarId; name: string; src: string }[] = [
+export type AvatarConfig = {
+  id: AvatarId;
+  name: string;
+  src: string;
+  achievement?: AvatarAchievementId;
+  unlockRequirement?: string;
+};
+export const avatars: readonly AvatarConfig[] = [
   { id: 'avatar-01', name: 'Avatar 01', src: 'avatars/avatar-01.webp' },
   { id: 'avatar-02', name: 'Avatar 02', src: 'avatars/avatar-02.webp' },
   { id: 'avatar-03', name: 'Avatar 03', src: 'avatars/avatar-03.webp' },
@@ -40,8 +51,13 @@ export const avatars: readonly { id: AvatarId; name: string; src: string }[] = [
   { id: 'avatar-18', name: 'Avatar 18', src: 'avatars/avatar-18.webp' },
   { id: 'avatar-19', name: 'Avatar 19', src: 'avatars/avatar-19.webp' },
   { id: 'avatar-20', name: 'Avatar 20', src: 'avatars/avatar-20.webp' },
+  { id: 'unlock_listing_female', name: 'First listing reward 1', src: 'avatars/unlock-listing-female.webp', achievement: 'FIRST_LISTING', unlockRequirement: 'Create your first listing to unlock' },
+  { id: 'unlock_listing_male', name: 'First listing reward 2', src: 'avatars/unlock-listing-male.webp', achievement: 'FIRST_LISTING', unlockRequirement: 'Create your first listing to unlock' },
+  { id: 'unlock_purchase_female', name: 'First purchase reward 1', src: 'avatars/unlock-purchase-female.webp', achievement: 'FIRST_PURCHASE', unlockRequirement: 'Complete your first purchase to unlock' },
+  { id: 'unlock_purchase_male', name: 'First purchase reward 2', src: 'avatars/unlock-purchase-male.webp', achievement: 'FIRST_PURCHASE', unlockRequirement: 'Complete your first purchase to unlock' },
 ];
 export const avatarIdSchema = z.enum(avatarIds);
+export const avatarAchievementIdSchema = z.enum(avatarAchievementIds);
 export const defaultAvatarId: AvatarId = 'avatar-01';
 
 export const idSchema = z.string().uuid();

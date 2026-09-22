@@ -9409,10 +9409,33 @@ html.dark .hero-campus-background {
   font-size: 0.78rem;
 }
 
+.avatar-picker-groups {
+  display: grid;
+  gap: 14px;
+}
+
 .avatar-picker-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 14px;
+}
+
+.avatar-picker-unlock-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+  color: var(--color-ink);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.avatar-picker-unlock-grid {
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--color-plum) 18%, var(--color-line));
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--color-plum) 4%, var(--color-surface));
 }
 
 .avatar-picker-option {
@@ -9454,6 +9477,101 @@ html.dark .hero-campus-background {
   height: 100%;
   display: block;
   object-fit: cover;
+  transition: opacity 160ms ease;
+}
+
+.avatar-picker-option[data-locked] {
+  cursor: pointer;
+}
+
+.avatar-picker-option[data-locked] .avatar-picker-portrait {
+  border-color: color-mix(in srgb, var(--color-plum) 30%, transparent);
+  background: var(--color-carbon);
+}
+
+.avatar-picker-option[data-locked] .avatar-picker-portrait::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: color-mix(in srgb, var(--color-carbon) 28%, transparent);
+  content: "";
+}
+
+.avatar-picker-option[data-locked] .avatar-picker-portrait img {
+  opacity: 0.56;
+}
+
+.avatar-picker-lock {
+  position: absolute;
+  z-index: 2;
+  inset: 50% auto auto 50%;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, white 28%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-carbon) 82%, transparent);
+  color: white;
+  box-shadow: 0 5px 16px color-mix(in srgb, var(--color-carbon) 38%, transparent);
+  transform: translate(-50%, -50%);
+}
+
+.avatar-picker-lock svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2.2;
+}
+
+.avatar-picker-lock-tooltip {
+  position: absolute;
+  z-index: 20;
+  left: 50%;
+  bottom: calc(100% + 7px);
+  width: max-content;
+  max-width: min(220px, calc(100vw - 48px));
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, white 12%, transparent);
+  border-radius: 9px;
+  background: var(--color-carbon);
+  color: white;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.35;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 4px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.avatar-picker-option[data-locked]:hover .avatar-picker-lock-tooltip,
+.avatar-picker-option[data-locked]:focus-visible .avatar-picker-lock-tooltip,
+.avatar-picker-option[data-requirement-open] .avatar-picker-lock-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.avatar-picker-unlock-grid .avatar-picker-option:first-child .avatar-picker-lock-tooltip {
+  left: 0;
+  transform: translate(0, 4px);
+}
+
+.avatar-picker-unlock-grid .avatar-picker-option:first-child:hover .avatar-picker-lock-tooltip,
+.avatar-picker-unlock-grid .avatar-picker-option:first-child:focus-visible .avatar-picker-lock-tooltip,
+.avatar-picker-unlock-grid .avatar-picker-option:first-child[data-requirement-open] .avatar-picker-lock-tooltip {
+  transform: translate(0, 0);
+}
+
+.avatar-picker-unlock-grid .avatar-picker-option:last-child .avatar-picker-lock-tooltip {
+  right: 0;
+  left: auto;
+  transform: translate(0, 4px);
+}
+
+.avatar-picker-unlock-grid .avatar-picker-option:last-child:hover .avatar-picker-lock-tooltip,
+.avatar-picker-unlock-grid .avatar-picker-option:last-child:focus-visible .avatar-picker-lock-tooltip,
+.avatar-picker-unlock-grid .avatar-picker-option:last-child[data-requirement-open] .avatar-picker-lock-tooltip {
+  transform: translate(0, 0);
 }
 
 

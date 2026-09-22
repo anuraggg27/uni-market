@@ -9,9 +9,10 @@ import { requireAuth, requireVerified } from '../middleware/auth.js';
 import { AppError, asyncRoute } from '../lib/errors.js';
 import type { StorageService } from '../services/storage.js';
 import { matchProhibitedTerms } from '../services/content-risk.js';
-import { notifyNotifications } from '../services/notification-events.js';
+import { notifyAvatarAchievement, notifyNotifications } from '../services/notification-events.js';
 import { getReviewSummary } from '../services/reputation.js';
 import { getListingCoverUrls } from '../services/listing-images.js';
+import { unlockAvatarAchievement } from '../services/avatar-achievements.js';
 
 const publicListing = and(eq(listings.moderationState, 'APPROVED'), inArray(listings.lifecycleState, ['ACTIVE', 'RESERVED', 'SOLD']), isNull(listings.deletedAt));
 
@@ -102,14 +103,16 @@ export function listingsRouter(db: Database, config: AppConfig, storage: Storage
     const matches = matchProhibitedTerms(`${listing.title} ${listing.description} ${listing.defects ?? ''} ${listing.brand ?? ''}`, activeTerms);
     if (matches.some(({ severity }) => severity === 'BLOCK')) throw new AppError(400, 'PROHIBITED_LISTING', 'This listing appears to contain an item that is not permitted on Uni Market');
     const riskCodes = matches.map(({ term, severity }) => `${severity}:${term}`);
-    const updated = await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       const now = new Date();
       const row = (await tx.update(listings).set({ moderationState: 'PENDING', lifecycleState: 'DRAFT', moderationRiskCodes: riskCodes, rejectionReason: null, requestedChanges: null, submittedAt: now, updatedAt: now }).where(eq(listings.id, id)).returning())[0]!;
       await tx.insert(notifications).values({ userId: req.auth!.userId, type: 'LISTING_SUBMITTED', title: 'Listing submitted', body: 'Your listing is waiting for manual review', href: `/listing/${id}` });
-      return row;
+      const avatarAchievementUnlocked = await unlockAvatarAchievement(tx, req.auth!.userId, 'FIRST_LISTING');
+      return { row, avatarAchievementUnlocked };
     });
     notifyNotifications(req.app.get('io'), [req.auth!.userId]);
-    res.json({ data: updated });
+    if (result.avatarAchievementUnlocked) notifyAvatarAchievement(req.app.get('io'), req.auth!.userId, 'FIRST_LISTING');
+    res.json({ data: { ...result.row, avatarAchievementUnlocked: result.avatarAchievementUnlocked ? 'FIRST_LISTING' : null } });
   }));
 
   router.post('/listings/:id/withdraw', requireVerified, asyncRoute(async (req, res) => {

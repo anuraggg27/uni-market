@@ -10,7 +10,7 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { currentPolicyVersion, defaultAvatarId, listingInputSchema, type AvatarId, type ListingInput } from "@campus-market/shared";
+import { currentPolicyVersion, defaultAvatarId, listingInputSchema, type AvatarAchievementId, type AvatarId, type ListingInput } from "@campus-market/shared";
 import { z } from "zod";
 import {
   ArrowDown,
@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import { api, clearCsrf, jsonBody } from "../api";
 import { useAuth } from "../auth";
+import { showAvatarUnlockToast } from "../avatar-achievements";
 import { shouldFollowNewMessage } from "../chat-scroll";
 import { pendingContact } from "../contact-intent";
 import {
@@ -154,6 +155,7 @@ export async function mapWithConcurrency<T>(
 export function ListingFormPage({ edit = false }: { edit?: boolean }) {
   const { listingId } = useParams();
   const navigate = useNavigate();
+  const client = useQueryClient();
   const categories = useCategories();
   const existing = useQuery({
     queryKey: ["listing", listingId],
@@ -348,7 +350,11 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
       if (images.length) await uploadFiles(listing.id);
       if (!edit) {
         setSubmissionProgress({ phase: "submitting" });
-        await api(`/api/listings/${listing.id}/submit`, { method: "POST" });
+        const submitted = await api<{ avatarAchievementUnlocked: AvatarAchievementId | null }>(`/api/listings/${listing.id}/submit`, { method: "POST" });
+        if (submitted.avatarAchievementUnlocked) {
+          void client.invalidateQueries({ queryKey: ["me"] });
+          showAvatarUnlockToast(submitted.avatarAchievementUnlocked, navigate);
+        }
       }
       setSubmissionProgress({ phase: "submitted" });
       toast.success(edit ? "Listing updated ✓" : "Submitted ✓");
@@ -2335,6 +2341,7 @@ export function RequestsPage() {
 export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
   const { user, refresh } = useAuth();
   const navigate = useNavigate();
+  const [profileSearchParams, setProfileSearchParams] = useSearchParams();
   const academicDomains = useAcademicDomains(Boolean(user));
   const [avatarId, setAvatarId] = useState<AvatarId>(
     user?.avatarId ?? defaultAvatarId,
@@ -2349,6 +2356,15 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
     setAvatarId(nextAvatar);
     setAvatarDraft(nextAvatar);
   }, [user?.avatarId, user?.id]);
+
+  useEffect(() => {
+    if (onboarding || profileSearchParams.get("avatar") !== "choose") return;
+    setAvatarDraft(user?.avatarId ?? defaultAvatarId);
+    setAvatarDialogOpen(true);
+    const next = new URLSearchParams(profileSearchParams);
+    next.delete("avatar");
+    setProfileSearchParams(next, { replace: true });
+  }, [onboarding, profileSearchParams, setProfileSearchParams, user?.avatarId]);
 
   const mutation = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
@@ -2427,7 +2443,7 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
         }}
       >
         {onboarding ? (
-          <AvatarPicker value={avatarId} onChange={setAvatarId} />
+          <AvatarPicker value={avatarId} onChange={setAvatarId} unlockedAchievements={user.avatarAchievements} />
         ) : (
           <section className="profile-avatar-card" aria-labelledby="profile-avatar-heading">
             <UserAvatar
@@ -2531,6 +2547,7 @@ export function ProfilePage({ onboarding = false }: { onboarding?: boolean }) {
           onSave={() => avatarMutation.mutate(avatarDraft)}
           pending={avatarMutation.isPending}
           error={avatarMutation.error?.message}
+          unlockedAchievements={user.avatarAchievements}
         />
       ) : null}
     </div>

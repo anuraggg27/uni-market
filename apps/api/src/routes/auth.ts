@@ -9,6 +9,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { decryptText, maskEmail, randomToken, sha256 } from '../lib/crypto.js';
 import { AppError, asyncRoute } from '../lib/errors.js';
 import type { GoogleVerifier } from '../services/google.js';
+import { assertAvatarUnlocked, getAvatarAchievements } from '../services/avatar-achievements.js';
 
 const profileSchema = z.object({
   displayName: z.string().trim().min(2).max(80),
@@ -28,9 +29,11 @@ export function authRouter(db: Database, config: AppConfig, verifier: GoogleVeri
   const currentUser = async (userId: string) => {
     const user = (await db.select({ id: users.id, email: users.email, displayName: users.displayName, avatarId: users.avatarId, institution: users.institution, campus: users.campus, graduationYear: users.graduationYear, phoneVerifiedAt: users.phoneVerifiedAt, phoneE164: users.phoneE164, studentEmailCiphertext: users.studentEmailCiphertext, studentEmailDomain: users.studentEmailDomain, studentEmailVerifiedAt: users.studentEmailVerifiedAt, studentEmailExpiresAt: users.studentEmailExpiresAt, adultAttestedAt: users.adultAttestedAt, onboardingComplete: users.onboardingComplete, suspendedAt: users.suspendedAt, createdAt: users.createdAt }).from(users).where(and(eq(users.id, userId), isNull(users.deletedAt), isNull(users.closedAt))).limit(1))[0];
     if (!user) return null;
+    const avatarAchievements = await getAvatarAchievements(db, userId);
     const { studentEmailCiphertext, ...safeUser } = user;
     return {
       ...safeUser,
+      avatarAchievements,
       phoneE164: user.phoneE164 ? `${user.phoneE164.slice(0, 3)}******${user.phoneE164.slice(-3)}` : null,
       studentEmailMasked: studentEmailCiphertext ? maskEmail(decryptText(studentEmailCiphertext, config.DATA_ENCRYPTION_KEY)) : null,
     };
@@ -123,6 +126,7 @@ export function authRouter(db: Database, config: AppConfig, verifier: GoogleVeri
 
   router.patch('/me', requireAuth, asyncRoute(async (req, res) => {
     const input = profileSchema.parse(req.body);
+    await assertAvatarUnlocked(db, req.auth!.userId, input.avatarId);
     const academicDomain = (await db.select().from(academicDomains).where(and(eq(academicDomains.id, input.academicDomainId), eq(academicDomains.active, true))).limit(1))[0];
     if (!academicDomain) throw new AppError(400, 'ACADEMIC_DOMAIN_NOT_APPROVED', 'Choose a supported college or institution');
     const now = new Date();
@@ -154,6 +158,7 @@ export function authRouter(db: Database, config: AppConfig, verifier: GoogleVeri
 
   router.patch('/me/avatar', requireAuth, asyncRoute(async (req, res) => {
     const input = z.object({ avatarId: avatarIdSchema }).strict().parse(req.body);
+    await assertAvatarUnlocked(db, req.auth!.userId, input.avatarId);
     const updated = (await db.update(users).set({ avatarId: input.avatarId, updatedAt: new Date() }).where(eq(users.id, req.auth!.userId)).returning({ avatarId: users.avatarId }))[0];
     if (!updated) throw new AppError(404, 'USER_NOT_FOUND', 'Account not found');
     res.json({ data: updated });

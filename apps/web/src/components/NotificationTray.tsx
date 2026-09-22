@@ -6,6 +6,7 @@ import {
   MessageCircle,
   ShieldCheck,
   ShoppingBag,
+  Sparkles,
   Star,
   type LucideIcon,
 } from "lucide-react";
@@ -25,6 +26,7 @@ export interface NotificationRecord {
 }
 
 export function getNotificationIcon(type: string): LucideIcon {
+  if (type === "AVATAR_UNLOCKED") return Sparkles;
   if (["NEW_MESSAGE", "NEW_CONVERSATION", "SUPPORT_RESPONSE"].includes(type))
     return MessageCircle;
   if (type === "LISTING_APPROVED") return ShieldCheck;

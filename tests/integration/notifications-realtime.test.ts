@@ -5,6 +5,7 @@ import { io as socketClient, type Socket } from 'socket.io-client';
 import { attachSocket } from '../../apps/api/src/socket';
 import { sessions } from '../../apps/api/src/db/schema';
 import { login, makeRole, setup } from './helper';
+import { notifyAvatarAchievement } from '../../apps/api/src/services/notification-events';
 
 let ctx: Awaited<ReturnType<typeof setup>>;
 beforeEach(async () => { ctx = await setup(); });
@@ -26,14 +27,22 @@ describe('private realtime notifications', () => {
       extraHeaders: { Cookie: auth.cookie }, transports: ['websocket'], autoConnect: false,
     }));
     const events: unknown[][][] = [[], [], []];
+    const achievementEvents: unknown[][] = [[], [], []];
     const connect = (socket: Socket) => new Promise<void>((resolve, reject) => {
       socket.once('connect', resolve);
       socket.once('connect_error', reject);
       socket.connect();
     });
     try {
-      connections.forEach((socket, index) => socket.on('notifications:updated', (...args: unknown[]) => events[index]!.push(args)));
+      connections.forEach((socket, index) => {
+        socket.on('notifications:updated', (...args: unknown[]) => events[index]!.push(args));
+        socket.on('achievement:unlocked', (payload: unknown) => achievementEvents[index]!.push(payload));
+      });
       await Promise.all(connections.map(connect));
+      notifyAvatarAchievement(io, recipient.user.id, 'FIRST_LISTING');
+      await expect.poll(() => achievementEvents.slice(0, 2).map((received) => received.length)).toEqual([1, 1]);
+      expect(achievementEvents[0]).toEqual([{ achievement: 'FIRST_LISTING' }]);
+      expect(achievementEvents[2]).toEqual([]);
       const assertUpdates = async (count: number) => {
         await expect.poll(() => events.slice(0, 2).map((received) => received.length)).toEqual([count, count]);
         expect(events[2]).toEqual([]);

@@ -9,7 +9,7 @@ export const priceTypeEnum = pgEnum('price_type', ['FIXED', 'RANGE', 'FREE']);
 export const transactionEnum = pgEnum('transaction_status', ['REQUESTED', 'ACCEPTED', 'RESERVED', 'HANDED_OVER', 'COMPLETED', 'CANCELLED_BY_BUYER', 'CANCELLED_BY_SELLER', 'DISPUTED']);
 export const supportStatusEnum = pgEnum('support_status', ['OPEN', 'ASSIGNED', 'WAITING_FOR_USER', 'RESOLVED', 'CLOSED']);
 export const reportStatusEnum = pgEnum('report_status', ['OPEN', 'INVESTIGATING', 'RESOLVED', 'DISMISSED']);
-export const notificationTypeEnum = pgEnum('notification_type', ['LISTING_SUBMITTED', 'LISTING_APPROVED', 'LISTING_REJECTED', 'LISTING_REMOVED', 'NEW_CONVERSATION', 'NEW_MESSAGE', 'PURCHASE_REQUEST', 'REQUEST_ACCEPTED', 'LISTING_RESERVED', 'TRANSACTION_COMPLETED', 'REVIEW_RECEIVED', 'SUPPORT_RESPONSE', 'MODERATION_WARNING']);
+export const notificationTypeEnum = pgEnum('notification_type', ['LISTING_SUBMITTED', 'LISTING_APPROVED', 'LISTING_REJECTED', 'LISTING_REMOVED', 'NEW_CONVERSATION', 'NEW_MESSAGE', 'PURCHASE_REQUEST', 'REQUEST_ACCEPTED', 'LISTING_RESERVED', 'TRANSACTION_COMPLETED', 'REVIEW_RECEIVED', 'SUPPORT_RESPONSE', 'MODERATION_WARNING', 'AVATAR_UNLOCKED']);
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -47,6 +47,15 @@ export const users = pgTable('users', {
   uniqueIndex('users_verified_phone_idx').on(table.phoneE164).where(sql`${table.phoneVerifiedAt} is not null`),
   uniqueIndex('users_verified_student_email_idx').on(table.studentEmailHash).where(sql`${table.studentEmailVerifiedAt} is not null`),
   index('users_purge_idx').on(table.purgeAfter)
+]);
+
+export const userAchievements = pgTable('user_achievements', {
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  achievement: text('achievement').notNull(),
+  unlockedAt: timestamp('unlocked_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.achievement] }),
+  check('user_achievement_known', sql`${table.achievement} in ('FIRST_LISTING', 'FIRST_PURCHASE')`),
 ]);
 
 export const emailPreferences = pgTable('email_preferences', {

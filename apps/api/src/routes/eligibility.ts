@@ -10,6 +10,7 @@ import { decryptText, encryptText, keyedHash, maskEmail, sha256, safeEqual } fro
 import { AppError, asyncRoute } from '../lib/errors.js';
 import { requireAuth } from '../middleware/auth.js';
 import { verifiedMsg91Identifier } from '../services/msg91.js';
+import { assertAvatarUnlocked } from '../services/avatar-achievements.js';
 
 const emailInput = z.string().trim().email().max(254).transform((value) => value.toLowerCase());
 const eligibilityDeclarationsInput = z.object({
@@ -97,6 +98,7 @@ export function eligibilityRouter(db: Database, config: AppConfig): Router {
 
   router.post('/onboarding/complete', requireAuth, asyncRoute(async (req, res) => {
     const input = onboardingInput.parse(req.body);
+    await assertAvatarUnlocked(db, req.auth!.userId, input.avatarId);
     const academicDomain = (await db.select().from(academicDomains).where(and(eq(academicDomains.id, input.academicDomainId), eq(academicDomains.active, true))).limit(1))[0];
     if (!academicDomain) throw new AppError(400, 'ACADEMIC_DOMAIN_NOT_APPROVED', 'Choose a supported college or institution');
     const now = new Date();

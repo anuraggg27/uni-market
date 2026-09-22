@@ -1,4 +1,5 @@
 import type { Server } from 'socket.io';
+import type { AvatarAchievementId } from '@campus-market/shared';
 
 export function notifyNotifications(io: Server | undefined, userIds: string[]): void {
   // Send only an invalidation signal. Notification contents are fetched through
@@ -6,4 +7,8 @@ export function notifyNotifications(io: Server | undefined, userIds: string[]): 
   for (const userId of new Set(userIds)) {
     io?.of('/notifications').to(`user:${userId}`).emit('notifications:updated');
   }
+}
+
+export function notifyAvatarAchievement(io: Server | undefined, userId: string, achievement: AvatarAchievementId): void {
+  io?.of('/notifications').to(`user:${userId}`).emit('achievement:unlocked', { achievement });
 }

@@ -736,6 +736,63 @@ test("E2E-06 public grievance submission returns private tracking access", async
   await guest.close();
 });
 
+test("achievement avatars explain locks, unlock live, and stay responsive", async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await context.newPage();
+  const auth = await signIn(context, "avatar-achievement-e2e");
+
+  await page.goto(marketplacePath("/profile?avatar=choose"));
+  await expect(page.getByRole("dialog", { name: "Change avatar" })).toBeVisible();
+  await expect(page.getByText(/^Unlockable/)).toBeVisible();
+
+  const listingReward = page.getByRole("radio", {
+    name: "First listing reward 1 avatar, locked",
+  });
+  await listingReward.hover();
+  await expect(page.getByRole("tooltip", {
+    name: "Create your first listing to unlock",
+  }).first()).toBeVisible();
+  await listingReward.click({ force: true });
+  await expect(listingReward).toHaveAttribute("data-requirement-open", "true");
+  await page.getByRole("button", { name: "Close avatar picker" }).click();
+
+  await createListing(auth, "Achievement avatar listing");
+  await expect(page.getByText(/New avatar unlocked/).last()).toBeVisible();
+  await page.getByRole("button", { name: "Choose avatar" }).click();
+  await expect(page.getByRole("dialog", { name: "Change avatar" })).toBeVisible();
+  await expect(page.getByRole("radio", {
+    name: "Select First listing reward 1 avatar",
+  })).toBeEnabled();
+  await expect(page.getByRole("radio", {
+    name: "First purchase reward 1 avatar, locked",
+  })).toHaveAttribute("aria-disabled", "true");
+
+  for (const width of [375, 390, 412, 430]) {
+    await page.setViewportSize({ width, height: 844 });
+    const purchaseReward = page.getByRole("radio", {
+      name: "First purchase reward 1 avatar, locked",
+    });
+    await purchaseReward.click({ force: true });
+    await expect(page.getByRole("tooltip", {
+      name: "Complete your first purchase to unlock",
+    }).first()).toBeVisible();
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(overflow, `avatar picker overflows at ${width}px`).toBe(false);
+  }
+
+  await page.getByRole("button", { name: "Close avatar picker" }).click();
+  await page.goto(marketplacePath("/browse"));
+  await page.getByRole("button", { name: /Notifications/ }).click();
+  await page.getByRole("link", { name: /New avatar unlocked/ }).click();
+  await expect(page.getByRole("dialog", { name: "Change avatar" })).toBeVisible();
+  await context.close();
+});
+
 test("E2E-07 important marketplace screens remain usable at mobile, tablet and desktop widths", async ({
   browser,
 }) => {

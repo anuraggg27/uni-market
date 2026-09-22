@@ -1,7 +1,9 @@
-import { useEffect, useId, useRef, type RefObject } from "react";
-import { Check, X } from "lucide-react";
+import { useEffect, useId, useRef, useState, type RefObject } from "react";
+import { Check, LockKeyhole, X } from "lucide-react";
 import {
   avatars,
+  type AvatarAchievementId,
+  type AvatarConfig,
   type AvatarId,
 } from "@campus-market/shared";
 import { avatarAssetSrc } from "./UserAvatar";
@@ -9,13 +11,72 @@ import { avatarAssetSrc } from "./UserAvatar";
 export function AvatarPicker({
   value,
   onChange,
+  unlockedAchievements = [],
   label = "Choose your avatar",
 }: {
   value: AvatarId;
   onChange: (avatarId: AvatarId) => void;
+  unlockedAchievements?: readonly AvatarAchievementId[];
   label?: string;
 }) {
   const labelId = useId();
+  const [openRequirement, setOpenRequirement] = useState<AvatarId | null>(null);
+  const standardAvatars = avatars.filter((avatar) => !avatar.achievement);
+  const unlockableAvatars = avatars.filter((avatar) => avatar.achievement);
+
+  const avatarOption = (avatar: AvatarConfig) => {
+    const selected = value === avatar.id;
+    const locked = Boolean(avatar.achievement && !unlockedAchievements.includes(avatar.achievement));
+    const requirementId = `${labelId}-${avatar.id}-requirement`;
+    return (
+      <button
+        key={avatar.id}
+        type="button"
+        className="avatar-picker-option"
+        role="radio"
+        aria-checked={selected}
+        aria-disabled={locked || undefined}
+        aria-describedby={locked ? requirementId : undefined}
+        aria-label={locked ? `${avatar.name} avatar, locked` : `Select ${avatar.name} avatar`}
+        data-selected={selected || undefined}
+        data-locked={locked || undefined}
+        data-requirement-open={locked && openRequirement === avatar.id || undefined}
+        onClick={() => {
+          if (locked) {
+            setOpenRequirement((current) => current === avatar.id ? null : avatar.id);
+            return;
+          }
+          setOpenRequirement(null);
+          onChange(avatar.id);
+        }}
+      >
+        <span className="avatar-picker-portrait">
+          <img
+            src={avatarAssetSrc(avatar.src)}
+            alt=""
+            width={160}
+            height={160}
+            loading="lazy"
+          />
+          {locked ? (
+            <span className="avatar-picker-lock" aria-hidden="true">
+              <LockKeyhole />
+            </span>
+          ) : null}
+        </span>
+        {locked ? (
+          <span id={requirementId} className="avatar-picker-lock-tooltip" role="tooltip">
+            {avatar.unlockRequirement}
+          </span>
+        ) : null}
+        {selected && !locked ? (
+          <span className="avatar-picker-check" aria-hidden="true">
+            <Check />
+          </span>
+        ) : null}
+      </button>
+    );
+  };
 
   return (
     <section className="avatar-picker">
@@ -23,37 +84,16 @@ export function AvatarPicker({
         <h2 id={labelId}>{label}</h2>
         <p>Pick an illustration that feels like you.</p>
       </div>
-      <div className="avatar-picker-grid" role="radiogroup" aria-labelledby={labelId}>
-        {avatars.map((avatar) => {
-          const selected = value === avatar.id;
-          return (
-            <button
-              key={avatar.id}
-              type="button"
-              className="avatar-picker-option"
-              role="radio"
-              aria-checked={selected}
-              aria-label={`Select ${avatar.name} avatar`}
-              data-selected={selected || undefined}
-              onClick={() => onChange(avatar.id)}
-            >
-              <span className="avatar-picker-portrait">
-                <img
-                  src={avatarAssetSrc(avatar.src)}
-                  alt=""
-                  width={160}
-                  height={160}
-                  loading="lazy"
-                />
-              </span>
-              {selected ? (
-                <span className="avatar-picker-check" aria-hidden="true">
-                  <Check />
-                </span>
-              ) : null}
-            </button>
-          );
-        })}
+      <div className="avatar-picker-groups" role="radiogroup" aria-labelledby={labelId}>
+        <div className="avatar-picker-grid">
+          {standardAvatars.map(avatarOption)}
+        </div>
+        <div className="avatar-picker-unlock-heading">
+          <span>Unlockable <span aria-hidden="true">&#10022;</span></span>
+        </div>
+        <div className="avatar-picker-grid avatar-picker-unlock-grid">
+          {unlockableAvatars.map(avatarOption)}
+        </div>
       </div>
     </section>
   );
@@ -67,6 +107,7 @@ export function AvatarPickerDialog({
   onSave,
   pending,
   error,
+  unlockedAchievements = [],
 }: {
   open: boolean;
   value: AvatarId;
@@ -75,6 +116,7 @@ export function AvatarPickerDialog({
   onSave: () => void;
   pending?: boolean;
   error?: string | undefined;
+  unlockedAchievements?: readonly AvatarAchievementId[];
 }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const onCloseRef = useRef(onClose);
@@ -137,7 +179,7 @@ export function AvatarPickerDialog({
           </button>
         </div>
         <div className="avatar-dialog-body">
-          <AvatarPicker value={value} onChange={onChange} label="Choose a new avatar" />
+          <AvatarPicker value={value} onChange={onChange} unlockedAchievements={unlockedAchievements} label="Choose a new avatar" />
         </div>
         <div className="avatar-dialog-footer">
           {error ? <p className="field-error" role="alert">{error}</p> : null}
