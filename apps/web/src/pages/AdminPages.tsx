@@ -27,9 +27,11 @@ import {
   Clock3,
   Database,
   Dumbbell,
+  Eye,
   FileCheck2,
   ExternalLink,
   Flag,
+  Globe2,
   Headphones,
   History,
   ImageIcon,
@@ -192,8 +194,149 @@ function QueryView({
   return children(query.data);
 }
 
+type TrafficRange = "7" | "30" | "90" | "365" | "all";
+type TrafficAnalytics = {
+  range: TrafficRange;
+  from: string | null;
+  to: string;
+  trackingStartedAt: string | null;
+  summary: {
+    views: number;
+    visitorDays: number;
+    averageDailyVisitors: number;
+    peakDailyVisitors: number;
+    todayViews: number;
+    todayVisitors: number;
+  };
+  series: Array<{ date: string; views: number; visitors: number }>;
+  topPages: Array<{ route: string; views: number }>;
+  referrers: Array<{ source: string; visits: number }>;
+  devices: Array<{ device: string; visitors: number }>;
+};
+
+const trafficRanges: Array<{ value: TrafficRange; label: string }> = [
+  { value: "7", label: "7 days" },
+  { value: "30", label: "30 days" },
+  { value: "90", label: "90 days" },
+  { value: "365", label: "1 year" },
+  { value: "all", label: "All time" },
+];
+
+function trafficRangeLabel(range: TrafficRange) {
+  return trafficRanges.find((item) => item.value === range)?.label ?? "Selected range";
+}
+
+function trafficRouteLabel(route: string) {
+  if (route === "/") return "Home";
+  return route
+    .replace("/:id", " detail")
+    .replace(/^\//, "")
+    .split("/")
+    .filter(Boolean)
+    .map((part) => part.replace(/-/g, " ").replace(/^./, (character) => character.toUpperCase()))
+    .join(" · ");
+}
+
+function compactMetric(value: number) {
+  return new Intl.NumberFormat("en-IN", { notation: value >= 10_000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(value);
+}
+
+function trafficDateLabel(value: string) {
+  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short" }).format(new Date(`${value}T00:00:00.000Z`));
+}
+
+function bucketTrafficSeries(series: TrafficAnalytics["series"]) {
+  const bucketSize = Math.max(1, Math.ceil(series.length / 56));
+  const buckets: Array<{ label: string; views: number; visitors: number }> = [];
+  for (let index = 0; index < series.length; index += bucketSize) {
+    const rows = series.slice(index, index + bucketSize);
+    const end = rows.at(-1)!;
+    buckets.push({
+      label: rows.length === 1 ? trafficDateLabel(rows[0]!.date) : `${trafficDateLabel(rows[0]!.date)}–${trafficDateLabel(end.date)}`,
+      views: Number((rows.reduce((sum, row) => sum + row.views, 0) / rows.length).toFixed(1)),
+      visitors: Number((rows.reduce((sum, row) => sum + row.visitors, 0) / rows.length).toFixed(1)),
+    });
+  }
+  return buckets;
+}
+
+function TrafficAnalyticsPanel({ range, setRange, query }: { range: TrafficRange; setRange: (range: TrafficRange) => void; query: any }) {
+  const data = query.data as TrafficAnalytics | undefined;
+  const buckets = data ? bucketTrafficSeries(data.series) : [];
+  const chartMaximum = Math.max(1, ...buckets.flatMap((item) => [item.views, item.visitors]));
+  const topPageMaximum = Math.max(1, ...(data?.topPages.map((item) => item.views) ?? []));
+  const deviceTotal = data?.devices.reduce((sum, item) => sum + item.visitors, 0) ?? 0;
+  return (
+    <section className="admin-traffic" aria-labelledby="admin-traffic-title">
+      <div className="admin-traffic-heading">
+        <div>
+          <h2 id="admin-traffic-title">Website traffic</h2>
+          <p>First-party page views and anonymous daily visitors retained in the marketplace database.</p>
+        </div>
+        <div className="admin-traffic-ranges" role="group" aria-label="Traffic date range">
+          {trafficRanges.map((option) => (
+            <button type="button" className={range === option.value ? "is-active" : ""} aria-pressed={range === option.value} onClick={() => setRange(option.value)} key={option.value}>
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {query.isLoading ? (
+        <p className="admin-traffic-state">Loading traffic history…</p>
+      ) : query.isError ? (
+        <div className="admin-traffic-state"><p>Traffic history is unavailable.</p><button type="button" onClick={() => void query.refetch()}>Try again</button></div>
+      ) : !data?.trackingStartedAt ? (
+        <div className="admin-traffic-state">
+          <Activity aria-hidden="true" />
+          <p><strong>Traffic collection has started</strong><span>Stats will appear after the first non-admin page view.</span></p>
+        </div>
+      ) : (
+        <>
+          <div className="admin-traffic-summary" aria-label="Traffic summary">
+            <article><span><Eye aria-hidden="true" /></span><p><strong>{compactMetric(data.summary.views)}</strong><b>Page views</b><small>{trafficRangeLabel(range)}</small></p></article>
+            <article><span><Users aria-hidden="true" /></span><p><strong>{compactMetric(data.summary.averageDailyVisitors)}</strong><b>Avg. visitors/day</b><small>Peak {compactMetric(data.summary.peakDailyVisitors)}</small></p></article>
+            <article><span><CalendarDays aria-hidden="true" /></span><p><strong>{compactMetric(data.summary.todayViews)}</strong><b>Views today</b><small>UTC day</small></p></article>
+            <article><span><Activity aria-hidden="true" /></span><p><strong>{compactMetric(data.summary.todayVisitors)}</strong><b>Visitors today</b><small>Unique today</small></p></article>
+          </div>
+          <div className="admin-traffic-chart-panel">
+            <div className="admin-traffic-subheading">
+              <div><h3>Daily traffic</h3><p>{buckets.length < data.series.length ? "Daily averages grouped for readability" : "Page views and unique visitors by UTC day"}</p></div>
+              <div className="admin-traffic-legend"><span className="is-views">Page views</span><span className="is-visitors">Visitors</span></div>
+            </div>
+            <div className="admin-traffic-chart" role="img" aria-label={`Traffic chart for ${trafficRangeLabel(range)}`}>
+              {buckets.map((item, index) => (
+                <div className="admin-traffic-bar-group" aria-label={`${item.label}: ${item.views} average page views and ${item.visitors} average daily visitors`} title={`${item.label} · ${item.views} views · ${item.visitors} visitors`} key={`${item.label}-${index}`}>
+                  <span className="is-views" style={{ height: item.views ? `${Math.max(3, (item.views / chartMaximum) * 100)}%` : "2px" }} />
+                  <span className="is-visitors" style={{ height: item.visitors ? `${Math.max(3, (item.visitors / chartMaximum) * 100)}%` : "2px" }} />
+                </div>
+              ))}
+            </div>
+            <div className="admin-traffic-axis"><span>{buckets[0]?.label}</span><span>{buckets.at(-1)?.label}</span></div>
+          </div>
+          <div className="admin-traffic-breakdown">
+            <section aria-labelledby="top-pages-title">
+              <div className="admin-traffic-subheading"><div><h3 id="top-pages-title">Top pages</h3><p>Views in this range</p></div></div>
+              {data.topPages.length ? <ol>{data.topPages.map((item) => <li key={item.route}><div><b>{trafficRouteLabel(item.route)}</b><span>{compactMetric(item.views)}</span></div><i style={{ width: `${Math.max(3, (item.views / topPageMaximum) * 100)}%` }} /></li>)}</ol> : <p className="admin-traffic-list-empty">No page views yet.</p>}
+            </section>
+            <section aria-labelledby="referrers-title">
+              <div className="admin-traffic-subheading"><div><h3 id="referrers-title">Traffic sources</h3><p>Landing visits in this range</p></div></div>
+              {data.referrers.length ? <ol>{data.referrers.map((item) => <li key={item.source}><div><b>{item.source}</b><span>{compactMetric(item.visits)}</span></div></li>)}</ol> : <p className="admin-traffic-list-empty">No landing sources yet.</p>}
+            </section>
+            <section aria-labelledby="devices-title">
+              <div className="admin-traffic-subheading"><div><h3 id="devices-title">Devices</h3><p>Share of daily visitors</p></div><Globe2 aria-hidden="true" /></div>
+              {data.devices.length ? <ol>{data.devices.map((item) => <li key={item.device}><div><b>{item.device.replace(/^./, (character) => character.toUpperCase())}</b><span>{deviceTotal ? Math.round((item.visitors / deviceTotal) * 100) : 0}%</span></div></li>)}</ol> : <p className="admin-traffic-list-empty">No device data yet.</p>}
+            </section>
+          </div>
+          <p className="admin-traffic-note">Tracking began {trafficDateLabel(data.trackingStartedAt)}. Visitors are deduplicated only within each UTC day; raw IP addresses and reusable cross-day visitor identifiers are not stored. Browser privacy opt-outs are respected.</p>
+        </>
+      )}
+    </section>
+  );
+}
+
 export function AdminDashboard() {
   const { user } = useAuth();
+  const [analyticsRange, setAnalyticsRange] = useState<TrafficRange>("90");
   const canViewAudit = Boolean(user?.roles.includes("SUPER_ADMIN"));
   const query = useQuery({
     queryKey: ["admin-dashboard"],
@@ -203,6 +346,10 @@ export function AdminDashboard() {
     queryKey: ["audit-logs", "dashboard-recent"],
     queryFn: () => api<any[]>("/api/admin/audit-logs"),
     enabled: canViewAudit,
+  });
+  const analyticsQuery = useQuery({
+    queryKey: ["admin-analytics", analyticsRange],
+    queryFn: () => api<TrafficAnalytics>(`/api/admin/analytics?range=${analyticsRange}`),
   });
 
   return (
@@ -299,27 +446,9 @@ export function AdminDashboard() {
                 </div>
               </section>
 
-              <div className={"admin-dashboard-lower" + (canViewAudit ? "" : " without-activity")}>
-                <section className="admin-dashboard-panel admin-health-panel">
-                  <div className="admin-panel-heading">
-                    <div>
-                      <h2>Marketplace health</h2>
-                      <p>Key activity over the last 30 days</p>
-                    </div>
-                    <Activity aria-hidden="true" />
-                  </div>
-                  <div className="admin-health-empty">
-                    <Activity aria-hidden="true" />
-                    <p>
-                      <strong>Historical activity is not available yet</strong>
-                      <span>
-                        Marketplace trends will appear here when the dashboard API provides
-                        time-series data.
-                      </span>
-                    </p>
-                  </div>
-                </section>
+              <TrafficAnalyticsPanel range={analyticsRange} setRange={setAnalyticsRange} query={analyticsQuery} />
 
+              <div className={"admin-dashboard-lower" + (canViewAudit ? "" : " without-activity")}>
                 {canViewAudit ? (
                   <section className="admin-dashboard-panel admin-activity-panel">
                     <div className="admin-panel-heading">

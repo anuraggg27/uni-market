@@ -21,6 +21,9 @@ import type { Database } from "../db/client.js";
 import type { AppConfig } from "../config.js";
 import {
   adminAuditLogs,
+  analyticsDailyPages,
+  analyticsDailyReferrers,
+  analyticsDailyVisitors,
   categories,
   conversations,
   emailOutbox,
@@ -622,6 +625,77 @@ export function adminRouter(
           otpSuccess,
           otpFailure,
           r2StorageUsage: null,
+        },
+      });
+    }),
+  );
+
+  router.get(
+    "/analytics",
+    requireRole("MODERATOR", "SUPPORT_AGENT", "SUPER_ADMIN"),
+    asyncRoute(async (req, res) => {
+      const { range } = z.object({ range: z.enum(["7", "30", "90", "365", "all"]).default("90") }).parse(req.query);
+      const today = new Date().toISOString().slice(0, 10);
+      const days = range === "all" ? null : Number(range);
+      const fromDay = days
+        ? new Date(Date.now() - (days - 1) * 24 * 60 * 60_000).toISOString().slice(0, 10)
+        : null;
+      const visitorRange = fromDay ? gte(analyticsDailyVisitors.day, fromDay) : sql`true`;
+      const pageRange = fromDay ? gte(analyticsDailyPages.day, fromDay) : sql`true`;
+      const referrerRange = fromDay ? gte(analyticsDailyReferrers.day, fromDay) : sql`true`;
+      const [dailyRows, pageRows, referrerRows, deviceRows, firstRows] = await Promise.all([
+        db.select({
+          date: analyticsDailyVisitors.day,
+          views: sql<number>`sum(${analyticsDailyVisitors.pageViews})`,
+          visitors: count(),
+        }).from(analyticsDailyVisitors).where(visitorRange).groupBy(analyticsDailyVisitors.day).orderBy(asc(analyticsDailyVisitors.day)),
+        db.select({
+          route: analyticsDailyPages.route,
+          views: sql<number>`sum(${analyticsDailyPages.views})`,
+        }).from(analyticsDailyPages).where(pageRange).groupBy(analyticsDailyPages.route).orderBy(desc(sql`sum(${analyticsDailyPages.views})`)).limit(8),
+        db.select({
+          source: analyticsDailyReferrers.source,
+          visits: sql<number>`sum(${analyticsDailyReferrers.visits})`,
+        }).from(analyticsDailyReferrers).where(referrerRange).groupBy(analyticsDailyReferrers.source).orderBy(desc(sql`sum(${analyticsDailyReferrers.visits})`)).limit(8),
+        db.select({
+          device: analyticsDailyVisitors.deviceType,
+          visitors: count(),
+        }).from(analyticsDailyVisitors).where(visitorRange).groupBy(analyticsDailyVisitors.deviceType).orderBy(desc(count())),
+        db.select({ date: sql<string | null>`min(${analyticsDailyVisitors.day})` }).from(analyticsDailyVisitors),
+      ]);
+      const trackingStartedAt = firstRows[0]?.date ?? null;
+      const seriesStart = trackingStartedAt && fromDay
+        ? (trackingStartedAt > fromDay ? trackingStartedAt : fromDay)
+        : trackingStartedAt;
+      const rowsByDay = new Map(dailyRows.map((row) => [row.date, { views: Number(row.views), visitors: Number(row.visitors) }]));
+      const series: Array<{ date: string; views: number; visitors: number }> = [];
+      if (seriesStart && trackingStartedAt) {
+        for (let cursor = new Date(`${seriesStart}T00:00:00.000Z`); cursor <= new Date(`${today}T00:00:00.000Z`); cursor = new Date(cursor.getTime() + 24 * 60 * 60_000)) {
+          const date = cursor.toISOString().slice(0, 10);
+          series.push({ date, views: rowsByDay.get(date)?.views ?? 0, visitors: rowsByDay.get(date)?.visitors ?? 0 });
+        }
+      }
+      const views = series.reduce((sum, item) => sum + item.views, 0);
+      const visitorDays = series.reduce((sum, item) => sum + item.visitors, 0);
+      const todayRow = rowsByDay.get(today) ?? { views: 0, visitors: 0 };
+      res.json({
+        data: {
+          range,
+          from: seriesStart,
+          to: today,
+          trackingStartedAt,
+          summary: {
+            views,
+            visitorDays,
+            averageDailyVisitors: series.length ? Number((visitorDays / series.length).toFixed(1)) : 0,
+            peakDailyVisitors: series.reduce((peak, item) => Math.max(peak, item.visitors), 0),
+            todayViews: todayRow.views,
+            todayVisitors: todayRow.visitors,
+          },
+          series,
+          topPages: pageRows.map((row) => ({ route: row.route, views: Number(row.views) })),
+          referrers: referrerRows.map((row) => ({ source: row.source, visits: Number(row.visits) })),
+          devices: deviceRows.map((row) => ({ device: row.device, visitors: Number(row.visitors) })),
         },
       });
     }),

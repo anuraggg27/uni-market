@@ -30,6 +30,7 @@ import { complianceAdminRouter } from "./routes/compliance-admin.js";
 import { privacyRouter } from "./routes/privacy.js";
 import { marketplaceHtmlRouter, seoRouter } from "./routes/seo.js";
 import { monitoringRouter, otpTelemetryRouter } from './routes/monitoring.js';
+import { analyticsRouter } from './routes/analytics.js';
 
 function r2ConnectSources(config: AppConfig): string[] {
   const endpoint =
@@ -161,6 +162,7 @@ export function createApp(deps: {
   app.use(express.json({ limit: "128kb", strict: true }));
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
   app.use(otpTelemetryRouter());
+  app.use('/api', analyticsRouter(db, config));
   app.use('/api', (_req, res, next) => { res.set('X-Robots-Tag', 'noindex'); next(); });
   app.use(seoRouter(db, config, storage));
   app.use("/api", uploadsRouter(db, config, storage));

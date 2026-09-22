@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, date, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 export const roleEnum = pgEnum('role', ['USER', 'SUPPORT_AGENT', 'MODERATOR', 'SUPER_ADMIN']);
 export const moderationEnum = pgEnum('moderation_state', ['PENDING', 'APPROVED', 'REJECTED', 'REMOVED']);
@@ -482,3 +482,40 @@ export const staffAccessReviews = pgTable('staff_access_reviews', {
   reviewedBy: uuid('reviewed_by').references(() => users.id).notNull(),
   reviewedAt: timestamp('reviewed_at', { withTimezone: true }).defaultNow().notNull()
 }, (table) => [index('staff_access_review_subject_idx').on(table.subjectUserId, table.reviewedAt)]);
+
+// Anonymous traffic analytics are deliberately aggregated by UTC day. The
+// visitor hash is derived from a browser-generated daily identifier and a
+// server secret, so it cannot be used to follow a visitor across days.
+export const analyticsDailyVisitors = pgTable('analytics_daily_visitors', {
+  day: date('day', { mode: 'string' }).notNull(),
+  visitorHash: text('visitor_hash').notNull(),
+  pageViews: integer('page_views').default(1).notNull(),
+  deviceType: text('device_type').notNull(),
+  firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).defaultNow().notNull(),
+  lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.day, table.visitorHash] }),
+  index('analytics_daily_visitors_day_idx').on(table.day),
+  index('analytics_daily_visitors_device_idx').on(table.day, table.deviceType),
+  check('analytics_daily_visitors_page_views_positive', sql`${table.pageViews} > 0`),
+]);
+
+export const analyticsDailyPages = pgTable('analytics_daily_pages', {
+  day: date('day', { mode: 'string' }).notNull(),
+  route: text('route').notNull(),
+  views: integer('views').default(1).notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.day, table.route] }),
+  index('analytics_daily_pages_day_idx').on(table.day),
+  check('analytics_daily_pages_views_positive', sql`${table.views} > 0`),
+]);
+
+export const analyticsDailyReferrers = pgTable('analytics_daily_referrers', {
+  day: date('day', { mode: 'string' }).notNull(),
+  source: text('source').notNull(),
+  visits: integer('visits').default(1).notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.day, table.source] }),
+  index('analytics_daily_referrers_day_idx').on(table.day),
+  check('analytics_daily_referrers_visits_positive', sql`${table.visits} > 0`),
+]);

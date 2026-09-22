@@ -4,6 +4,7 @@ import { AuthProvider, RequireAuth } from "./auth";
 import { Layout } from "./components/Layout";
 import { NotificationUpdates } from "./components/NotificationUpdates";
 import { PageSeo } from "./components/PageSeo";
+import { AnalyticsTracker } from "./components/AnalyticsTracker";
 
 function lazyNamed<Props = Record<string, never>>(
   loader: () => Promise<any>,
@@ -80,6 +81,7 @@ export function App() {
   return (
     <AuthProvider>
       <PageSeo />
+      <AnalyticsTracker />
       <NotificationUpdates />
       <Routes>
           <Route element={<Layout />}>

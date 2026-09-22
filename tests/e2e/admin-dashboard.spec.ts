@@ -59,9 +59,9 @@ test("admin dashboard preserves real data and stays responsive at supported widt
   ).toBeVisible();
   await expect(page.locator(".admin-summary-card")).toHaveCount(4);
   await expect(page.locator(".admin-detail-metric")).toHaveCount(13);
-  await expect(
-    page.getByText("Historical activity is not available yet"),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Website traffic" })).toBeVisible();
+  await expect(page.getByText("Traffic collection has started")).toBeVisible();
+  await expect(page.getByRole("button", { name: "All time" })).toBeVisible();
   await expect(
     page.getByRole("link", { name: "Review pending listings" }),
   ).toHaveAttribute("href", "/marketplace/admin/listings/pending");

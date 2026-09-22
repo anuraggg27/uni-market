@@ -51,6 +51,22 @@ const dashboard = {
   r2StorageUsage: null,
 };
 
+const analytics = {
+  range: "90",
+  from: "2026-09-20",
+  to: "2026-09-22",
+  trackingStartedAt: "2026-09-20",
+  summary: { views: 24, visitorDays: 12, averageDailyVisitors: 4, peakDailyVisitors: 6, todayViews: 9, todayVisitors: 5 },
+  series: [
+    { date: "2026-09-20", views: 6, visitors: 3 },
+    { date: "2026-09-21", views: 9, visitors: 4 },
+    { date: "2026-09-22", views: 9, visitors: 5 },
+  ],
+  topPages: [{ route: "/browse", views: 14 }, { route: "/listing/:id", views: 10 }],
+  referrers: [{ source: "Direct", visits: 7 }, { source: "Organic search", visits: 3 }],
+  devices: [{ device: "mobile", visitors: 8 }, { device: "desktop", visitors: 4 }],
+};
+
 function renderDashboard() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -72,6 +88,7 @@ describe("AdminDashboard", () => {
   beforeEach(() => {
     apiMock.mockImplementation((path: string) => {
       if (path === "/api/admin/dashboard") return Promise.resolve(dashboard);
+      if (path === "/api/admin/analytics?range=90") return Promise.resolve(analytics);
       if (path === "/api/admin/audit-logs") {
         return Promise.resolve([
           {
@@ -92,7 +109,7 @@ describe("AdminDashboard", () => {
     vi.clearAllMocks();
   });
 
-  it("uses real dashboard metrics and audit entries without fabricated trends", async () => {
+  it("uses real dashboard, traffic and audit metrics without fabricated trends", async () => {
     renderDashboard();
 
     expect(
@@ -106,12 +123,19 @@ describe("AdminDashboard", () => {
     expect(within(primaryMetrics).getByText("4")).toBeVisible();
     expect(screen.getByText("4.8")).toBeVisible();
     expect(screen.getByText("Unavailable")).toBeVisible();
-    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
-    expect(
-      screen.getByText("Historical activity is not available yet"),
-    ).toBeVisible();
+    expect(within(primaryMetrics).queryByText(/%/)).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Website traffic" })).toBeVisible();
+    const traffic = screen.getByRole("region", { name: "Website traffic" });
+    const trafficSummary = within(traffic).getByLabelText("Traffic summary");
+    expect(within(trafficSummary).getByText("Page views")).toBeVisible();
+    expect(within(trafficSummary).getByText("24")).toBeVisible();
+    expect(within(trafficSummary).getByText("Avg. visitors/day")).toBeVisible();
+    expect(within(traffic).getByText("Browse")).toBeVisible();
+    expect(within(traffic).getByText("Organic search")).toBeVisible();
+    expect(within(traffic).getByRole("button", { name: "1 year" })).toHaveAttribute("aria-pressed", "false");
     expect(await screen.findByText("Listing approve")).toBeVisible();
     expect(apiMock).toHaveBeenCalledWith("/api/admin/dashboard");
+    expect(apiMock).toHaveBeenCalledWith("/api/admin/analytics?range=90");
     expect(apiMock).toHaveBeenCalledWith("/api/admin/audit-logs");
   });
 

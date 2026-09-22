@@ -10022,16 +10022,346 @@ html.dark .hero-campus-background {
   color: var(--color-sandalwood);
 }
 
+.admin-traffic {
+  min-width: 0;
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid var(--color-line);
+  border-radius: 15px;
+  background: var(--color-surface);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.025);
+}
+
+.admin-traffic-heading,
+.admin-traffic-subheading {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-traffic-heading h2,
+.admin-traffic-subheading h3 {
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.admin-traffic-heading h2 {
+  font-size: 1.05rem;
+}
+
+.admin-traffic-heading p,
+.admin-traffic-subheading p {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.admin-traffic-ranges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-surface) 78%, var(--color-surface-soft));
+}
+
+.admin-traffic-ranges button {
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-traffic-ranges button:hover,
+.admin-traffic-ranges button:focus-visible {
+  color: var(--color-ink);
+  background: var(--color-surface-soft);
+}
+
+.admin-traffic-ranges button.is-active {
+  color: var(--color-accent-strong);
+  background: color-mix(in srgb, var(--color-accent) 15%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+.admin-traffic-state {
+  min-height: 210px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  margin: 16px 0 0;
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.admin-traffic-state > svg {
+  width: 30px;
+  height: 30px;
+  color: var(--color-accent);
+}
+
+.admin-traffic-state p {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  font-size: 0.76rem;
+}
+
+.admin-traffic-state strong {
+  color: var(--color-ink);
+  font-size: 0.9rem;
+}
+
+.admin-traffic-state button {
+  min-height: 36px;
+  padding: 6px 13px;
+  border: 1px solid var(--color-line);
+  border-radius: 9px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.admin-traffic-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 18px;
+}
+
+.admin-traffic-summary article {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid color-mix(in srgb, var(--color-line) 82%, transparent);
+  border-radius: 11px;
+  background: var(--color-surface-soft);
+}
+
+.admin-traffic-summary article > span {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-accent) 13%, var(--color-surface));
+  color: var(--color-accent);
+}
+
+.admin-traffic-summary svg {
+  width: 18px;
+  height: 18px;
+}
+
+.admin-traffic-summary p {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.admin-traffic-summary strong {
+  overflow-wrap: anywhere;
+  font-size: 1.25rem;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.admin-traffic-summary b {
+  font-size: 0.72rem;
+}
+
+.admin-traffic-summary small {
+  color: var(--color-muted);
+  font-size: 0.62rem;
+}
+
+.admin-traffic-chart-panel {
+  margin-top: 12px;
+  padding: 16px 16px 11px;
+  border: 1px solid color-mix(in srgb, var(--color-line) 82%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-surface-soft) 68%, var(--color-surface));
+}
+
+.admin-traffic-subheading h3 {
+  font-size: 0.82rem;
+}
+
+.admin-traffic-subheading > svg {
+  width: 18px;
+  height: 18px;
+  color: var(--color-accent);
+}
+
+.admin-traffic-legend {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--color-muted);
+  font-size: 0.64rem;
+  white-space: nowrap;
+}
+
+.admin-traffic-legend span::before {
+  width: 8px;
+  height: 8px;
+  display: inline-block;
+  margin-right: 5px;
+  border-radius: 2px;
+  content: "";
+}
+
+.admin-traffic-legend .is-views::before,
+.admin-traffic-chart .is-views {
+  background: var(--color-accent);
+}
+
+.admin-traffic-legend .is-visitors::before,
+.admin-traffic-chart .is-visitors {
+  background: var(--color-success);
+}
+
+.admin-traffic-chart {
+  height: 200px;
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(1px, 0.3vw, 4px);
+  margin-top: 14px;
+  padding-top: 10px;
+  border-bottom: 1px solid var(--color-line);
+  background-image: linear-gradient(to bottom, color-mix(in srgb, var(--color-line) 55%, transparent) 1px, transparent 1px);
+  background-size: 100% 25%;
+}
+
+.admin-traffic-bar-group {
+  min-width: 1px;
+  height: 100%;
+  flex: 1 1 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1px;
+}
+
+.admin-traffic-bar-group > span {
+  width: min(46%, 10px);
+  min-width: 1px;
+  border-radius: 3px 3px 0 0;
+  opacity: 0.88;
+}
+
+.admin-traffic-axis {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 7px;
+  color: var(--color-muted);
+  font-size: 0.58rem;
+}
+
+.admin-traffic-breakdown {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.admin-traffic-breakdown > section {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--color-line) 82%, transparent);
+  border-radius: 11px;
+}
+
+.admin-traffic-breakdown ol {
+  display: grid;
+  gap: 9px;
+  margin: 13px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-traffic-breakdown li {
+  min-width: 0;
+}
+
+.admin-traffic-breakdown li div {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 9px;
+}
+
+.admin-traffic-breakdown li b {
+  overflow: hidden;
+  color: var(--color-ink);
+  font-size: 0.68rem;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-traffic-breakdown li span {
+  color: var(--color-muted);
+  font-size: 0.64rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-traffic-breakdown li i {
+  height: 3px;
+  display: block;
+  margin-top: 5px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--color-accent) 68%, var(--color-surface));
+}
+
+.admin-traffic-list-empty {
+  min-height: 90px;
+  display: grid;
+  place-items: center;
+  margin: 10px 0 0;
+  color: var(--color-muted);
+  font-size: 0.68rem;
+  text-align: center;
+}
+
+.admin-traffic-note {
+  margin: 13px 0 0;
+  color: var(--color-muted);
+  font-size: 0.62rem;
+  line-height: 1.55;
+}
+
 .admin-dashboard-lower {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.9fr) minmax(250px, 0.75fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
   align-items: stretch;
   gap: 12px;
   margin-top: 24px;
 }
 
 .admin-dashboard-lower.without-activity {
-  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.75fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .admin-dashboard-panel {
@@ -10074,41 +10404,6 @@ html.dark .hero-campus-background {
 .admin-panel-heading > a svg {
   width: 14px;
   height: 14px;
-}
-
-.admin-health-empty {
-  min-height: 170px;
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 12px;
-  padding: 24px;
-  color: var(--color-muted);
-  text-align: center;
-}
-
-.admin-health-empty > svg {
-  width: 30px;
-  height: 30px;
-  color: var(--color-accent);
-  opacity: 0.75;
-}
-
-.admin-health-empty p {
-  max-width: 390px;
-  display: grid;
-  gap: 6px;
-  margin: 0;
-}
-
-.admin-health-empty strong {
-  color: var(--color-ink);
-  font-size: 0.85rem;
-}
-
-.admin-health-empty span {
-  font-size: 0.72rem;
-  line-height: 1.55;
 }
 
 .admin-panel-state {
@@ -10306,16 +10601,8 @@ html.dark .hero-campus-background {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .admin-health-panel {
-    grid-column: 1 / -1;
-  }
-
   .admin-dashboard-lower.without-activity {
-    grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.75fr);
-  }
-
-  .admin-dashboard-lower.without-activity .admin-health-panel {
-    grid-column: auto;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -10335,6 +10622,10 @@ html.dark .hero-campus-background {
   .admin-detailed-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .admin-traffic-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 800px) {
@@ -10353,14 +10644,23 @@ html.dark .hero-campus-background {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .admin-dashboard-lower,
-  .admin-dashboard-lower.without-activity {
+  .admin-traffic-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-traffic-ranges {
+    align-self: flex-start;
+    justify-content: flex-start;
+  }
+
+  .admin-traffic-breakdown {
     grid-template-columns: 1fr;
   }
 
-  .admin-health-panel,
-  .admin-dashboard-lower.without-activity .admin-health-panel {
-    grid-column: auto;
+  .admin-dashboard-lower,
+  .admin-dashboard-lower.without-activity {
+    grid-template-columns: 1fr;
   }
 
   .admin-dashboard-panel {
@@ -10380,6 +10680,36 @@ html.dark .hero-campus-background {
 
   .admin-console-header h1 {
     font-size: 1.75rem;
+  }
+
+  .admin-traffic {
+    padding: 15px;
+  }
+
+  .admin-traffic-ranges {
+    width: 100%;
+  }
+
+  .admin-traffic-ranges button {
+    flex: 1 1 calc(33.333% - 4px);
+  }
+
+  .admin-traffic-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-traffic-chart {
+    height: 170px;
+  }
+
+  .admin-traffic-subheading {
+    gap: 10px;
+  }
+
+  .admin-traffic-legend {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
   }
 
   .admin-console-header p {
