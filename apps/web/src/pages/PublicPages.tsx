@@ -7,6 +7,7 @@ import {
   BookOpen,
   Building2,
   CalendarDays,
+  ChevronLeft,
   ChevronRight,
   Dumbbell,
   Heart,
@@ -960,6 +961,10 @@ export function ListingPage() {
   );
   const images = Array.isArray(item.images) ? item.images : [];
   const activeImageUrl = images[activeImage]?.url as string | undefined;
+  const selectImage = (index: number) => {
+    setActiveImage(index);
+    setImageFailed(false);
+  };
   const listedAt = new Date(item.approvedAt ?? item.createdAt);
   const listedLabel = Number.isNaN(listedAt.getTime())
     ? null
@@ -1067,6 +1072,29 @@ export function ListingPage() {
                 <span className="text-sm">Image unavailable</span>
               </div>
             )}
+            {images.length > 1 ? (
+              <>
+                <button
+                  type="button"
+                  className="product-gallery-arrow product-gallery-arrow-prev"
+                  onClick={() => selectImage((activeImage - 1 + images.length) % images.length)}
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="product-gallery-arrow product-gallery-arrow-next"
+                  onClick={() => selectImage((activeImage + 1) % images.length)}
+                  aria-label="Next image"
+                >
+                  <ChevronRight aria-hidden="true" />
+                </button>
+                <span className="sr-only" aria-live="polite">
+                  Image {activeImage + 1} of {images.length}
+                </span>
+              </>
+            ) : null}
           </div>
 
           {images.length > 1 ? (
@@ -1078,10 +1106,7 @@ export function ListingPage() {
                 <button
                   type="button"
                   key={image.id}
-                  onClick={() => {
-                    setActiveImage(index);
-                    setImageFailed(false);
-                  }}
+                  onClick={() => selectImage(index)}
                   className={`product-gallery-thumbnail size-16 shrink-0 overflow-hidden rounded-lg border bg-surface-muted p-0.5 transition-colors sm:size-[72px] ${
                     activeImage === index
                       ? "border-ink"

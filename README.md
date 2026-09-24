@@ -6,6 +6,48 @@ Uni Market is not affiliated with, endorsed by, sponsored by, or operated by any
 
 The application is a TypeScript npm workspace with a Vite/React frontend, Express/Socket.IO API, Drizzle data layer, Neon PostgreSQL connections, a PGlite fallback for isolated local/test runs, and a private Cloudflare R2 image pipeline.
 
+## Architecture
+
+```mermaid
+flowchart LR
+  browser["Browser<br/>React SPA"]
+  edge["Cloudflare edge"]
+  caddy["Caddy reverse proxy"]
+
+  subgraph app["Production Docker container"]
+    direction TB
+    web["Express serves SPA<br/>/marketplace"]
+    api["Express REST API<br/>/api"]
+    realtime["Socket.IO<br/>/socket.io"]
+    images["Image validation, WebP conversion<br/>and signed URLs"]
+    workers["Email, retention and<br/>grievance workers"]
+  end
+
+  neon[("Neon PostgreSQL")]
+  r2[("Private Cloudflare R2")]
+  google["Google Identity"]
+  msg91["MSG91 OTP"]
+  turnstile["Cloudflare Turnstile"]
+  smtp["SMTP provider"]
+
+  browser -->|HTTPS| edge --> caddy
+  caddy -->|SPA| web
+  caddy -->|REST| api
+  caddy -->|Realtime| realtime
+  api -->|Drizzle ORM| neon
+  realtime -->|Sessions and messages| neon
+  workers -->|Outbox and retention| neon
+  api --> images -->|Store and read| r2
+  workers -->|Delete expired images| r2
+  browser -->|Signed image PUT and GET| r2
+  api --> google
+  api --> msg91
+  api --> turnstile
+  workers --> smtp
+```
+
+The React app lives in `apps/web`, the API and workers in `apps/api`, and shared schemas and types in `packages/shared`. See [docs/architecture.md](docs/architecture.md) for the data model and critical flows.
+
 ## Prerequisites
 
 - Node.js 22 or later and npm 10+

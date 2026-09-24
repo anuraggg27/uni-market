@@ -5193,6 +5193,42 @@ html.dark [data-site-header] :where(
   object-position: center;
 }
 
+.product-gallery-arrow {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  display: grid;
+  width: clamp(3rem, 6vw, 6rem);
+  aspect-ratio: 1;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #f5f6fb;
+  color: #111418;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.product-gallery-arrow:hover {
+  background: #fff;
+}
+
+.product-gallery-arrow svg {
+  width: 42%;
+  height: 42%;
+  stroke-width: 2.75;
+}
+
+.product-gallery-arrow-prev {
+  left: clamp(0.75rem, 3vw, 3rem);
+}
+
+.product-gallery-arrow-next {
+  right: clamp(0.75rem, 3vw, 3rem);
+}
+
 .product-gallery-thumbnail {
   aspect-ratio: 1;
 }
