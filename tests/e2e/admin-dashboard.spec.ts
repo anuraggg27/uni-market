@@ -49,6 +49,9 @@ async function signInAsAdmin(context: BrowserContext) {
 test("admin dashboard preserves real data and stays responsive at supported widths", async ({
   browser,
 }) => {
+  // This journey visits every admin section at two mobile widths in addition to
+  // checking six dashboard breakpoints, so it needs more than the default 30s.
+  test.setTimeout(90_000);
   const context = await browser.newContext();
   await signInAsAdmin(context);
   const page = await context.newPage();
