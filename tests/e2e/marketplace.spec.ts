@@ -209,12 +209,21 @@ test("unfinished listing details survive a declined navigation", async ({ browse
     await page.goto(marketplacePath("/sell"));
     await page.getByLabel("Title").fill("Draft laptop stand");
     const browse = page.getByRole("link", { name: "Browse", exact: true }).first();
-    page.once("dialog", (dialog) => dialog.dismiss());
-    await browse.click();
+    const dismissed = new Promise<void>((resolve, reject) => {
+      page.once("dialog", (dialog) => {
+        void dialog.dismiss().then(resolve, reject);
+      });
+    });
+    await Promise.all([browse.click(), dismissed]);
     await expect(page).toHaveURL(/\/marketplace\/sell$/);
     await expect(page.getByLabel("Title")).toHaveValue("Draft laptop stand");
-    page.once("dialog", (dialog) => dialog.accept());
-    await browse.click();
+
+    const accepted = new Promise<void>((resolve, reject) => {
+      page.once("dialog", (dialog) => {
+        void dialog.accept().then(resolve, reject);
+      });
+    });
+    await Promise.all([browse.click(), accepted]);
     await expect(page).toHaveURL(/\/marketplace\/browse$/);
   } finally {
     await seller.close();

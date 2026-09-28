@@ -173,13 +173,23 @@ test('browse product grid stays compact and responsive without an internal card 
     });
   });
 
+  await page.setViewportSize({ width: 360, height: 900 });
+  await page.goto('/marketplace/browse');
+  const grid = page.locator('.browse-product-grid');
+  await expect(grid.locator('.market-card')).toHaveCount(8);
+  await expect(grid.getByText('Show', { exact: true })).toHaveCount(0);
+
   for (const [width, columns] of [[360, 2], [375, 2], [390, 2], [412, 2], [430, 2], [768, 3], [1024, 3], [1440, 4]] as const) {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto('/marketplace/browse');
-    const grid = page.locator('.browse-product-grid');
-    await expect(grid).toBeVisible();
-    expect(await grid.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(columns);
-    await expect(grid.getByText('Show', { exact: true })).toHaveCount(0);
+    await expect.poll(
+      () => grid.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return style.display === 'grid'
+          ? style.gridTemplateColumns.split(/\s+/).filter(Boolean).length
+          : 0;
+      }),
+      { message: `Expected ${columns} product columns at ${width}px` },
+    ).toBe(columns);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
   }
 });
