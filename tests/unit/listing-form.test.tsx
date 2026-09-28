@@ -24,6 +24,9 @@ vi.mock("../../apps/web/src/api", () => ({
     body: JSON.stringify(value),
   }),
 }));
+vi.mock("../../apps/web/src/components/UnsavedChangesGuard", () => ({
+  UnsavedChangesGuard: () => null,
+}));
 
 import { ListingFormPage, mapWithConcurrency } from "../../apps/web/src/pages/UserPages";
 
@@ -268,7 +271,7 @@ describe("ListingFormPage photos", () => {
     );
   });
 
-  it("shows existing edit photos and removes a selected photo when changes are saved", async () => {
+  it("sends photo removals with the listing edit as one commit", async () => {
     const retainedImageId = "22222222-2222-4222-8222-222222222222";
     const removedImageId = "33333333-3333-4333-8333-333333333333";
     apiMock.mockImplementation((path: string, options?: RequestInit) => {
@@ -310,12 +313,6 @@ describe("ListingFormPage photos", () => {
       }
       if (path === "/api/listings/listing-1" && options?.method === "PATCH") {
         return Promise.resolve({ id: "listing-1" });
-      }
-      if (
-        path === `/api/uploads/listings/listing-1/${removedImageId}` &&
-        options?.method === "DELETE"
-      ) {
-        return Promise.resolve(undefined);
       }
       return Promise.reject(new Error(`Unexpected API call: ${path}`));
     });
@@ -359,11 +356,46 @@ describe("ListingFormPage photos", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
-    await waitFor(() =>
-      expect(apiMock).toHaveBeenCalledWith(
-        `/api/uploads/listings/listing-1/${removedImageId}`,
-        expect.objectContaining({ method: "DELETE" }),
-      ),
-    );
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith(
+      "/api/listings/listing-1",
+      expect.objectContaining({ method: "PATCH" }),
+    ));
+    const patch = apiMock.mock.calls.find(([path, options]) => path === "/api/listings/listing-1" && options?.method === "PATCH");
+    expect(JSON.parse(String(patch?.[1]?.body))).toMatchObject({
+      newImageIds: [],
+      removedImageIds: [removedImageId],
+    });
+    expect(apiMock.mock.calls.some(([path, options]) => path === `/api/uploads/listings/listing-1/${removedImageId}` && options?.method === "DELETE")).toBe(false);
+  });
+
+  it("keeps the listing edit uncommitted if a replacement photo fails to upload", async () => {
+    const imageId = "33333333-3333-4333-8333-333333333333";
+    const stagedId = "44444444-4444-4444-8444-444444444444";
+    apiMock.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === "/api/categories") return Promise.resolve([{ id: "11111111-1111-4111-8111-111111111111", name: "Books" }]);
+      if (path === "/api/listings/listing-1" && !options?.method) return Promise.resolve({
+        id: "listing-1", title: "Used calculator", description: "A working used calculator for class.",
+        categoryId: "11111111-1111-4111-8111-111111111111", condition: "GOOD", conditionExplanation: "",
+        priceType: "FIXED", exactPrice: 650, minimumPrice: null, maximumPrice: null,
+        negotiable: true, location: "Main campus", brand: "", defects: "", meetupPoint: "",
+        images: [{ id: imageId, position: 0, url: "https://images.example.test/calculator.webp" }],
+      });
+      if (path === "/api/uploads/listings/listing-1/presign") return Promise.resolve({
+        imageId: stagedId, uploadUrl: "https://uploads.example.test/replacement", headers: { "content-type": "image/jpeg" },
+      });
+      if (path === `/api/uploads/listings/listing-1/${stagedId}` && options?.method === "DELETE") return Promise.resolve(undefined);
+      return Promise.reject(new Error(`Unexpected API call: ${path}`));
+    });
+    fetchMock.mockResolvedValue({ ok: false });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/listing/listing-1/edit"]}><Routes><Route path="/listing/:listingId/edit" element={<ListingFormPage edit />} /></Routes></MemoryRouter></QueryClientProvider>);
+    await screen.findByAltText("Existing product image 1");
+    fireEvent.change(screen.getByLabelText("Product images"), { target: { files: [new File(["photo"], "replacement.jpg", { type: "image/jpeg" })] } });
+    fireEvent.click(screen.getByLabelText(/I own this used physical item/));
+    fireEvent.click(screen.getByLabelText(/This listing is accurate and follows the seller rules/));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(await screen.findByText("Image upload failed. Your published listing has not changed.")).toBeVisible();
+    expect(apiMock.mock.calls.some(([path, options]) => path === "/api/listings/listing-1" && options?.method === "PATCH")).toBe(false);
+    expect(apiMock).toHaveBeenCalledWith(`/api/uploads/listings/listing-1/${stagedId}`, expect.objectContaining({ method: "DELETE" }));
   });
 });

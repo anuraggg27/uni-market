@@ -22,6 +22,18 @@ describe('notification acceptance',()=>{
 });
 
 describe('support acceptance',()=>{
+  it('lets a signed-in customer without current student verification seek account help and continue the private thread', async () => {
+    const account = await login(ctx.app, 'support-unverified-account');
+    const created = await account.agent.post('/api/support').set(account.headers).send({
+      category: 'ACCOUNT', subject: 'Student email verification help',
+      description: 'My student email expired and I need help restoring access to my account.',
+    }).expect(201);
+    await account.agent.get(`/api/support/${created.body.data.id}`).expect(200);
+    await account.agent.post(`/api/support/${created.body.data.id}/messages`).set(account.headers).send({ body: 'I can still receive messages at my Google account.' }).expect(201);
+    const outsider = await login(ctx.app, 'ticket-outsider');
+    await outsider.agent.get(`/api/support/${created.body.data.id}`).expect(403);
+    await request(ctx.app).post('/api/support').send({ category: 'ACCOUNT', subject: 'Not signed in', description: 'An anonymous user cannot create a private account ticket.' }).expect(401);
+  });
   it('SUPPORT-01 creates an OPEN ticket visible to its owner',async()=>{const response=await user.agent.post('/api/support').set(user.headers).send({category:'TECHNICAL',subject:'Chat will not open',description:'The conversation page fails to open after I select the seller.'}).expect(201);expect(response.body.data.status).toBe('OPEN');expect((await user.agent.get(`/api/support/${response.body.data.id}`)).status).toBe(200);});
   it('SUPPORT-02 assigned agent reply persists, notifies and queues email',async()=>{const ticket=(await user.agent.post('/api/support').set(user.headers).send({category:'ACCOUNT',subject:'Profile help needed',description:'I need help correcting the institution shown on my profile.'})).body.data;const agent=await login(ctx.app,'support-agent');await makeRole(ctx.db,agent.user.id,'SUPPORT_AGENT');await agent.agent.post(`/api/admin/support/${ticket.id}/reply`).set(agent.headers).send({body:'We can help update that safely.',status:'WAITING_FOR_USER',internal:false}).expect(201);expect(await ctx.db.select().from(schema.supportMessages)).toHaveLength(1);expect((await ctx.db.select().from(schema.notifications)).some((n)=>n.type==='SUPPORT_RESPONSE')).toBe(true);expect((await ctx.db.select().from(schema.emailOutbox)).some((j)=>j.template==='support-response')).toBe(true);});
   it('SUPPORT-03 unrelated user cannot access another ticket',async()=>{const ticket=(await user.agent.post('/api/support').set(user.headers).send({category:'SAFETY',subject:'Meetup concern',description:'I need advice about a proposed meetup location from a seller.'})).body.data;const other=await login(ctx.app,'unrelated-ticket-user');await verifyPhone(other,'9987654321');await other.agent.get(`/api/support/${ticket.id}`).expect(403);});

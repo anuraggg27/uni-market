@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { eq } from 'drizzle-orm';
-import { listings } from '../../apps/api/src/db/schema';
-import { login, makeRole, setup } from './helper';
+import { adminAuditLogs, listings, moderationNotes, notifications, transactions } from '../../apps/api/src/db/schema';
+import { login, makeRole, setup, verifyMarketplaceEligibility } from './helper';
 
 let ctx: Awaited<ReturnType<typeof setup>>;
 let mod: Awaited<ReturnType<typeof login>>;
@@ -67,6 +67,42 @@ describe('admin listing history', () => {
       expect(await ids('?status=CHANGES_REQUESTED')).toEqual([]);
       expect((await ctx.db.select().from(listings).where(eq(listings.id, listing.id)))[0]?.requestedChanges).toBeNull();
     }
+  });
+
+  it('preserves a reservation when a moderator requests changes, then allows review after cancellation', async () => {
+    const buyer = await login(ctx.app, 'listing-history-buyer');
+    await verifyMarketplaceEligibility(buyer);
+    const listing = await seed({
+      submittedAt: new Date(), approvedAt: new Date(), moderationState: 'APPROVED',
+      lifecycleState: 'RESERVED', reservedBuyerId: buyer.user.id,
+    });
+    const transaction = (await ctx.db.insert(transactions).values({
+      listingId: listing.id, buyerId: buyer.user.id, sellerId: mod.user.id, status: 'RESERVED',
+    }).returning())[0]!;
+    const before = {
+      notifications: (await ctx.db.select().from(notifications)).length,
+      notes: (await ctx.db.select().from(moderationNotes)).length,
+      audits: (await ctx.db.select().from(adminAuditLogs)).length,
+    };
+    const decision = { decision: 'REQUEST_CHANGES', internalReason: 'Replace the photo', userVisibleReason: 'Please replace the photo', note: 'Bad photo' };
+
+    const rejected = await mod.agent.post(`/api/admin/listings/${listing.id}/decision`).set(mod.headers).send(decision).expect(409);
+    expect(rejected.body.error.code).toBe('LISTING_LOCKED');
+    expect((await ctx.db.select().from(listings).where(eq(listings.id, listing.id)))[0]).toMatchObject({
+      moderationState: 'APPROVED', lifecycleState: 'RESERVED', reservedBuyerId: buyer.user.id,
+    });
+    expect((await ctx.db.select().from(transactions).where(eq(transactions.id, transaction.id)))[0]?.status).toBe('RESERVED');
+    expect((await ctx.db.select().from(notifications)).length).toBe(before.notifications);
+    expect((await ctx.db.select().from(moderationNotes)).length).toBe(before.notes);
+    expect((await ctx.db.select().from(adminAuditLogs)).length).toBe(before.audits);
+
+    await buyer.agent.post(`/api/transactions/${transaction.id}/cancel`).set(buyer.headers).expect(200);
+    await mod.agent.post(`/api/admin/listings/${listing.id}/decision`).set(mod.headers).send(decision).expect(200);
+    expect((await ctx.db.select().from(listings).where(eq(listings.id, listing.id)))[0]).toMatchObject({
+      moderationState: 'REJECTED', lifecycleState: 'DRAFT', reservedBuyerId: null,
+      requestedChanges: 'Please replace the photo',
+    });
+    expect((await ctx.db.select().from(transactions).where(eq(transactions.id, transaction.id)))[0]?.status).toBe('CANCELLED_BY_BUYER');
   });
 
   it('paginates deterministically without dropping or repeating rows with identical timestamps', async () => {

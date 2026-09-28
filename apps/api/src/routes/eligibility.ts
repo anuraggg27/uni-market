@@ -156,7 +156,7 @@ export function eligibilityRouter(db: Database, config: AppConfig): Router {
 
   router.get('/student-email/config', requireAuth, (_req, res) => {
     if (config.DEV_MODE) {
-      res.json({ data: { provider: 'development', otpLength: 6, retryAfter: config.OTP_RESEND_COOLDOWN_SECONDS, verificationMonths: 12 } });
+      res.json({ data: { provider: 'development', otpLength: 6, developmentCode: '999999', retryAfter: config.OTP_RESEND_COOLDOWN_SECONDS, verificationMonths: 12 } });
       return;
     }
     res.json({ data: {
@@ -201,7 +201,7 @@ export function eligibilityRouter(db: Database, config: AppConfig): Router {
       ipHash: sha256(req.ip),
       expiresAt: new Date(now.getTime() + 10 * 60_000),
     });
-    res.json({ data: { message: 'If the address can receive email, a code has been sent', maskedEmail: maskEmail(email), retryAfter: config.OTP_RESEND_COOLDOWN_SECONDS } });
+    res.json({ data: { message: 'Development code ready; no email was sent', maskedEmail: maskEmail(email), retryAfter: config.OTP_RESEND_COOLDOWN_SECONDS } });
   }));
 
   router.post('/student-email/verify', requireAuth, asyncRoute(async (req, res) => {

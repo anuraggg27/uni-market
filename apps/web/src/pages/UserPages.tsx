@@ -58,6 +58,7 @@ import { ProductCard } from "../components/ProductCard";
 import { ProfileModeSwitcher } from "../components/ProfileModeSwitcher";
 import { AvatarPicker, AvatarPickerDialog } from "../components/AvatarPicker";
 import { UserAvatar } from "../components/UserAvatar";
+import { UnsavedChangesGuard } from "../components/UnsavedChangesGuard";
 import { BuyerReputation, BuyerReputationSection } from "../components/BuyerReputation";
 import {
   formatNotificationTime,
@@ -87,7 +88,7 @@ import {
 const API_URL = import.meta.env.VITE_API_URL ?? "";
 const accountDateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
 type VerificationProviderConfig =
-  | { provider: "development"; otpLength: number; retryAfter: number }
+  | { provider: "development"; otpLength: number; developmentCode?: string; retryAfter: number }
   | {
       provider: "msg91";
       widgetId: string;
@@ -168,6 +169,7 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const createdListingIdRef = useRef<string | null>(null);
+  const allowLeaveRef = useRef(false);
   const uploadedFileKeysRef = useRef(new Set<string>());
   const [uploading, setUploading] = useState(false);
   const [submissionProgress, setSubmissionProgress] = useState<SubmissionProgress>({ phase: "idle" });
@@ -324,6 +326,30 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
       throw error;
     }
   }
+  async function stageEditFiles(id: string): Promise<string[]> {
+    const allocatedIds: string[] = [];
+    try {
+      for (const file of images) {
+        const ticket = await api<any>(`/api/uploads/listings/${id}/presign`, {
+          method: "POST",
+          ...jsonBody({ mimeType: file.type, byteSize: file.size }),
+        });
+        allocatedIds.push(ticket.imageId);
+        const uploaded = await fetch(ticket.uploadUrl, {
+          method: "PUT",
+          headers: ticket.headers,
+          body: file,
+        });
+        if (!uploaded.ok) throw new Error("Image upload failed. Your published listing has not changed.");
+      }
+      return allocatedIds;
+    } catch (error) {
+      await Promise.allSettled(allocatedIds.map((imageId) =>
+        api(`/api/uploads/listings/${id}/${imageId}`, { method: "DELETE" }),
+      ));
+      throw error;
+    }
+  }
   async function submit(values: ListingInput) {
     setServerError("");
     setUploading(true);
@@ -332,33 +358,39 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
       if (edit && retainedExistingImages.length + images.length === 0) {
         throw new Error("Keep or add at least one product image.");
       }
-      const listing = edit || createdListingIdRef.current
-        ? await api<any>(`/api/listings/${edit ? listingId : createdListingIdRef.current}`, {
-            method: "PATCH",
-            ...jsonBody(values),
-          })
-        : await api<any>("/api/listings", {
-            method: "POST",
-            ...jsonBody(values),
-          });
-      if (!edit) createdListingIdRef.current = listing.id;
-      for (const imageId of removedExistingImageIds) {
-        await api(`/api/uploads/listings/${listing.id}/${imageId}`, {
-          method: "DELETE",
+      if (edit) {
+        const newImageIds = images.length ? await stageEditFiles(listingId!) : [];
+        const listing = await api<any>(`/api/listings/${listingId}`, {
+          method: "PATCH",
+          ...jsonBody({ ...values, newImageIds, removedImageIds: removedExistingImageIds }),
         });
-      }
-      if (images.length) await uploadFiles(listing.id);
-      if (!edit) {
+        setSubmissionProgress({ phase: "submitted" });
+        toast.success("Listing updated");
+        allowLeaveRef.current = true;
+        navigate(`/listing/${listing.id}`);
+      } else {
+        const listing = createdListingIdRef.current
+          ? await api<any>(`/api/listings/${createdListingIdRef.current}`, {
+              method: "PATCH",
+              ...jsonBody(values),
+            })
+          : await api<any>("/api/listings", {
+              method: "POST",
+              ...jsonBody(values),
+            });
+        createdListingIdRef.current = listing.id;
+        if (images.length) await uploadFiles(listing.id);
         setSubmissionProgress({ phase: "submitting" });
         const submitted = await api<{ avatarAchievementUnlocked: AvatarAchievementId | null }>(`/api/listings/${listing.id}/submit`, { method: "POST" });
         if (submitted.avatarAchievementUnlocked) {
           void client.invalidateQueries({ queryKey: ["me"] });
           showAvatarUnlockToast(submitted.avatarAchievementUnlocked, navigate);
         }
+        setSubmissionProgress({ phase: "submitted" });
+        toast.success("Listing submitted for review");
+        allowLeaveRef.current = true;
+        navigate(`/listing/${listing.id}`);
       }
-      setSubmissionProgress({ phase: "submitted" });
-      toast.success(edit ? "Listing updated ✓" : "Submitted ✓");
-      navigate(`/listing/${listing.id}`);
     } catch (error: any) {
       setServerError(error.message);
       setSubmissionProgress({ phase: "idle" });
@@ -391,6 +423,7 @@ export function ListingFormPage({ edit = false }: { edit?: boolean }) {
             : (edit ? "Save changes" : "Submit for review");
   return (
     <div className="page listing-form-page">
+      <UnsavedChangesGuard when={form.formState.isDirty || images.length > 0 || removedExistingImageIds.length > 0 || uploading} allowLeave={allowLeaveRef} />
       <div className="page-header listing-form-header">
         <div>
           <h1>{edit ? "Edit your listing" : "List a product"}</h1>
@@ -2974,7 +3007,7 @@ export function SettingsPage() {
       setStudentCodeSent(true);
       setStudentResendCooldown(retryAfter);
       setStudentRequestId(nextRequestId);
-      toast.success("Student email code sent");
+      toast.success(studentVerificationConfig.data?.provider === "development" ? "Development code ready" : "Student email code sent");
     },
   });
   const verifyStudentEmail = useMutation({
@@ -3183,8 +3216,9 @@ export function SettingsPage() {
           {user?.studentEmailVerifiedAt ? <div className="verification-complete"><CheckCircle2 aria-hidden="true" /><div><strong>{user.studentEmailMasked} is verified</strong><span>Valid until {user.studentEmailExpiresAt ? accountDateFormatter.format(new Date(user.studentEmailExpiresAt)) : "12 months after verification"}.</span></div></div> : <div className="settings-card-form" onFocusCapture={() => setActiveVerification("student")}>
             {academicDomains.isPending ? <Loading label="Loading student email domain" /> : selectedAcademicDomain ? <>
               <label className="field"><span>Student email</span><div className="student-email-address"><input aria-label="Student email" name="studentEmailLocalPart" type="text" value={studentEmailLocalPart} onChange={(event) => { setStudentEmailLocalPart(event.target.value.replace(/@.*$/, "")); setStudentCodeSent(false); setStudentCode(""); setStudentRequestId(undefined); setStudentResendCooldown(0); }} autoComplete="username" spellCheck={false} placeholder="your.name" /><span aria-hidden="true">@{selectedAcademicDomain.domain}</span></div></label>
+              {studentVerificationConfig.data?.provider === "development" ? <p className="verification-setup-note">Local development: no email is sent. Request a code, then enter <strong>{studentVerificationConfig.data.developmentCode ?? "999999"}</strong>.</p> : null}
               {activeVerification === "student" && !studentCodeSent ? <div id="msg91-student-email-captcha" className="msg91-captcha-slot" /> : null}
-              <button type="button" className="button secondary" onClick={() => sendStudentCode.mutate()} disabled={studentVerificationConfig.isPending || sendStudentCode.isPending || !studentEmail || studentResendCooldown > 0}>{sendStudentCode.isPending ? "Sending…" : studentCodeSent ? studentResendCooldown > 0 ? `Resend in ${studentResendCooldown}s` : "Resend Code" : "Send Email Code"}</button>
+              <button type="button" className="button secondary" onClick={() => sendStudentCode.mutate()} disabled={studentVerificationConfig.isPending || sendStudentCode.isPending || !studentEmail || studentResendCooldown > 0}>{sendStudentCode.isPending ? "Sending…" : studentCodeSent ? studentResendCooldown > 0 ? `Resend in ${studentResendCooldown}s` : "Resend Code" : studentVerificationConfig.data?.provider === "development" ? "Generate Test Code" : "Send Email Code"}</button>
             </> : <p className="verification-setup-note">Choose a supported college or institution in <Link to="/profile">your profile</Link> before verifying your student email.</p>}
             {studentCodeSent ? <><label className="field"><span>{studentOtpLength}-digit email code</span><input name="studentCode" value={studentCode} onChange={(event) => setStudentCode(event.target.value.replace(/\D/g, "").slice(0, studentOtpLength))} inputMode="numeric" autoComplete="one-time-code" maxLength={studentOtpLength} /></label><button type="button" className="button primary" onClick={() => verifyStudentEmail.mutate()} disabled={verifyStudentEmail.isPending || studentCode.length !== studentOtpLength}>{verifyStudentEmail.isPending ? "Verifying…" : "Verify Student Email"}</button></> : null}
             {sendStudentCode.error ? <p className="field-error" role="alert">{sendStudentCode.error.message}</p> : null}{verifyStudentEmail.error ? <p className="field-error" role="alert">{verifyStudentEmail.error.message}</p> : null}{studentVerificationConfig.error ? <p className="field-error" role="alert">{studentVerificationConfig.error.message}</p> : null}{academicDomains.error ? <p className="field-error" role="alert">{academicDomains.error.message}</p> : null}{activeVerification === "student" && captchaInitializationError ? <p className="field-error" role="alert">{captchaInitializationError}</p> : null}

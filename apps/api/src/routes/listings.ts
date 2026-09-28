@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { currentPolicyVersion, idSchema, listingInputSchema } from '@campus-market/shared';
 import type { AppConfig } from '../config.js';
 import type { Database } from '../db/client.js';
-import { categories, listingImages, listings, notifications, prohibitedTerms, users } from '../db/schema.js';
+import { categories, favourites, listingImages, listings, notifications, prohibitedTerms, users } from '../db/schema.js';
 import { requireAuth, requireVerified } from '../middleware/auth.js';
 import { AppError, asyncRoute } from '../lib/errors.js';
 import type { StorageService } from '../services/storage.js';
@@ -41,14 +41,15 @@ export function listingsRouter(db: Database, config: AppConfig, storage: Storage
     if (query.condition) conditions.push(eq(listings.condition, z.enum(['LIKE_NEW', 'GOOD', 'FAIR', 'POOR']).parse(query.condition)));
     if (query.location) conditions.push(ilike(listings.location, `%${query.location}%`));
     if (query.negotiable === 'true') conditions.push(eq(listings.negotiable, true));
-    if (query.minPrice !== undefined) conditions.push(or(gte(listings.exactPrice, query.minPrice), gte(listings.maximumPrice, query.minPrice), eq(listings.priceType, 'FREE'))!);
+    if (query.minPrice !== undefined) conditions.push(or(gte(listings.exactPrice, query.minPrice), gte(listings.maximumPrice, query.minPrice), ...(query.minPrice === 0 ? [eq(listings.priceType, 'FREE')] : []))!);
     if (query.maxPrice !== undefined) conditions.push(or(lte(listings.exactPrice, query.maxPrice), lte(listings.minimumPrice, query.maxPrice), eq(listings.priceType, 'FREE'))!);
     const order = query.sort === 'price_asc' ? asc(sql`coalesce(${listings.exactPrice}, ${listings.minimumPrice}, 0)`) : query.sort === 'price_desc' ? desc(sql`coalesce(${listings.exactPrice}, ${listings.maximumPrice}, 0)`) : query.sort === 'popular' ? desc(sql`${listings.viewCount} + ${listings.favouriteCount} * 3`) : desc(listings.approvedAt);
-    const rows = await db.select({ listing: listings, categoryName: categories.name }).from(listings).innerJoin(categories, eq(categories.id, listings.categoryId)).where(and(...conditions)).orderBy(order, desc(listings.id)).limit(query.limit).offset((query.page - 1) * query.limit);
-    const covers = await getListingCoverUrls(db, storage, rows.map(({ listing }) => listing.id));
-    const data = rows.map(({ listing, categoryName }) => ({ ...listing, categoryName, priceLabel: priceLabel(listing), coverImageUrl: covers.get(listing.id) ?? null }));
+    const rows = await db.select({ listing: listings, categoryName: categories.name }).from(listings).innerJoin(categories, eq(categories.id, listings.categoryId)).where(and(...conditions)).orderBy(order, desc(listings.id)).limit(query.limit + 1).offset((query.page - 1) * query.limit);
+    const pageRows = rows.slice(0, query.limit);
+    const covers = await getListingCoverUrls(db, storage, pageRows.map(({ listing }) => listing.id));
+    const data = pageRows.map(({ listing, categoryName }) => ({ ...listing, categoryName, priceLabel: priceLabel(listing), coverImageUrl: covers.get(listing.id) ?? null }));
     res.setHeader('cache-control', 'public, max-age=30, stale-while-revalidate=60');
-    res.json({ data, meta: { page: query.page, limit: query.limit, hasMore: rows.length === query.limit } });
+    res.json({ data, meta: { page: query.page, limit: query.limit, hasMore: rows.length > query.limit } });
   }));
 
   router.post('/listings', requireVerified, asyncRoute(async (req, res) => {
@@ -81,13 +82,74 @@ export function listingsRouter(db: Database, config: AppConfig, storage: Storage
   }));
 
   router.patch('/listings/:id', requireVerified, asyncRoute(async (req, res) => {
-    const id = idSchema.parse(req.params.id); const input = listingInputSchema.parse(req.body);
+    const id = idSchema.parse(req.params.id);
+    const input = listingInputSchema.parse(req.body);
+    const { newImageIds, removedImageIds } = z.object({
+      newImageIds: z.array(idSchema).max(config.MAX_LISTING_IMAGES).default([]),
+      removedImageIds: z.array(idSchema).max(config.MAX_LISTING_IMAGES).default([]),
+    }).parse(req.body);
+    if (new Set(newImageIds).size !== newImageIds.length || new Set(removedImageIds).size !== removedImageIds.length) {
+      throw new AppError(400, 'DUPLICATE_IMAGE', 'Choose each product image only once');
+    }
     const current = (await db.select().from(listings).where(and(eq(listings.id, id), isNull(listings.deletedAt))).limit(1))[0];
     if (!current || current.sellerId !== req.auth!.userId) throw new AppError(403, 'LISTING_FORBIDDEN', 'You cannot edit this listing');
     if (['SOLD', 'RESERVED'].includes(current.lifecycleState)) throw new AppError(409, 'LISTING_LOCKED', 'This listing cannot be edited in its current state');
-    const wasPublic = current.moderationState === 'APPROVED';
-    const updated = (await db.update(listings).set({ categoryId: input.categoryId, title: input.title, description: input.description, condition: input.condition, conditionExplanation: input.conditionExplanation || null, priceType: input.priceType, exactPrice: input.priceType === 'FIXED' ? input.exactPrice : null, minimumPrice: input.priceType === 'RANGE' ? input.minimumPrice : null, maximumPrice: input.priceType === 'RANGE' ? input.maximumPrice : null, negotiable: input.priceType === 'FREE' ? false : input.negotiable, location: input.location, brand: input.brand || null, defects: input.defects || null, meetupPoint: input.meetupPoint || null, sellerAttestedAt: new Date(), sellerPolicyVersion: currentPolicyVersion, ...(wasPublic ? { moderationState: 'PENDING' as const, lifecycleState: 'DRAFT' as const, submittedAt: new Date(), approvedAt: null } : {}), updatedAt: new Date() }).where(eq(listings.id, id)).returning())[0]!;
-    res.json({ data: updated });
+
+    const staged = newImageIds.length
+      ? await db.select().from(listingImages).where(and(inArray(listingImages.id, newImageIds), eq(listingImages.listingId, id), eq(listingImages.ownerId, req.auth!.userId), isNull(listingImages.deletedAt)))
+      : [];
+    if (staged.length !== newImageIds.length || staged.some((image) => !image.tempKey || image.finalizedAt)) {
+      throw new AppError(400, 'UPLOAD_NOT_FOUND', 'Upload the selected photos again');
+    }
+    const stagedById = new Map(staged.map((image) => [image.id, image]));
+    const finalized: Array<{ id: string; result: Awaited<ReturnType<StorageService['finalize']>> }> = [];
+    let saved: { updated: typeof listings.$inferSelect; removedKeys: string[] };
+    try {
+      // Image validation and R2 writes finish before the listing changes. A
+      // failed upload leaves the approved version available to buyers.
+      for (const imageId of newImageIds) {
+        const stagedImage = stagedById.get(imageId)!;
+        const result = await storage.finalize(stagedImage.tempKey!, req.auth!.userId, id, stagedImage.byteSize, imageId);
+        finalized.push({ id: imageId, result });
+      }
+      saved = await db.transaction(async (tx) => {
+        const listing = (await tx.select().from(listings).where(and(eq(listings.id, id), isNull(listings.deletedAt))).limit(1).for('update'))[0];
+        if (!listing || listing.sellerId !== req.auth!.userId) throw new AppError(403, 'LISTING_FORBIDDEN', 'You cannot edit this listing');
+        if (['SOLD', 'RESERVED'].includes(listing.lifecycleState)) throw new AppError(409, 'LISTING_LOCKED', 'This listing cannot be edited in its current state');
+        const category = (await tx.select({ id: categories.id }).from(categories).where(and(eq(categories.id, input.categoryId), eq(categories.active, true))).limit(1))[0];
+        if (!category) throw new AppError(400, 'INVALID_CATEGORY', 'Choose an available category');
+        const activeImages = await tx.select().from(listingImages).where(and(eq(listingImages.listingId, id), isNull(listingImages.deletedAt)));
+        const imageById = new Map(activeImages.map((image) => [image.id, image]));
+        const removed = removedImageIds.map((imageId) => imageById.get(imageId));
+        if (removed.some((image) => !image || image.ownerId !== req.auth!.userId || !image.finalizedAt)) {
+          throw new AppError(400, 'IMAGE_NOT_FOUND', 'One of the photos to remove is unavailable');
+        }
+        if (newImageIds.some((imageId) => {
+          const image = imageById.get(imageId);
+          return !image || image.ownerId !== req.auth!.userId || !image.tempKey || image.finalizedAt;
+        })) throw new AppError(409, 'UPLOAD_CHANGED', 'Upload the selected photos again');
+        const retainedCount = activeImages.filter((image) => image.finalizedAt && !removedImageIds.includes(image.id)).length;
+        if ((newImageIds.length || removedImageIds.length) && (retainedCount + newImageIds.length < 1 || retainedCount + newImageIds.length > config.MAX_LISTING_IMAGES)) {
+          throw new AppError(400, 'IMAGE_COUNT_INVALID', `Keep between 1 and ${config.MAX_LISTING_IMAGES} product photos`);
+        }
+        const now = new Date();
+        const wasPublic = listing.moderationState === 'APPROVED';
+        const updated = (await tx.update(listings).set({ categoryId: input.categoryId, title: input.title, description: input.description, condition: input.condition, conditionExplanation: input.conditionExplanation || null, priceType: input.priceType, exactPrice: input.priceType === 'FIXED' ? input.exactPrice : null, minimumPrice: input.priceType === 'RANGE' ? input.minimumPrice : null, maximumPrice: input.priceType === 'RANGE' ? input.maximumPrice : null, negotiable: input.priceType === 'FREE' ? false : input.negotiable, location: input.location, brand: input.brand || null, defects: input.defects || null, meetupPoint: input.meetupPoint || null, sellerAttestedAt: now, sellerPolicyVersion: currentPolicyVersion, ...(wasPublic ? { moderationState: 'PENDING' as const, lifecycleState: 'DRAFT' as const, submittedAt: now, approvedAt: null } : {}), updatedAt: now }).where(eq(listings.id, id)).returning())[0]!;
+        for (const image of finalized) {
+          const applied = (await tx.update(listingImages).set({ ...image.result, tempKey: null, finalizedAt: now }).where(and(eq(listingImages.id, image.id), isNull(listingImages.finalizedAt), isNull(listingImages.deletedAt))).returning({ id: listingImages.id }))[0];
+          if (!applied) throw new AppError(409, 'UPLOAD_CHANGED', 'Upload the selected photos again');
+        }
+        if (removedImageIds.length) await tx.update(listingImages).set({ deletedAt: now }).where(inArray(listingImages.id, removedImageIds));
+        return { updated, removedKeys: removed.flatMap((image) => image?.objectKey ? [image.objectKey] : []) };
+      });
+    } catch (error) {
+      await Promise.allSettled(finalized.map((image) => storage.delete(image.result.objectKey)));
+      await Promise.allSettled(staged.map((image) => image.tempKey ? storage.delete(image.tempKey) : Promise.resolve()));
+      if (newImageIds.length) await db.update(listingImages).set({ deletedAt: new Date(), tempKey: null }).where(and(inArray(listingImages.id, newImageIds), isNull(listingImages.finalizedAt), isNull(listingImages.deletedAt)));
+      throw error;
+    }
+    await Promise.allSettled(saved.removedKeys.map((key) => storage.delete(key)));
+    res.json({ data: saved.updated });
   }));
 
   router.post('/listings/:id/submit', requireVerified, asyncRoute(async (req, res) => {
@@ -124,8 +186,11 @@ export function listingsRouter(db: Database, config: AppConfig, storage: Storage
 
   router.delete('/listings/:id', requireAuth, asyncRoute(async (req, res) => {
     const id = idSchema.parse(req.params.id);
-    const deleted = (await db.update(listings).set({ deletedAt: new Date(), updatedAt: new Date() }).where(and(eq(listings.id, id), eq(listings.sellerId, req.auth!.userId), isNull(listings.deletedAt))).returning({ id: listings.id }))[0];
-    if (!deleted) throw new AppError(404, 'LISTING_NOT_FOUND', 'Listing not found');
+    await db.transaction(async tx => {
+      const deleted = (await tx.update(listings).set({ deletedAt: new Date(), updatedAt: new Date(), favouriteCount: 0 }).where(and(eq(listings.id, id), eq(listings.sellerId, req.auth!.userId), isNull(listings.deletedAt))).returning({ id: listings.id }))[0];
+      if (!deleted) throw new AppError(404, 'LISTING_NOT_FOUND', 'Listing not found');
+      await tx.delete(favourites).where(eq(favourites.listingId, id));
+    });
     res.status(204).send();
   }));
   router.post('/listings/:id/sold', requireVerified, (_req, _res, next) => next(new AppError(409, 'TRANSACTION_REQUIRED', 'Complete a transaction before a listing can be sold')));

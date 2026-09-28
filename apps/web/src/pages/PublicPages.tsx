@@ -35,7 +35,7 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { api, ApiError, jsonBody } from "../api";
+import { api, apiWithMeta, ApiError, jsonBody } from "../api";
 import { categoryDescription, categoryPath, marketplaceHeroDescription, reportReasons } from "@campus-market/shared";
 import { useAuth } from "../auth";
 import { postLoginDestination } from "../auth-routing";
@@ -73,6 +73,14 @@ function useListings(search: string, enabled = true) {
   return useQuery({
     queryKey: ["listings", search],
     queryFn: () => api<any[]>(`/api/listings${search}`),
+    enabled,
+  });
+}
+
+function useBrowseListings(search: string, enabled = true) {
+  return useQuery({
+    queryKey: ["browse-listings", search],
+    queryFn: () => apiWithMeta<any[], { page: number; limit: number; hasMore: boolean }>(`/api/listings${search}`),
     enabled,
   });
 }
@@ -455,8 +463,9 @@ export function BrowsePage() {
   const selectedCategory = categories.data?.find((category: MarketplaceCategory) => category.slug === categorySlug);
   const listingParams = new URLSearchParams(serialized);
   if (selectedCategory) listingParams.set('category', selectedCategory.id);
-  const listings = useListings(listingParams.size ? `?${listingParams}` : "", !categorySlug || Boolean(selectedCategory));
-  const displayedProducts = listings.data ?? [];
+  const listings = useBrowseListings(listingParams.size ? `?${listingParams}` : "", !categorySlug || Boolean(selectedCategory));
+  const displayedProducts = listings.data?.data ?? [];
+  const currentPage = listings.data?.meta.page ?? Math.max(1, Number.parseInt(params.get("page") ?? "1", 10) || 1);
   const availableCategories = categories.data ?? [];
 
   useEffect(() => {
@@ -501,6 +510,14 @@ export function BrowsePage() {
     setFilters(filtersFromParams(next));
     setParams({});
     setFiltersOpen(false);
+  }
+
+  function showPage(page: number) {
+    const next = new URLSearchParams(params);
+    if (page <= 1) next.delete("page");
+    else next.set("page", String(page));
+    setParams(next);
+    window.scrollTo({ top: 0, behavior: "instant" });
   }
 
   const inputClass =
@@ -829,18 +846,18 @@ export function BrowsePage() {
             <Search className="size-5" aria-hidden="true" />
           </div>
           <h2 className="mb-0 mt-5 text-xl font-medium tracking-[-0.02em] text-ink">
-            No products match
+            {currentPage > 1 ? "No more products" : "No products match"}
           </h2>
           <p className="mb-5 mt-2 max-w-sm text-[14px] leading-relaxed text-muted">
             Try a broader search or clear one of the filters.
           </p>
-          <button
+          {currentPage > 1 ? <button type="button" className="button secondary" onClick={() => showPage(currentPage - 1)}>Previous page</button> : <button
             type="button"
             className="h-10 rounded-full border border-line bg-surface px-5 text-[14px] font-normal text-ink transition-colors hover:border-line hover:bg-surface-muted"
             onClick={resetFilters}
           >
             Clear filters
-          </button>
+          </button>}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -849,6 +866,13 @@ export function BrowsePage() {
           ))}
         </div>
       )}
+      {!listings.isLoading && !listings.isError && (currentPage > 1 || listings.data?.meta.hasMore) ? (
+        <nav className="mt-8 flex items-center justify-center gap-4" aria-label="Product pages">
+          <button type="button" className="button secondary" disabled={currentPage <= 1} onClick={() => showPage(currentPage - 1)}>Previous</button>
+          <span aria-current="page">Page {currentPage}</span>
+          <button type="button" className="button secondary" disabled={!listings.data?.meta.hasMore} onClick={() => showPage(currentPage + 1)}>Next</button>
+        </nav>
+      ) : null}
     </div>
   );
 }

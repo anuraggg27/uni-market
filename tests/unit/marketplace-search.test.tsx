@@ -15,7 +15,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { apiMock } = vi.hoisted(() => ({ apiMock: vi.fn() }));
 
-vi.mock("../../apps/web/src/api", () => ({ api: apiMock }));
+vi.mock("../../apps/web/src/api", () => ({
+  api: apiMock,
+  apiWithMeta: (path: string) => apiMock(path).then((data: Array<{ id: string }>) => ({
+    data,
+    meta: { page: path.includes("page=2") ? 2 : 1, limit: 24, hasMore: data.some((item) => item.id === "listing-first") },
+  })),
+}));
 
 import { MarketplaceSearch } from "../../apps/web/src/components/MarketplaceSearch";
 import { BrowsePage } from "../../apps/web/src/pages/PublicPages";
@@ -71,6 +77,23 @@ describe("marketplace live search", () => {
       { timeout: 1_500 },
     );
     expect(await screen.findByText("LG 24-inch monitor")).toBeVisible();
+  });
+
+  it("lets buyers reach listings on the next browse page", async () => {
+    vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+    apiMock.mockImplementation((path: string) => {
+      if (path === "/api/categories") return Promise.resolve([]);
+      if (path === "/api/listings") return Promise.resolve([{ ...result, id: "listing-first", title: "First page book" }]);
+      if (path === "/api/listings?page=2") return Promise.resolve([{ ...result, id: "listing-second", title: "Second page book" }]);
+      return Promise.reject(new Error(`Unexpected API call: ${path}`));
+    });
+    renderWithProviders(<BrowsePage />, "/browse");
+    expect(await screen.findByText("First page book")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByText("Second page book")).toBeVisible();
+    expect(apiMock).toHaveBeenCalledWith("/api/listings?page=2");
+    expect(screen.getByText("Page 2")).toBeVisible();
+    vi.restoreAllMocks();
   });
 
   it("opens from the navbar trigger and renders live product matches", async () => {

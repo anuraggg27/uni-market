@@ -35,7 +35,10 @@ export function uploadsRouter(db: Database, config: AppConfig, storage: StorageS
         nextPosition: sql<number>`coalesce(max(${listingImages.position}), -1) + 1`,
       }).from(listingImages).where(eq(listingImages.listingId, listingId));
       timings.allocationReadMs = Math.round(performance.now() - stageStartedAt);
-      if (allocation!.activeCount + inputs.length > config.MAX_LISTING_IMAGES) throw new AppError(400, 'IMAGE_LIMIT_REACHED', `A listing can have up to ${config.MAX_LISTING_IMAGES} images`);
+      // Approved listings can stage replacement photos while the existing
+      // approved photos remain in place until the edit is committed.
+      const allocationLimit = listing.moderationState === 'APPROVED' ? config.MAX_LISTING_IMAGES * 2 : config.MAX_LISTING_IMAGES;
+      if (allocation!.activeCount + inputs.length > allocationLimit) throw new AppError(400, 'IMAGE_LIMIT_REACHED', `A listing can have up to ${config.MAX_LISTING_IMAGES} images`);
       stageStartedAt = performance.now();
       const tickets = await Promise.all(inputs.map(input => storage.createUploadTicket(ownerId, listingId, input.mimeType, input.byteSize)));
       timings.signingMs = Math.round(performance.now() - stageStartedAt);
@@ -124,7 +127,7 @@ export function uploadsRouter(db: Database, config: AppConfig, storage: StorageS
     if (!row) throw new AppError(404, 'IMAGE_NOT_FOUND', 'Image not found');
     await db.transaction(async (tx) => {
       await tx.update(listingImages).set({ deletedAt: new Date() }).where(eq(listingImages.id, imageId));
-      if (row.moderationState === 'APPROVED') await tx.update(listings).set({ moderationState: 'PENDING', lifecycleState: 'DRAFT', approvedAt: null, updatedAt: new Date() }).where(eq(listings.id, listingId));
+      if (row.moderationState === 'APPROVED' && row.image.finalizedAt) await tx.update(listings).set({ moderationState: 'PENDING', lifecycleState: 'DRAFT', approvedAt: null, updatedAt: new Date() }).where(eq(listings.id, listingId));
     });
     if (row.image.objectKey) await storage.delete(row.image.objectKey);
     if (row.image.tempKey) await storage.delete(row.image.tempKey);

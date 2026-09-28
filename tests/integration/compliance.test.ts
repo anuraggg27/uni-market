@@ -49,7 +49,10 @@ describe('India compliance controls', () => {
     expect(domain.body.error.code).toBe('ACADEMIC_DOMAIN_NOT_APPROVED');
     const mismatch = await auth.agent.post('/api/student-email/send').set(auth.headers).send({ email: 'student@students.example.edu' }).expect(400);
     expect(mismatch.body.error.code).toBe('STUDENT_EMAIL_DOMAIN_MISMATCH');
-    await auth.agent.post('/api/student-email/send').set(auth.headers).send({ email: 'student@stu.upes.ac.in' }).expect(200);
+    const config = await auth.agent.get('/api/student-email/config').expect(200);
+    expect(config.body.data).toMatchObject({ provider: 'development', developmentCode: '999999' });
+    const sent = await auth.agent.post('/api/student-email/send').set(auth.headers).send({ email: 'student@stu.upes.ac.in' }).expect(200);
+    expect(sent.body.data.message).toContain('no email was sent');
     await auth.agent.post('/api/student-email/verify').set(auth.headers).send({ email: 'student@stu.upes.ac.in', code: '999999' }).expect(200);
   });
 

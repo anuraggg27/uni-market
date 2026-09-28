@@ -73,7 +73,10 @@ describe("SettingsPage eligibility declarations", () => {
     refreshMock.mockReset().mockResolvedValue(undefined);
     apiMock.mockReset().mockImplementation((path: string, options?: RequestInit) => {
       if (path === "/api/phone/config" || path === "/api/student-email/config") {
-        return Promise.resolve({ provider: "development", otpLength: 6, retryAfter: 30 });
+        return Promise.resolve({ provider: "development", otpLength: 6, developmentCode: "999999", retryAfter: 30 });
+      }
+      if (path === "/api/student-email/send" && options?.method === "POST") {
+        return Promise.resolve({ retryAfter: 30, message: "Development code ready; no email was sent" });
       }
       if (path === "/api/academic-domains") {
         return Promise.resolve([{ id: "domain-1", domain: "students.example.edu", institutionName: "Example Institute" }]);
@@ -121,5 +124,18 @@ describe("SettingsPage eligibility declarations", () => {
       policyVersion: "2026-08-27",
     });
     await waitFor(() => expect(refreshMock).toHaveBeenCalledOnce());
+  });
+
+  it("explains that local student-email verification does not send mail", async () => {
+    renderSettings();
+    expect(await screen.findByText(/Local development: no email is sent/)).toBeVisible();
+    fireEvent.change(screen.getByLabelText("Student email"), { target: { value: "student" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Test Code" }));
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith(
+      "/api/student-email/send",
+      expect.objectContaining({ method: "POST" }),
+    ));
+    expect(await screen.findByLabelText("6-digit email code")).toBeVisible();
+    expect(screen.getByText("999999")).toBeVisible();
   });
 });

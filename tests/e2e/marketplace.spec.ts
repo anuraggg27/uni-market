@@ -201,6 +201,26 @@ test("seller profiles render uploaded listing photos on desktop and mobile", asy
   }
 });
 
+test("unfinished listing details survive a declined navigation", async ({ browser }) => {
+  const seller = await browser.newContext();
+  try {
+    await signIn(seller, "unsaved-listing");
+    const page = await seller.newPage();
+    await page.goto(marketplacePath("/sell"));
+    await page.getByLabel("Title").fill("Draft laptop stand");
+    const browse = page.getByRole("link", { name: "Browse", exact: true }).first();
+    page.once("dialog", (dialog) => dialog.dismiss());
+    await browse.click();
+    await expect(page).toHaveURL(/\/marketplace\/sell$/);
+    await expect(page.getByLabel("Title")).toHaveValue("Draft laptop stand");
+    page.once("dialog", (dialog) => dialog.accept());
+    await browse.click();
+    await expect(page).toHaveURL(/\/marketplace\/browse$/);
+  } finally {
+    await seller.close();
+  }
+});
+
 test("E2E-01 seller journey from onboarding through moderator approval", async ({
   browser,
 }) => {
@@ -224,7 +244,7 @@ test("E2E-01 seller journey from onboarding through moderator approval", async (
   await page.getByRole("button", { name: /Student email/ }).click();
   await expect(page.locator("#student-email-settings")).toBeFocused();
   await page.getByRole("textbox", { name: "Student email" }).fill("journey");
-  await page.getByRole("button", { name: "Send email code" }).click();
+  await page.getByRole("button", { name: "Generate Test Code" }).click();
   await page.getByLabel("6-digit email code").fill("999999");
   await page.getByRole("button", { name: "Verify student email" }).click();
   await expect(page.getByText(/@students\.example\.edu is verified/)).toBeVisible();
@@ -706,6 +726,25 @@ test("E2E-05 support request receives an agent response and resolves", async ({
   await expect(page.locator(".support-conversation-header .support-status")).toHaveText("Resolved");
   await user.close();
   await support.close();
+});
+
+test("signed-in students can request account help before completing verification", async ({ browser }) => {
+  const account = await browser.newContext();
+  try {
+    await signIn(account, "support-before-verification", { profile: false, phone: false });
+    const page = await account.newPage();
+    await page.goto(marketplacePath("/support"));
+    await expect(page.getByRole("heading", { name: "Help & Support" })).toBeVisible();
+    await page.getByRole("button", { name: "New support request" }).first().click();
+    await page.getByLabel("Category").selectOption("ACCOUNT");
+    await page.getByLabel("Subject").fill("Verification help needed");
+    await page.getByLabel("Describe the issue").fill("I cannot finish my student email verification and need account help.");
+    await page.getByRole("button", { name: "Open request" }).click();
+    await expect(page).toHaveURL(/\/support\/[0-9a-f-]+/);
+    await expect(page.getByText("Verification help needed").first()).toBeVisible();
+  } finally {
+    await account.close();
+  }
 });
 
 test("E2E-06 public grievance submission returns private tracking access", async ({

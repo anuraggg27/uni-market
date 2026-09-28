@@ -185,7 +185,7 @@ export function App() {
             <Route
               path="support"
               element={
-                <RequireAuth eligible>
+                <RequireAuth allowIncomplete>
                   <SupportPage />
                 </RequireAuth>
               }
@@ -193,7 +193,7 @@ export function App() {
             <Route
               path="support/:ticketId"
               element={
-                <RequireAuth eligible>
+                <RequireAuth allowIncomplete>
                   <SupportDetailPage />
                 </RequireAuth>
               }

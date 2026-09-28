@@ -154,6 +154,8 @@ export function transactionsRouter(db: Database, config: AppConfig, storage: Sto
     }
 
     const completed = await db.transaction(async (tx) => {
+      // Keep listing -> transaction lock order consistent with accept and cancel.
+      await tx.select({ id: listings.id }).from(listings).where(eq(listings.id, existing.listingId)).limit(1).for('update');
       const now = new Date();
       const updated = (await tx.update(transactions).set({ status: 'COMPLETED', completedAt: now, exchangeCodeUsedAt: now, updatedAt: now }).where(and(eq(transactions.id, id), eq(transactions.sellerId, req.auth!.userId), eq(transactions.status, 'RESERVED'), eq(transactions.exchangeCodeVersion, existing.exchangeCodeVersion), isNull(transactions.exchangeCodeLockedAt))).returning())[0];
       if (!updated) throw new AppError(409, 'EXCHANGE_CODE_CHANGED', 'Ask the buyer for their current exchange code');
@@ -194,6 +196,7 @@ export function transactionsRouter(db: Database, config: AppConfig, storage: Sto
     if (existing.status === 'COMPLETED') { res.json({ data: publicTransaction(existing, req.auth!.userId, config) }); return; }
     if (existing.status !== 'HANDED_OVER') throw new AppError(409, 'INVALID_TRANSACTION_STATE', 'Confirm receipt only after the seller records handover');
     const completed = await db.transaction(async (tx) => {
+      await tx.select({ id: listings.id }).from(listings).where(eq(listings.id, existing.listingId)).limit(1).for('update');
       const updated = (await tx.update(transactions).set({ status: 'COMPLETED', completedAt: new Date(), updatedAt: new Date() }).where(and(eq(transactions.id, id), eq(transactions.status, 'HANDED_OVER'))).returning())[0];
       if (!updated) throw new AppError(409, 'INVALID_TRANSACTION_STATE', 'This transaction was already updated');
       const sold = (await tx.update(listings).set({ lifecycleState: 'SOLD', soldAt: new Date(), updatedAt: new Date() }).where(and(eq(listings.id, updated.listingId), eq(listings.lifecycleState, 'RESERVED'), eq(listings.reservedBuyerId, updated.buyerId))).returning({ id: listings.id, title: listings.title }))[0];
@@ -214,17 +217,26 @@ export function transactionsRouter(db: Database, config: AppConfig, storage: Sto
 
   router.post('/transactions/:id/cancel', requireVerified, asyncRoute(async (req, res) => {
     const id = idSchema.parse(req.params.id);
-    const row = (await db.select({ transaction: transactions, listingTitle: listings.title }).from(transactions).innerJoin(listings, eq(listings.id, transactions.listingId)).where(eq(transactions.id, id)).limit(1))[0];
-    const transaction = row?.transaction;
-    if (!transaction || ![transaction.buyerId, transaction.sellerId].includes(req.auth!.userId)) throw new AppError(403, 'TRANSACTION_FORBIDDEN', 'You cannot cancel this transaction');
-    if (!['REQUESTED', 'ACCEPTED', 'RESERVED'].includes(transaction.status)) throw new AppError(409, 'INVALID_TRANSACTION_STATE', 'This transaction can no longer be cancelled');
-    const cancelledByBuyer = req.auth!.userId === transaction.buyerId;
-    const status = cancelledByBuyer ? 'CANCELLED_BY_BUYER' : 'CANCELLED_BY_SELLER';
+    const reference = (await db.select({ listingId: transactions.listingId, buyerId: transactions.buyerId, sellerId: transactions.sellerId }).from(transactions).where(eq(transactions.id, id)).limit(1))[0];
+    if (!reference || ![reference.buyerId, reference.sellerId].includes(req.auth!.userId)) throw new AppError(403, 'TRANSACTION_FORBIDDEN', 'You cannot cancel this transaction');
     const updated = await db.transaction(async (tx) => {
-      const changed = (await tx.update(transactions).set({ status, cancelledAt: new Date(), updatedAt: new Date() }).where(and(eq(transactions.id, id), inArray(transactions.status, ['REQUESTED', 'ACCEPTED', 'RESERVED']))).returning())[0]!;
-      if (transaction.status === 'RESERVED') await tx.update(listings).set({ lifecycleState: 'ACTIVE', reservedBuyerId: null, updatedAt: new Date() }).where(and(eq(listings.id, transaction.listingId), eq(listings.reservedBuyerId, transaction.buyerId)));
+      // Lock the listing before the transaction, matching the seller's accept
+      // path, then read the current status under the transaction lock.
+      const [listing] = await tx.select({ title: listings.title }).from(listings).where(eq(listings.id, reference.listingId)).limit(1).for('update');
+      if (!listing) throw new AppError(409, 'LISTING_STATE_CHANGED', 'This listing is no longer available');
+      const transaction = (await tx.select().from(transactions).where(eq(transactions.id, id)).limit(1).for('update'))[0];
+      if (!transaction || ![transaction.buyerId, transaction.sellerId].includes(req.auth!.userId)) throw new AppError(403, 'TRANSACTION_FORBIDDEN', 'You cannot cancel this transaction');
+      if (!['REQUESTED', 'ACCEPTED', 'RESERVED'].includes(transaction.status)) throw new AppError(409, 'INVALID_TRANSACTION_STATE', 'This transaction can no longer be cancelled');
+      const cancelledByBuyer = req.auth!.userId === transaction.buyerId;
+      const status = cancelledByBuyer ? 'CANCELLED_BY_BUYER' : 'CANCELLED_BY_SELLER';
+      const changed = (await tx.update(transactions).set({ status, cancelledAt: new Date(), updatedAt: new Date() }).where(and(eq(transactions.id, id), eq(transactions.status, transaction.status))).returning())[0];
+      if (!changed) throw new AppError(409, 'INVALID_TRANSACTION_STATE', 'This transaction was already updated');
+      if (transaction.status === 'RESERVED') {
+        const released = (await tx.update(listings).set({ lifecycleState: 'ACTIVE', reservedBuyerId: null, updatedAt: new Date() }).where(and(eq(listings.id, transaction.listingId), eq(listings.lifecycleState, 'RESERVED'), eq(listings.reservedBuyerId, transaction.buyerId))).returning({ id: listings.id }))[0];
+        if (!released) throw new AppError(409, 'LISTING_STATE_CHANGED', 'This listing can no longer be released');
+      }
       const recipientUserId = cancelledByBuyer ? transaction.sellerId : transaction.buyerId;
-      await queueUserEmail(tx, { recipientUserId, template: 'transaction-cancelled', payload: { transactionId: changed.id, listingId: changed.listingId, listingTitle: row.listingTitle, cancelledBy: cancelledByBuyer ? 'The buyer' : 'The seller', recipientRole: cancelledByBuyer ? 'SELLER' : 'BUYER' }, dedupeKey: `transaction-cancelled:${changed.id}:${status}` });
+      await queueUserEmail(tx, { recipientUserId, template: 'transaction-cancelled', payload: { transactionId: changed.id, listingId: changed.listingId, listingTitle: listing.title, cancelledBy: cancelledByBuyer ? 'The buyer' : 'The seller', recipientRole: cancelledByBuyer ? 'SELLER' : 'BUYER' }, dedupeKey: `transaction-cancelled:${changed.id}:${status}` });
       return changed;
     });
     notifyTransactionChange(req, updated);

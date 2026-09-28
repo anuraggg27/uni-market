@@ -905,6 +905,8 @@ export function AdminListingReview() {
     return <ErrorState error={admin.error ?? detail.error} />;
   const row = admin.data;
   const item = detail.data;
+  const lockedForExchange = item.lifecycleState === "RESERVED" || item.lifecycleState === "SOLD";
+  const availableDecision = lockedForExchange && moderationDecision !== "REMOVE" ? "" : moderationDecision;
   return (
     <div className="stack-lg">
       <Link to={returnTo}>← Back to listings</Link>
@@ -1004,18 +1006,26 @@ export function AdminListingReview() {
         }}
       >
         <h3>Moderation decision</h3>
+        {lockedForExchange ? (
+          <p role="status">
+            {item.lifecycleState === "RESERVED"
+              ? "This listing is reserved. The buyer or seller must cancel the reservation before you can request changes or reject it. You can still remove it for a policy violation."
+              : "This listing is sold and cannot return to draft. You can still remove it for a policy violation."}
+          </p>
+        ) : null}
         <label className="field">
           <span>Decision</span>
-          <select name="decision" value={moderationDecision} onChange={(event) => setModerationDecision(event.target.value)}>
-            <option value="APPROVE">Approve</option>
-            <option value="REJECT">Reject</option>
-            <option value="REQUEST_CHANGES">Request changes</option>
+          <select name="decision" value={availableDecision} onChange={(event) => setModerationDecision(event.target.value)} required>
+            {lockedForExchange ? <option value="" disabled>Choose a decision</option> : null}
+            <option value="APPROVE" disabled={lockedForExchange}>Approve</option>
+            <option value="REJECT" disabled={lockedForExchange}>Reject</option>
+            <option value="REQUEST_CHANGES" disabled={lockedForExchange}>Request changes</option>
             <option value="REMOVE">Remove</option>
           </select>
         </label>
         <label className="field">
-          <span>Internal reason {moderationDecision === "APPROVE" ? "(optional)" : ""}</span>
-          <textarea name="internalReason" required={moderationDecision !== "APPROVE"} minLength={moderationDecision === "APPROVE" ? undefined : 3} />
+          <span>Internal reason {availableDecision === "APPROVE" ? "(optional)" : ""}</span>
+          <textarea name="internalReason" required={availableDecision !== "APPROVE"} minLength={availableDecision === "APPROVE" ? undefined : 3} />
         </label>
         <label className="field">
           <span>User-visible reason (required unless approving)</span>

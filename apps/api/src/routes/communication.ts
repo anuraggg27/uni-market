@@ -99,7 +99,12 @@ export function communicationRouter(
         })
         .from(favourites)
         .innerJoin(listings, eq(listings.id, favourites.listingId))
-        .where(eq(favourites.userId, req.auth!.userId))
+        .where(and(
+          eq(favourites.userId, req.auth!.userId),
+          isNull(listings.deletedAt),
+          eq(listings.moderationState, "APPROVED"),
+          inArray(listings.lifecycleState, ["ACTIVE", "RESERVED", "SOLD"]),
+        ))
         .orderBy(desc(favourites.createdAt));
       const covers = await getListingCoverUrls(db, storage, rows.map(({ listing }) => listing.id));
       res.json({
@@ -117,37 +122,43 @@ export function communicationRouter(
     requireAuth,
     asyncRoute(async (req, res) => {
       const listingId = idSchema.parse(req.params.listingId);
-      const listing = (
-        await db
-          .select({ id: listings.id })
-          .from(listings)
-          .where(
-            and(
-              eq(listings.id, listingId),
-              eq(listings.moderationState, "APPROVED"),
-              inArray(listings.lifecycleState, ["ACTIVE", "RESERVED", "SOLD"]),
-              isNull(listings.deletedAt),
-            ),
-          )
-          .limit(1)
-      )[0];
-      if (!listing)
-        throw new AppError(
-          404,
-          "LISTING_UNAVAILABLE",
-          "This listing is unavailable",
-        );
-      const inserted = await db
-        .insert(favourites)
-        .values({ userId: req.auth!.userId, listingId })
-        .onConflictDoNothing()
-        .returning();
-      if (inserted.length)
-        await db
-          .update(listings)
-          .set({ favouriteCount: sql`${listings.favouriteCount} + 1` })
-          .where(eq(listings.id, listingId));
-      res.status(inserted.length ? 201 : 200).json({ data: { saved: true } });
+      const inserted = await db.transaction(async (tx) => {
+        // Serialize saving with deletion so an in-flight save cannot recreate
+        // a favourite after the listing's saved references have been cleared.
+        const listing = (
+          await tx
+            .select({ id: listings.id })
+            .from(listings)
+            .where(
+              and(
+                eq(listings.id, listingId),
+                eq(listings.moderationState, "APPROVED"),
+                inArray(listings.lifecycleState, ["ACTIVE", "RESERVED", "SOLD"]),
+                isNull(listings.deletedAt),
+              ),
+            )
+            .limit(1)
+            .for("update")
+        )[0];
+        if (!listing)
+          throw new AppError(
+            404,
+            "LISTING_UNAVAILABLE",
+            "This listing is unavailable",
+          );
+        const saved = await tx
+          .insert(favourites)
+          .values({ userId: req.auth!.userId, listingId })
+          .onConflictDoNothing()
+          .returning();
+        if (saved.length)
+          await tx
+            .update(listings)
+            .set({ favouriteCount: sql`${listings.favouriteCount} + 1` })
+            .where(eq(listings.id, listingId));
+        return saved.length;
+      });
+      res.status(inserted ? 201 : 200).json({ data: { saved: true } });
     }),
   );
 

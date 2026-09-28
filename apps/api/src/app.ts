@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
-import { rateLimit } from "express-rate-limit";
+import { ipKeyGenerator, rateLimit } from "express-rate-limit";
 import pinoHttp from "pino-http";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
@@ -223,6 +223,14 @@ export function createApp(deps: {
   );
   app.use("/api", transactionsRouter(db, config, storage));
   app.use("/api", reputationRouter(db, storage));
+  app.use("/api/support", rateLimit({
+    windowMs: 60 * 60_000,
+    limit: config.NODE_ENV === "test" ? 1_000 : 8,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: (req) => req.method !== "POST" || req.path !== "/",
+    keyGenerator: (req) => req.auth?.userId ?? ipKeyGenerator(req.ip ?? ""),
+  }));
   app.use("/api", userOperationsRouter(db, config));
   app.use("/api/admin", grievanceAdminRouter(db, config));
   app.use("/api/admin", complianceAdminRouter(db));

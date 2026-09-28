@@ -27,6 +27,7 @@ import {
   categories,
   conversations,
   emailOutbox,
+  favourites,
   listings,
   listingImages,
   messages,
@@ -322,7 +323,7 @@ export function userOperationsRouter(db: Database, config: AppConfig): Router {
 
   router.post(
     "/support",
-    requireVerified,
+    requireAuth,
     asyncRoute(async (req, res) => {
       const input = ticketSchema.parse(req.body);
       const ticket = (
@@ -444,7 +445,7 @@ export function userOperationsRouter(db: Database, config: AppConfig): Router {
   );
   router.post(
     "/support/:id/reopen",
-    requireVerified,
+    requireAuth,
     asyncRoute(async (req, res) => {
       const id = idSchema.parse(req.params.id);
       const ticket = (
@@ -853,17 +854,20 @@ export function adminRouter(
     moderation,
     asyncRoute(async (req, res) => {
       const id = idSchema.parse(req.params.id);
-      const current = (await db.select().from(listings).where(and(eq(listings.id, id), isNull(listings.deletedAt))).limit(1))[0];
-      if (!current) throw new AppError(404, "LISTING_NOT_FOUND", "Listing not found");
-      const deletedAt = new Date();
-      await db.update(listings).set({ deletedAt, updatedAt: deletedAt }).where(eq(listings.id, id));
-      await audit(db, req, {
-        action: "LISTING_DELETE",
-        targetType: "LISTING",
-        targetId: id,
-        previousState: current,
-        newState: { deletedAt },
-        internalReason: "Listing deleted by administrator",
+      await db.transaction(async tx => {
+        const current = (await tx.select().from(listings).where(and(eq(listings.id, id), isNull(listings.deletedAt))).limit(1).for("update"))[0];
+        if (!current) throw new AppError(404, "LISTING_NOT_FOUND", "Listing not found");
+        const deletedAt = new Date();
+        await tx.update(listings).set({ deletedAt, updatedAt: deletedAt, favouriteCount: 0 }).where(eq(listings.id, id));
+        await tx.delete(favourites).where(eq(favourites.listingId, id));
+        await audit(tx, req, {
+          action: "LISTING_DELETE",
+          targetType: "LISTING",
+          targetId: id,
+          previousState: current,
+          newState: { deletedAt, favouriteCount: 0 },
+          internalReason: "Listing deleted by administrator",
+        });
       });
       res.status(204).send();
     }),
@@ -881,17 +885,6 @@ export function adminRouter(
           note: z.string().trim().max(2000).optional(),
         })
         .parse(req.body);
-      const current = (
-        await db.select().from(listings).where(eq(listings.id, id)).limit(1)
-      )[0];
-      if (!current)
-        throw new AppError(404, "LISTING_NOT_FOUND", "Listing not found");
-      if (input.decision === "APPROVE" && !current.submittedAt)
-        throw new AppError(
-          409,
-          "LISTING_NOT_SUBMITTED",
-          "This listing has not been submitted for review",
-        );
       if (input.decision !== "APPROVE" && input.internalReason.length < 3)
         throw new AppError(
           400,
@@ -904,25 +897,6 @@ export function adminRouter(
           "REASON_REQUIRED",
           "A user-visible reason is required",
         );
-      if (input.decision === "APPROVE") {
-        const disallowedImages = await db
-          .select({ id: listingImages.id })
-          .from(listingImages)
-          .where(
-            and(
-              eq(listingImages.listingId, id),
-              isNull(listingImages.deletedAt),
-              ne(listingImages.syntheticStatus, "NOT_SYNTHETIC"),
-            ),
-          )
-          .limit(1);
-        if (disallowedImages.length)
-          throw new AppError(
-            400,
-            "AI_GENERATED_IMAGE_NOT_ALLOWED",
-            "AI-generated or materially altered listing images are not allowed",
-          );
-      }
       const patch =
         input.decision === "APPROVE"
           ? {
@@ -954,7 +928,54 @@ export function adminRouter(
                   rejectionReason: input.userVisibleReason!,
                   approvedAt: null,
                 };
-      const updated = await db.transaction(async (tx) => {
+      const { updated, previous } = await db.transaction(async (tx) => {
+        // Reservation acceptance locks this listing first. Read the current
+        // lifecycle under the same lock before a moderation decision changes it.
+        const current = (
+          await tx
+            .select()
+            .from(listings)
+            .where(eq(listings.id, id))
+            .limit(1)
+            .for("update")
+        )[0];
+        if (!current)
+          throw new AppError(404, "LISTING_NOT_FOUND", "Listing not found");
+        if (
+          ["RESERVED", "SOLD"].includes(current.lifecycleState) &&
+          input.decision !== "REMOVE"
+        ) {
+          throw new AppError(
+            409,
+            "LISTING_LOCKED",
+            "This moderation decision cannot change a reserved or sold listing",
+          );
+        }
+        if (input.decision === "APPROVE") {
+          if (!current.submittedAt)
+            throw new AppError(
+              409,
+              "LISTING_NOT_SUBMITTED",
+              "This listing has not been submitted for review",
+            );
+          const disallowedImages = await tx
+            .select({ id: listingImages.id })
+            .from(listingImages)
+            .where(
+              and(
+                eq(listingImages.listingId, id),
+                isNull(listingImages.deletedAt),
+                ne(listingImages.syntheticStatus, "NOT_SYNTHETIC"),
+              ),
+            )
+            .limit(1);
+          if (disallowedImages.length)
+            throw new AppError(
+              400,
+              "AI_GENERATED_IMAGE_NOT_ALLOWED",
+              "AI-generated or materially altered listing images are not allowed",
+            );
+        }
         const row = (
           await tx
             .update(listings)
@@ -995,16 +1016,16 @@ export function adminRouter(
           payload: { listingId: id, listingTitle: current.title, reason: input.userVisibleReason },
           dedupeKey: `${type}:${id}:${Date.now()}`,
         });
-        return row;
+        return { updated: row, previous: current };
       });
-      notifyNotifications(req.app.get('io'), [current.sellerId]);
+      notifyNotifications(req.app.get('io'), [previous.sellerId]);
       await audit(db, req, {
         action: `LISTING_${input.decision}`,
         targetType: "LISTING",
         targetId: id,
         previousState: {
-          moderationState: current.moderationState,
-          lifecycleState: current.lifecycleState,
+          moderationState: previous.moderationState,
+          lifecycleState: previous.lifecycleState,
         },
         newState: {
           moderationState: updated.moderationState,

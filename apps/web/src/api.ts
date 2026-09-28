@@ -32,6 +32,7 @@ export async function api<T = any>(
   path: string,
   options: RequestInit = {},
   challenged = false,
+  envelope = false,
 ): Promise<T> {
   const method = options.method?.toUpperCase() ?? "GET";
   const headers = new Headers(options.headers);
@@ -58,7 +59,7 @@ export async function api<T = any>(
     if (!challenged && payload?.error?.code === "BOT_CHECK_REQUIRED") {
       const token = await solveTurnstile();
       headers.set("x-turnstile-token", token);
-      return api<T>(path, { ...options, headers }, true);
+      return api<T>(path, { ...options, headers }, true, envelope);
     }
     throw new ApiError(
       response.status,
@@ -68,7 +69,11 @@ export async function api<T = any>(
       payload?.error?.details,
     );
   }
-  return payload.data as T;
+  return (envelope ? payload : payload.data) as T;
+}
+
+export function apiWithMeta<T, M>(path: string): Promise<{ data: T; meta: M }> {
+  return api<{ data: T; meta: M }>(path, {}, false, true);
 }
 
 export async function publicApi<T = any>(path: string, options: RequestInit = {}, challenged = false): Promise<T> {

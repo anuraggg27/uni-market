@@ -27,13 +27,12 @@ function SupportStatus({ ticket }: { ticket: Ticket }) {
   return <span className={`support-status support-status-${ticket.status.toLowerCase()}`}>{statuses[ticket.status]}</span>;
 }
 function SupportDetails({ ticket }: { ticket: Thread }) {
-  const { user } = useAuth();
   const client = useQueryClient();
   const reopen = useMutation({
     mutationFn: () => api(`/api/support/${ticket.id}/reopen`, { method: "POST" }),
     onSuccess: () => { toast.success("Request reopened"); void client.invalidateQueries({ queryKey: ["support"] }); },
   });
-  const canReopen = user?.marketplaceEligible && ticket.status === "RESOLVED" && ticket.resolvedAt
+  const canReopen = ticket.status === "RESOLVED" && ticket.resolvedAt
     && Date.now() - new Date(ticket.resolvedAt).getTime() <= 14 * 24 * 60 * 60_000;
   return <div className="support-details-content">
     <h2>Conversation details</h2>
