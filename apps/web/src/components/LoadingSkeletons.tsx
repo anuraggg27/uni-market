@@ -64,7 +64,7 @@ export function ProductGridSkeleton({ browse = false }: { browse?: boolean }) {
     <div
       className={cn(
         browse
-          ? "grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          ? "browse-product-grid"
           : "product-grid",
       )}
       aria-hidden="true"
@@ -82,17 +82,16 @@ function ProductCardSkeleton() {
       <div className="market-card-link">
         <Skeleton className="market-card-visual" />
         <div className="market-card-content">
-          <div className="flex items-start justify-between gap-3">
-            <Skeleton className="h-4 w-3/5" />
+          <Skeleton className="h-4 w-4/5" />
+          <Skeleton className="mt-1 h-4 w-3/5" />
+          <div className="market-card-primary">
+            <Skeleton className="h-6 w-2/5" />
             <Skeleton className="h-6 w-16 rounded-full" />
           </div>
-          <Skeleton className="mt-3 h-6 w-2/5" />
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Skeleton className="h-3 w-16" />
+          <div className="market-card-meta">
             <Skeleton className="h-3 w-24" />
             <Skeleton className="h-3 w-14" />
           </div>
-          <Skeleton className="mt-auto h-10 w-full rounded-[10px]" />
         </div>
       </div>
     </article>

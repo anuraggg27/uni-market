@@ -83,7 +83,7 @@ describe("ProductCard", () => {
 
     expect(screen.getByText("Calculators")).toBeVisible();
     expect(screen.getByText("2h ago")).toBeVisible();
-    expect(screen.getByText("Show")).toBeVisible();
+    expect(screen.queryByText("Show")).not.toBeInTheDocument();
     expect(
       screen.getByRole("link", {
         name: "View Casio FX-991EX Scientific Calculator",

@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -115,10 +115,6 @@ function categoryCardIcon(category: MarketplaceCategory) {
 
 function BrowseByCategory({ categories }: { categories: MarketplaceCategory[] }) {
   if (!categories.length) return null;
-  const mobileShortcutOrder = new Map(
-    categories.slice(0, 5).map((category, index) => [category.id, index]),
-  );
-
   return (
     <section className="section home-category-section" aria-labelledby="home-category-heading">
       <div className="home-category-heading">
@@ -135,9 +131,7 @@ function BrowseByCategory({ categories }: { categories: MarketplaceCategory[] })
             <Link
               aria-label={category.name}
               className="home-category-card"
-              data-mobile-shortcut={mobileShortcutOrder.has(category.id) ? "true" : "false"}
               key={category.id}
-              style={{ "--mobile-category-order": mobileShortcutOrder.get(category.id) ?? 6 } as CSSProperties}
               to={categoryPath(category.slug)}
             >
               <span className="home-category-icon" aria-hidden="true"><Icon /></span>
@@ -152,7 +146,6 @@ function BrowseByCategory({ categories }: { categories: MarketplaceCategory[] })
         <Link
           aria-label="All categories"
           className="home-category-card home-category-card-all"
-          style={{ "--mobile-category-order": 5 } as CSSProperties}
           to="/categories"
         >
           <span className="home-category-icon" aria-hidden="true"><Shapes /></span>
@@ -343,7 +336,7 @@ export function HomePage() {
           />
         ) : null}
         {user && saved.data?.length ? (
-          <section className="section">
+          <section className="section home-product-section">
             <div className="mb-6 flex items-baseline justify-between border-b border-line pb-3">
               <h2 className="text-2xl font-semibold tracking-[-0.025em] text-ink">
                 Saved for later
@@ -860,7 +853,7 @@ export function BrowsePage() {
           </button>}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="browse-product-grid">
           {displayedProducts.map((listing) => (
             <ProductCard key={listing.id} listing={listing} variant="browse" />
           ))}

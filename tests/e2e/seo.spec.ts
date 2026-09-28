@@ -87,12 +87,12 @@ test('homepage category shortcuts follow admin order for new categories on mobil
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/marketplace/');
   const cards = page.locator('.home-category-section .home-category-card:visible');
-  await expect(cards).toHaveCount(6);
-  expect(await cards.locator('strong').allTextContents()).toEqual([...names.slice(0, 5), 'All categories']);
+  await expect(cards).toHaveCount(9);
+  expect(await cards.locator('strong').allTextContents()).toEqual([...names.slice(0, 8), 'All categories']);
   await expect(cards.first()).toHaveAttribute('href', '/marketplace/category/accessories');
   await page.setViewportSize({ width: 1280, height: 900 });
-  await expect(cards).toHaveCount(8);
-  expect(await cards.locator('strong').allTextContents()).toEqual(names.slice(0, 8));
+  await expect(cards).toHaveCount(9);
+  expect(await cards.locator('strong').allTextContents()).toEqual([...names.slice(0, 8), 'All categories']);
   await page.setViewportSize({ width: 390, height: 844 });
   await cards.last().click();
   await expect(page.locator('.category-directory').getByRole('link', { name: /Other/ })).toBeVisible();
@@ -126,7 +126,8 @@ test('mobile homepage uses compact category shortcuts and horizontally scrollabl
   expect(await visibleCategoryCards.locator('strong').allTextContents()).toEqual(['Books', 'Electronics', 'Furniture', 'Cycles', 'All categories']);
   await expect(visibleCategoryCards.last()).toHaveAttribute('href', '/marketplace/categories');
   await expect(visibleCategoryCards.last()).toContainText('All categories');
-  expect(await categorySection.locator('.home-category-grid').evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(2);
+  await expect(categorySection.locator('.home-category-grid')).toHaveCSS('display', 'flex');
+  await expect(categorySection.locator('.home-category-grid')).toHaveCSS('overflow-x', 'auto');
   await expect(categorySection.locator('.home-category-copy > span').first()).toBeHidden();
 
   const recentlyAdded = page.getByRole('heading', { name: 'Recently added', exact: true });
@@ -138,14 +139,47 @@ test('mobile homepage uses compact category shortcuts and horizontally scrollabl
   await expect(rail).toHaveCSS('overflow-x', 'auto');
   for (const width of [375, 390, 412, 430]) {
     await page.setViewportSize({ width, height: 844 });
-    expect(await categorySection.locator('.home-category-grid').evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(2);
+    expect(await categorySection.locator('.home-category-grid').evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
     expect(await rail.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
     const visibleCardRatio = await rail.evaluate((element) => {
       const card = element.querySelector<HTMLElement>('.market-card');
       return card ? element.clientWidth / card.getBoundingClientRect().width : 0;
     });
-    expect(visibleCardRatio).toBeGreaterThan(1.55);
-    expect(visibleCardRatio).toBeLessThan(2.1);
+    expect(visibleCardRatio).toBeGreaterThan(2);
+    expect(visibleCardRatio).toBeLessThan(2.5);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
+  }
+});
+
+
+test('browse product grid stays compact and responsive without an internal card CTA', async ({ page }) => {
+  await page.route('**/api/listings**', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: Array.from({ length: 8 }, (_, index) => ({
+          id: `10000000-0000-4000-8000-00000000000${index}`,
+          title: `Responsive listing title ${index + 1}`,
+          categoryName: index % 2 ? 'Electronics' : 'Books',
+          condition: index % 2 ? 'LIKE_NEW' : 'GOOD',
+          location: 'Bidholi Campus',
+          priceType: 'FIXED',
+          exactPrice: 400 + index,
+          lifecycleState: index === 2 ? 'SOLD' : 'ACTIVE',
+          createdAt: new Date().toISOString(),
+        })),
+        meta: { page: 1, limit: 24, hasMore: false },
+      }),
+    });
+  });
+
+  for (const [width, columns] of [[360, 2], [375, 2], [390, 2], [412, 2], [430, 2], [768, 3], [1024, 3], [1440, 4]] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/marketplace/browse');
+    const grid = page.locator('.browse-product-grid');
+    await expect(grid).toBeVisible();
+    expect(await grid.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(columns);
+    await expect(grid.getByText('Show', { exact: true })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width);
   }
 });

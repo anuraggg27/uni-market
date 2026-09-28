@@ -22,7 +22,7 @@ const imageDimensions = [
   { name: "calculator phone photo", width: 1170, height: 2532 },
 ] as const;
 
-test("listing images remain fully contained at every supported surface and aspect ratio", async ({ page }) => {
+test("listing images use the intended fit at every supported surface and aspect ratio", async ({ page }) => {
   const stylesheet = (await readFile("apps/web/src/styles.css", "utf8")).replace('@import "tailwindcss";', "");
   await page.setContent("<main></main>");
   await page.addStyleTag({ content: stylesheet });
@@ -55,7 +55,7 @@ test("listing images remain fully contained at every supported surface and aspec
       }, { surface, dimensions });
 
       expect(result, `${surface.name}: ${dimensions.name}`).toEqual({
-        objectFit: "contain",
+        objectFit: surface.name === "browse card" ? "cover" : "contain",
         objectPosition: "50% 50%",
         overflows: false,
       });

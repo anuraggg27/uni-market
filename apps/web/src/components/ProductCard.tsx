@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowRight, Clock3, ImageOff, MapPin } from "lucide-react";
+import { ImageOff, MapPin } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface MarketplaceListing {
@@ -65,6 +65,7 @@ export function ProductCard({
             <ImagePlaceholder />
           )}
           <span className="market-card-image-tint" aria-hidden="true" />
+          <span className="market-card-category">{category}</span>
           {listing.lifecycleState &&
           listing.lifecycleState !== "ACTIVE" ? (
             <div className="market-card-badges">
@@ -76,30 +77,30 @@ export function ProductCard({
         </div>
 
         <div className="market-card-content">
-          <div className="market-card-title-row">
-            <h3>{title}</h3>
-            <span className="market-card-category">{category}</span>
+          <h3>{title}</h3>
+
+          <div className="market-card-primary">
+            <p className="market-card-price">{getPriceLabel(listing)}</p>
+            <span
+              className="market-card-condition"
+              data-condition={listing.condition ?? undefined}
+            >
+              {condition}
+            </span>
           </div>
-          <p className="market-card-price">{getPriceLabel(listing)}</p>
 
           <div className="market-card-meta" aria-label="Listing details">
-            <span className="market-card-condition">{condition}</span>
             <span className="market-card-location">
               <MapPin aria-hidden="true" />
               <span>{location}</span>
             </span>
             {postedLabel ? (
               <time dateTime={toDateTime(postedAt)}>
-                <Clock3 aria-hidden="true" />
+                <span className="market-card-meta-dot" aria-hidden="true" />
                 {postedLabel}
               </time>
             ) : null}
           </div>
-
-          <span className="market-card-cta">
-            Show
-            <ArrowRight aria-hidden="true" />
-          </span>
         </div>
       </Link>
     </article>
