@@ -17126,12 +17126,12 @@ html.dark .hero-campus-background {
   aspect-ratio: 4 / 3;
   border: 0;
   border-radius: 15px 15px 0 0;
-  background: var(--color-surface-muted);
+  background: #171918;
   box-shadow: none;
 }
 
 img.market-card-image {
-  object-fit: cover;
+  object-fit: contain;
   object-position: center;
 }
 
@@ -17283,7 +17283,7 @@ html:not(.dark) .market-card {
 
 html:not(.dark) .market-card-visual {
   border: 0;
-  background: var(--color-surface-muted);
+  background: #1b1d1c;
   box-shadow: none;
 }
 

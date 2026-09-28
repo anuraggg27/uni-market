@@ -17,6 +17,7 @@ const listingImageSurfaces = [
 
 const imageDimensions = [
   { name: "landscape", width: 1600, height: 900 },
+  { name: "very wide", width: 2400, height: 600 },
   { name: "portrait", width: 900, height: 1600 },
   { name: "square", width: 1000, height: 1000 },
   { name: "calculator phone photo", width: 1170, height: 2532 },
@@ -55,7 +56,7 @@ test("listing images use the intended fit at every supported surface and aspect 
       }, { surface, dimensions });
 
       expect(result, `${surface.name}: ${dimensions.name}`).toEqual({
-        objectFit: surface.name === "browse card" ? "cover" : "contain",
+        objectFit: "contain",
         objectPosition: "50% 50%",
         overflows: false,
       });
