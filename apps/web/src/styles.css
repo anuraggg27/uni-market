@@ -17017,7 +17017,8 @@ html.dark .hero-campus-background {
 .home-category-grid {
   display: flex;
   gap: 12px;
-  padding: 1px 1px 8px;
+  margin-top: -7px;
+  padding: 8px 1px;
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-inline: contain;
@@ -17084,7 +17085,8 @@ html.dark .hero-campus-background {
 .home-product-section .product-grid {
   display: flex;
   gap: 12px;
-  padding: 1px 1px 10px;
+  margin-top: -7px;
+  padding: 8px 1px 10px;
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-inline: contain;
@@ -17302,7 +17304,23 @@ html:not(.dark) .market-card-visual > .market-card-category {
   }
 
   .home-category-card:hover {
-    box-shadow: none;
+    box-shadow: 0 8px 18px color-mix(in srgb, var(--color-carbon) 8%, transparent);
+  }
+}
+
+@media (min-width: 768px) {
+  .home-product-section .product-grid > .market-card {
+    flex-basis: 280px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .home-product-section .product-grid > .market-card {
+    flex-basis: 300px;
+  }
+
+  .home-product-section .market-card-content {
+    padding: 14px 16px 15px;
   }
 }
 
