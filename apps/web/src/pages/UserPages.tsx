@@ -1321,9 +1321,9 @@ export function ChatsPage() {
                       ? item.lastMessageAt
                       : message.createdAt,
                     unread:
-                      message.conversationId === openConversation ||
-                      message.senderId === user?.id
+                      message.conversationId === openConversation
                         ? 0
+                        : message.senderId === user?.id ? item.unread
                         // An inbox fetch can already include this message before
                         // its socket event arrives. Do not count it twice.
                         : item.unread + (new Date(item.lastMessageAt) < new Date(message.createdAt) ? 1 : 0),
@@ -1536,6 +1536,7 @@ function ChatPanel({
 
   useEffect(() => {
     if (!query.isSuccess) return;
+    void client.invalidateQueries({ queryKey: ['unread-conversations'] });
     client.setQueryData<ChatConversation[]>(["conversations"], (current = []) =>
       current.map((item) => (item.id === id ? { ...item, unread: 0 } : item)),
     );

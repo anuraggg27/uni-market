@@ -1,5 +1,5 @@
 import { parse as parseCookie } from 'cookie';
-import { and, eq, gt, inArray, isNull, ne, or } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import type { Server as HttpServer } from 'node:http';
 import { Server } from 'socket.io';
 import { messageSchema } from '@campus-market/shared';
@@ -11,7 +11,7 @@ import { logger } from './lib/logger.js';
 import { currentPolicyVersion, requiredOnboardingPolicies } from '@campus-market/shared';
 import { createScamConfirmation, scamRiskCodes, verifyScamConfirmation } from './services/scam-risk.js';
 import { queueUserEmail } from './services/email-preferences.js';
-import { notifyNotifications } from './services/notification-events.js';
+import { notifyChatUnread, notifyNotifications } from './services/notification-events.js';
 
 export function attachSocket(server: HttpServer, db: Database, config: AppConfig): Server {
   const io = new Server(server, { cors: { origin: config.CLIENT_URL, credentials: true }, maxHttpBufferSize: 20_000, transports: ['websocket', 'polling'] });
@@ -66,7 +66,8 @@ export function attachSocket(server: HttpServer, db: Database, config: AppConfig
       if (typeof conversationId !== 'string') return acknowledge?.({ ok: false });
       const member = (await db.select({ id: conversations.id }).from(conversations).where(and(eq(conversations.id, conversationId), or(eq(conversations.buyerId, userId), eq(conversations.sellerId, userId)))).limit(1))[0];
       if (!member) return acknowledge?.({ ok: false, error: 'Forbidden' });
-      await db.update(messages).set({ readAt: new Date() }).where(and(eq(messages.conversationId, conversationId), ne(messages.senderId, userId), isNull(messages.readAt)));
+      await db.update(messages).set({ readAt: sql`clock_timestamp()` }).where(and(eq(messages.conversationId, conversationId), ne(messages.senderId, userId), isNull(messages.readAt)));
+      notifyChatUnread(io, userId);
       acknowledge?.({ ok: true });
     });
     socket.on('message:send', async (payload: unknown, acknowledge?: (result: unknown) => void) => {

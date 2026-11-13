@@ -27,7 +27,7 @@ export type EmailPreferenceValues = {
 export function emailCategory(template: string): EmailPreferenceCategory | null {
   if (['listing_approved', 'listing_rejected', 'listing_removed'].includes(template)) return 'listingUpdates';
   if (['purchase-request', 'purchase-accepted', 'transaction-completed-buyer', 'transaction-completed-seller', 'transaction-cancelled'].includes(template)) return 'transactionUpdates';
-  if (template === 'first-conversation-message') return 'messageUpdates';
+  if (['first-conversation-message', 'unread-message-reminder'].includes(template)) return 'messageUpdates';
   if (template === 'policy-reminder') return 'policyReminders';
   return null;
 }

@@ -17,6 +17,7 @@ import { categoryPath } from "@campus-market/shared";
 import { useAuth } from "../auth";
 import { Button } from "./ui/button";
 import { NotificationTray } from "./NotificationTray";
+import { ChatUnreadBadge } from "./ChatUnreadBadge";
 import { MarketplaceSearch } from "./MarketplaceSearch";
 import { ThemeToggle } from "./ThemeToggle";
 import { UserAvatar } from "./UserAvatar";
@@ -398,7 +399,7 @@ export const Navbar = () => {
                       to="/chats"
                       className="navbar-primary-link !font-medium !text-muted hover:!text-ink dark:hover:!text-ink"
                     >
-                      Chats
+                      Chats <ChatUnreadBadge />
                     </NavLink>
                   </NavigationMenuLink>
                 </NavigationMenuItem>
@@ -521,7 +522,7 @@ export const Navbar = () => {
                       onClick={() => setOpen(false)}
                       className="text-[15px] font-normal text-muted hover:text-ink transition-colors py-1"
                     >
-                      Chats
+                      Chats <ChatUnreadBadge />
                     </Link>
                     <Link
                       to="/requests"

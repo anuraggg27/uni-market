@@ -61,6 +61,8 @@ function templateContent(template: string, payload: Record<string, unknown>, con
   const receivedRequestHref = appUrl(config, `/requests?view=received${transactionId ? `#transaction-${transactionId}` : ''}`);
 
   switch (template) {
+    case 'unread-message-reminder':
+      return { subject: 'Someone might be waiting for your reply 👀', heading: 'You have an unread message', intro: `A student may be interested in ${listingName(payload)}. Open your chat to check their message and keep the conversation going.`, details: ['Find it. Chat. Meet on campus.'], cta: { label: 'View message →', href: appUrl(config, `/chats/${conversationId}`) } };
     case 'first-conversation-message':
       return { subject: `New message about ${listingName(payload)}`, heading: 'A buyer started a conversation', intro: `You have a new message about ${listingName(payload)}.`, cta: { label: 'Open conversation', href: conversationId ? appUrl(config, `/chats/${conversationId}`) : appUrl(config, '/chats') } };
     case 'listing_approved':

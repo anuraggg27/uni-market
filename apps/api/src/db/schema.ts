@@ -241,6 +241,8 @@ export const conversations = pgTable('conversations', {
   buyerId: uuid('buyer_id').references(() => users.id).notNull(),
   sellerId: uuid('seller_id').references(() => users.id).notNull(),
   firstMessageEmailQueuedAt: timestamp('first_message_email_queued_at', { withTimezone: true }),
+  lastUnreadReminderThroughAt: timestamp('last_unread_reminder_through_at', { withTimezone: true }),
+  lastUnreadReminderSentAt: timestamp('last_unread_reminder_sent_at', { withTimezone: true }),
   lastMessageAt: timestamp('last_message_at', { withTimezone: true }).defaultNow().notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
 }, (table) => [uniqueIndex('conversation_identity_idx').on(table.listingId, table.buyerId, table.sellerId), check('conversation_not_self', sql`${table.buyerId} <> ${table.sellerId}`), index('conversation_buyer_idx').on(table.buyerId), index('conversation_seller_idx').on(table.sellerId)]);
@@ -262,7 +264,7 @@ export const messages = pgTable('messages', {
   readAt: timestamp('read_at', { withTimezone: true }),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
-}, (table) => [uniqueIndex('message_dedupe_idx').on(table.senderId, table.clientId), index('messages_conversation_idx').on(table.conversationId, table.createdAt)]);
+}, (table) => [uniqueIndex('message_dedupe_idx').on(table.senderId, table.clientId), index('messages_conversation_idx').on(table.conversationId, table.createdAt), index('messages_unread_conversation_idx').on(table.conversationId, table.createdAt).where(sql`${table.readAt} is null and ${table.deletedAt} is null`)]);
 
 export const transactions = pgTable('transactions', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -401,6 +403,7 @@ export const adminAuditLogs = pgTable('admin_audit_logs', {
 
 export const emailOutbox = pgTable('email_outbox', {
   id: uuid('id').defaultRandom().primaryKey(),
+  reminderConversationId: uuid('reminder_conversation_id').references(() => conversations.id, { onDelete: 'cascade' }),
   recipientUserId: uuid('recipient_user_id').references(() => users.id),
   recipientEmailCiphertext: text('recipient_email_ciphertext'),
   template: text('template').notNull(),
@@ -408,6 +411,7 @@ export const emailOutbox = pgTable('email_outbox', {
   encryptedPayload: text('encrypted_payload'),
   dedupeKey: text('dedupe_key').notNull().unique(),
   attempts: integer('attempts').default(0).notNull(),
+  lastAttemptAt: timestamp('last_attempt_at', { withTimezone: true }),
   availableAt: timestamp('available_at', { withTimezone: true }).defaultNow().notNull(),
   sentAt: timestamp('sent_at', { withTimezone: true }),
   failedAt: timestamp('failed_at', { withTimezone: true }),
@@ -415,7 +419,7 @@ export const emailOutbox = pgTable('email_outbox', {
   suppressionReason: text('suppression_reason'),
   lastError: text('last_error'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
-}, (table) => [index('email_outbox_pending_idx').on(table.sentAt, table.failedAt, table.suppressedAt, table.availableAt)]);
+}, (table) => [index('email_outbox_pending_idx').on(table.sentAt, table.failedAt, table.suppressedAt, table.availableAt), uniqueIndex('email_outbox_pending_reminder_idx').on(table.reminderConversationId).where(sql`${table.sentAt} is null and ${table.failedAt} is null and ${table.suppressedAt} is null`)]);
 
 export const prohibitedTerms = pgTable('prohibited_terms', {
   id: uuid('id').defaultRandom().primaryKey(),

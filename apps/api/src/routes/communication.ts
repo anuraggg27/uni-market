@@ -19,7 +19,7 @@ import { AppError, asyncRoute } from "../lib/errors.js";
 import type { StorageService } from "../services/storage.js";
 import { createScamConfirmation, scamRiskCodes, verifyScamConfirmation } from "../services/scam-risk.js";
 import { queueUserEmail } from "../services/email-preferences.js";
-import { notifyNotifications } from "../services/notification-events.js";
+import { notifyChatUnread, notifyNotifications } from "../services/notification-events.js";
 import { getReputation } from "../services/reputation.js";
 import { getListingCoverUrls } from "../services/listing-images.js";
 
@@ -79,6 +79,14 @@ export function communicationRouter(
   onMessage?: (conversationId: string, message: unknown) => void,
 ): Router {
   const router = Router();
+
+  router.get('/conversations/unread-count', requireAuth, asyncRoute(async (req, res) => {
+    const [row] = await db.select({ count: sql<number>`count(*)` }).from(conversations)
+      .where(and(or(eq(conversations.buyerId, req.auth!.userId), eq(conversations.sellerId, req.auth!.userId)),
+        sql`exists (select 1 from messages m where m.conversation_id = ${conversations.id}
+          and m.sender_id <> ${req.auth!.userId} and m.read_at is null and m.deleted_at is null)`));
+    res.set('Cache-Control', 'no-store').json({ data: { count: Number(row?.count ?? 0) } });
+  }));
 
   router.get('/conversations/:id/buyer-reputation', requireVerified, asyncRoute(async (req, res) => {
     const conversation = await assertConversationMember(db, idSchema.parse(req.params.id), req.auth!.userId);
@@ -265,7 +273,7 @@ export function communicationRouter(
           sellerName: sql<string>`seller.display_name`,
           buyerAvatarId: sql<string>`buyer.avatar_id`,
           sellerAvatarId: sql<string>`seller.avatar_id`,
-          unread: sql<number>`(select count(*) from messages m where m.conversation_id = ${conversations.id} and m.sender_id <> ${req.auth!.userId} and m.read_at is null)`,
+          unread: sql<number>`(select count(*) from messages m where m.conversation_id = ${conversations.id} and m.sender_id <> ${req.auth!.userId} and m.read_at is null and m.deleted_at is null)`,
         })
         .from(conversations)
         .innerJoin(listings, eq(listings.id, conversations.listingId))
@@ -335,7 +343,7 @@ export function communicationRouter(
         .limit(query.limit);
       await db
         .update(messages)
-        .set({ readAt: new Date() })
+        .set({ readAt: sql`clock_timestamp()` })
         .where(
           and(
             eq(messages.conversationId, id),
@@ -343,6 +351,7 @@ export function communicationRouter(
             isNull(messages.readAt),
           ),
         );
+      notifyChatUnread(req.app.get('io'), req.auth!.userId);
       res.json({
         data: rows.reverse(),
         meta: { hasMore: rows.length === query.limit },

@@ -123,6 +123,7 @@ Read [docs/moderation-policy.md](docs/moderation-policy.md) before moderating co
 - Configure the Cloudflare limits in [docs/security.md](docs/security.md).
 - Run `npm audit --omit=dev`, all tests, and the production build before release.
 - SMTP and email outbox processing are asynchronous; monitor failed jobs.
+- Unread-message reminders require the host timer in [docs/unread-reminders.md](docs/unread-reminders.md); deploy the migration and enable it to start the five-hour reminders.
 
 Additional documentation: [architecture](docs/architecture.md), [API](docs/api.md), [security](docs/security.md), [testing](docs/testing.md), and [UI references](docs/ui-reference.md).
 

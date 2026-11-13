@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import type { Socket } from "socket.io-client";
@@ -12,16 +12,31 @@ export function NotificationUpdates() {
   const { user } = useAuth();
   const client = useQueryClient();
   const navigate = useNavigate();
+  const previousUserId = useRef(user?.id);
 
   useEffect(() => {
+    const previous = previousUserId.current;
+    previousUserId.current = user?.id;
+    if (previous && previous !== user?.id) {
+      client.removeQueries({ queryKey: ["unread-conversations", previous] });
+    }
     if (!user?.id) {
       client.removeQueries({ queryKey: ["notifications"] });
+      client.removeQueries({ queryKey: ["unread-conversations"] });
+      client.removeQueries({ queryKey: ["conversations"] });
+      client.removeQueries({ queryKey: ["messages"] });
       return;
     }
     let disposed = false;
     let connection: Socket | undefined;
     const refresh = () => {
       if (!disposed) void client.invalidateQueries({ queryKey: ["notifications"] });
+      if (!disposed) void client.invalidateQueries({ queryKey: ["unread-conversations", user.id] });
+    };
+    const refreshChats = () => {
+      if (disposed) return;
+      void client.invalidateQueries({ queryKey: ["unread-conversations", user.id] });
+      void client.invalidateQueries({ queryKey: ["conversations"] });
     };
     const visible = () => {
       if (document.visibilityState === "visible") refresh();
@@ -38,6 +53,7 @@ export function NotificationUpdates() {
       connection = io(`${API_URL}/notifications`, { withCredentials: true, autoConnect: false });
       connection.on("connect", refresh);
       connection.on("notifications:updated", refresh);
+      connection.on("chats:updated", refreshChats);
       connection.on("achievement:unlocked", achievementUnlocked);
       connection.connect();
     }).catch(() => {
@@ -54,6 +70,7 @@ export function NotificationUpdates() {
       document.removeEventListener("visibilitychange", visible);
       connection?.off("connect", refresh);
       connection?.off("notifications:updated", refresh);
+      connection?.off("chats:updated", refreshChats);
       connection?.off("achievement:unlocked", achievementUnlocked);
       connection?.disconnect();
     };

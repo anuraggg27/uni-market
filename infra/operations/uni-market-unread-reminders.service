@@ -1,0 +1,18 @@
+[Unit]
+Description=Uni Market unread message reminders
+Requires=docker.service
+Wants=network-online.target
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=root
+# Bound the process inside Docker too; killing only the docker client can leave
+# the container process running. Use the image's node user and inherited env.
+ExecStart=/usr/bin/docker --host=unix:///var/run/docker.sock exec --workdir /app uni-market /usr/bin/timeout --signal=TERM --kill-after=10s 25m /usr/local/bin/node /app/apps/api/dist/jobs/unread-reminders.js
+TimeoutStartSec=27min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+UMask=0077

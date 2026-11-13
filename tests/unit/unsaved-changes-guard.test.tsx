@@ -4,6 +4,7 @@ import React, { useRef, useState } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createMemoryRouter, Link, RouterProvider } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
+import { transferableAbortController } from "node:util";
 import { UnsavedChangesGuard } from "../../apps/web/src/components/UnsavedChangesGuard";
 
 function ListingDraft() {
@@ -16,9 +17,14 @@ function ListingDraft() {
   </>;
 }
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 it("keeps an unfinished listing when navigation is declined and leaves after confirmation", async () => {
+  // React Router's data navigation creates Node's Request. Pair it with native
+  // signals instead of jsdom's different AbortSignal realm.
+  const nativeController = transferableAbortController();
+  vi.stubGlobal("AbortController", nativeController.constructor);
+  vi.stubGlobal("AbortSignal", nativeController.signal.constructor);
   const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
   const router = createMemoryRouter([
     { path: "/listing", element: <ListingDraft /> },

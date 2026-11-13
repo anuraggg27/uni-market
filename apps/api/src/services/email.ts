@@ -78,7 +78,7 @@ export class EmailWorker {
       }).from(emailOutbox)
         .leftJoin(users, eq(users.id, emailOutbox.recipientUserId))
         .leftJoin(emailPreferences, eq(emailPreferences.userId, emailOutbox.recipientUserId))
-        .where(and(isNull(emailOutbox.sentAt), isNull(emailOutbox.failedAt), isNull(emailOutbox.suppressedAt), lte(emailOutbox.availableAt, now), ne(emailOutbox.template, 'student-email-otp')))
+        .where(and(isNull(emailOutbox.sentAt), isNull(emailOutbox.failedAt), isNull(emailOutbox.suppressedAt), lte(emailOutbox.availableAt, now), ne(emailOutbox.template, 'student-email-otp'), ne(emailOutbox.template, 'unread-message-reminder')))
         .orderBy(asc(emailOutbox.createdAt)).limit(10).for('update', { of: emailOutbox, skipLocked: true });
       for (const { job } of jobs) {
         await tx.update(emailOutbox).set({ availableAt, attempts: job.attempts + 1 }).where(eq(emailOutbox.id, job.id));

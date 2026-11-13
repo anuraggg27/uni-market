@@ -1,0 +1,11 @@
+[Unit]
+Description=Check Uni Market unread messages every 15 minutes
+
+[Timer]
+OnCalendar=*-*-* *:00/15:00 UTC
+Persistent=true
+RandomizedDelaySec=30
+Unit=uni-market-unread-reminders.service
+
+[Install]
+WantedBy=timers.target

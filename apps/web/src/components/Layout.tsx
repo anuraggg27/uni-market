@@ -4,6 +4,7 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Navbar } from './Navbar';
 import { RouteScrollRestoration } from './RouteScrollRestoration';
 import { RouteLoading } from './LoadingSkeletons';
+import { ChatUnreadBadge } from './ChatUnreadBadge';
 
 const mobileLinks = [
   { to: '/', label: 'Home', icon: Home },
@@ -36,7 +37,7 @@ export function Layout() {
         {mobileLinks.map(({ to, label, icon: Icon }) => (
           <NavLink key={to} to={to} end={to === '/'}>
             <Icon aria-hidden="true" />
-            <span>{label}</span>
+            <span>{label}{to === '/chats' ? <ChatUnreadBadge /> : null}</span>
           </NavLink>
         ))}
       </nav>
